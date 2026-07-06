@@ -1,13 +1,14 @@
 /**
- * Apply Crit chat button — opens a dialog seeded from the weapon's Vicious
- * quality and the target's existing crits / Durable talent, rolls the macro's
- * crit formula against a chosen critical table, embeds the resulting crit item
- * on the target, and posts the item description to public chat.
+ * Apply Crit chat button — gathers the crit context from the attack (target,
+ * Vicious quality, the target's existing crits / Durable talent) and opens the
+ * system's Critical Roller (helpers/critical-roller.js) in apply mode: the
+ * roller's modifier interface drives a draw from the world's Critical
+ * RollTable and the resulting crit item is embedded on the target.
+ * Crit-ing a minion kills one outright instead (RAW).
  */
 import { applyToTargetActor } from "./gm-bridge.js";
 import { promptSetupCriticalTables } from "./crit-tables.js";
-
-const { DialogV2 } = foundry.applications.api;
+import CriticalRollerFFG from "./critical-roller.js";
 
 export class ApplyCrit {
   /**
@@ -54,8 +55,9 @@ export class ApplyCrit {
   }
 
   /**
-   * Resolve the target, gather auto-fill values, open the dialog, run the crit
-   * roll on Roll, embed the result item, and post the description.
+   * Resolve the target, gather the auto-fill modifier values, and open the
+   * Critical Roller in apply mode (which rolls, draws from the table, and
+   * embeds the result on the target).
    * @param {ChatMessage} message
    */
   static async show(message) {
@@ -94,13 +96,12 @@ export class ApplyCrit {
       return;
     }
 
-    // Modifier: count existing crit items × 10.
+    // Existing Critical on Target: count of embedded crit items (+10 each in the roller).
     const existingCrits = realActor.items.filter(
       (i) => i.type === "criticalinjury" || i.type === "criticaldamage"
     ).length;
-    const autoModifier = existingCrits * 10;
 
-    // Durable: ranks × 10. Lookup differs for linked (talentList) vs unlinked (items).
+    // Durable ranks (−10 each). Lookup differs for linked (talentList) vs unlinked (items).
     let durableRanks = 0;
     if (isLinked) {
       const durable = realActor.talentList?.find(
@@ -113,140 +114,41 @@ export class ApplyCrit {
       );
       durableRanks = Number(durableItem?.system?.ranks?.current) || 0;
     }
-    const autoDurable = durableRanks * 10;
 
     // Vicious: substring match on chat-embedded qualities; sum totalRanks.
+    // Pre-seeds the roller's flat Additional Modifier at +10 per rank.
     const qualities = itemSystem.doNotSubmit?.qualities || [];
-    let autoViciousRanks = 0;
+    let viciousRanks = 0;
     for (const q of qualities) {
       const name = (q?.name || "").toLowerCase();
       if (name.includes("vicious")) {
-        autoViciousRanks += Number(q?.totalRanks) || 0;
+        viciousRanks += Number(q?.totalRanks) || 0;
       }
     }
 
-    // Critical tables in this world. If none exist yet, offer the GM the
-    // one-click setup (crit-tables.js) and continue with the created tables.
-    let critTables = game.tables.filter((t) => (t.name || "").includes("Critical"));
-    if (critTables.length === 0 && game.user.isGM) {
+    // Make sure a Critical RollTable exists; offer the GM the one-click setup.
+    let hasTable = game.tables.some((t) => (t.name || "").includes("Critical"));
+    if (!hasTable && game.user.isGM) {
       await promptSetupCriticalTables();
-      critTables = game.tables.filter((t) => (t.name || "").includes("Critical"));
+      hasTable = game.tables.some((t) => (t.name || "").includes("Critical"));
     }
-    if (critTables.length === 0) {
+    if (!hasTable) {
       ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.NoTable"));
       return;
     }
-    const preferredTableName = type === "vehicle" ? "Critical Damage" : "Critical Injuries";
-    const tableOptions = critTables
-      .map((t) => {
-        const selected = t.name === preferredTableName ? " selected" : "";
-        return `<option value="${t.id}"${selected}>${t.name}</option>`;
-      })
-      .join("");
 
-    const modifierLabel = game.i18n.localize("SWFFG.ApplyCrit.Modifier");
-    const durableLabel = game.i18n.localize("SWFFG.ApplyCrit.Durable");
-    const viciousLabel = game.i18n.localize("SWFFG.ApplyCrit.Vicious");
-    const tableLabel = game.i18n.localize("SWFFG.ApplyCrit.Table");
-    const rollLabel = game.i18n.localize("SWFFG.ButtonRoll");
-    const cancelLabel = game.i18n.localize("SWFFG.ApplyDamage.Cancel");
-    const title = game.i18n.format("SWFFG.ApplyCrit.DialogTitle", { name: a.name });
-
-    const content = `
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <div style="padding:4px 8px; display:flex; align-items:center; gap:8px;">
-          <label style="white-space:nowrap;">${modifierLabel}:</label>
-          <input name="modifier" class="modifier" style="flex:1 1 auto; min-width:0;" type="text"
-                 value="${autoModifier}" data-dtype="String" />
-        </div>
-        <div style="padding:4px 8px; display:flex; align-items:center; gap:12px;">
-          <span>${durableLabel}: ${autoDurable}</span>
-          <span style="display:inline-block; width:1px; height:20px; background:#888;"></span>
-          <span style="display:flex; align-items:center; gap:6px;">
-            ${viciousLabel}: <span class="vicious-rank">${autoViciousRanks}</span>
-            <button type="button" class="vicious-minus" style="width:24px; height:22px; line-height:1; padding:0;">−</button>
-            <button type="button" class="vicious-plus" style="width:24px; height:22px; line-height:1; padding:0;">+</button>
-          </span>
-        </div>
-        <div style="padding:4px 8px; display:flex; align-items:center; gap:8px;">
-          <label style="white-space:nowrap;">${tableLabel}:</label>
-          <select class="crittable" style="flex:1 1 auto; min-width:0;">${tableOptions}</select>
-        </div>
-      </div>
-    `;
-
-    DialogV2.wait({
-      window: { title },
-      content,
-      buttons: [
-        {
-          action: "roll",
-          icon: "fas fa-check",
-          label: rollLabel,
-          default: true,
-          callback: async (event, button, dialog) => {
-            const root = dialog.element;
-            const modifier = parseInt(root.querySelector(".modifier")?.value, 10) || 0;
-            const viciousRank = parseInt(root.querySelector(".vicious-rank")?.textContent, 10) || 0;
-            const viciousMod = viciousRank * 10;
-            const tableId = root.querySelector(".crittable")?.value;
-
-            const table = game.tables.get(tableId);
-            if (!table) {
-              ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.NoTable"));
-              return;
-            }
-
-            const formula = `max(1d100 + ${modifier} - ${autoDurable} + ${viciousMod}, 1)`;
-            const critRoll = new Roll(formula);
-            const draw = await table.draw({ roll: critRoll, displayChat: true });
-
-            const firstResult = draw?.results?.[0];
-            if (!firstResult) return;
-            // V13 stores a document result as a uuid; resolve it directly
-            // (firstResult.documentId still works but is a deprecated shim).
-            // fromUuid also resolves compendium-linked results, unlike the
-            // upstream game.items.get() lookup.
-            const item = firstResult.documentUuid ? await fromUuid(firstResult.documentUuid) : null;
-            if (!item || item.documentName !== "Item") return;
-
-            try {
-              // Embeds the crit item on the target actor; when the clicking
-              // player does not own the target, this forwards to the active GM
-              // (see gm-bridge.js).
-              const ok = await applyToTargetActor(realActor, { type: "crit", items: [item.toObject()] });
-              if (!ok) return;
-              await ChatMessage.create({
-                speaker: ChatMessage.getSpeaker({ token: target.document }),
-                content: item.system?.description ?? "",
-              });
-            } catch (err) {
-              CONFIG.logger?.warn?.("ApplyCrit: createEmbeddedDocuments failed", err);
-              ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
-            }
-          },
+    new CriticalRollerFFG({
+      applyContext: {
+        critType: type === "vehicle" ? "criticaldamage" : "criticalinjury",
+        preferredTableName: type === "vehicle" ? "Critical Damage" : "Critical Injuries",
+        targetName: a.name,
+        actorUuid: realActor.uuid,
+        prefill: {
+          existing: existingCrits,
+          durable: durableRanks,
+          other: viciousRanks * 10,
         },
-        {
-          action: "cancel",
-          icon: "fas fa-times",
-          label: cancelLabel,
-        },
-      ],
-      render: (event, dialog) => {
-        const root = dialog.element;
-        const rankEl = root.querySelector(".vicious-rank");
-        root.querySelector(".vicious-plus")?.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          const cur = parseInt(rankEl.textContent, 10) || 0;
-          rankEl.textContent = String(cur + 1);
-        });
-        root.querySelector(".vicious-minus")?.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          const cur = parseInt(rankEl.textContent, 10) || 0;
-          rankEl.textContent = String(Math.max(0, cur - 1));
-        });
       },
-      rejectClose: false,
-    });
+    }).render(true);
   }
 }

@@ -112,6 +112,8 @@ export class ApplyDamage {
 
     const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.Damage");
     const pierceLabel = game.i18n.localize("SWFFG.Pierce");
+    const parryLabel = game.i18n.localize("SWFFG.ApplyDamage.ParryRanks");
+    const reductionLabel = game.i18n.localize("SWFFG.ApplyDamage.Reduction");
     const applyLabel = game.i18n.localize("SWFFG.ApplyDamage.Apply");
     const cancelLabel = game.i18n.localize("SWFFG.ApplyDamage.Cancel");
     const radioHtml = showRadio
@@ -123,11 +125,15 @@ export class ApplyDamage {
 
     const content = `
       ${radioHtml}
-      <div style="display:grid; grid-template-columns: 90px 1fr; gap:6px 10px; align-items:center;">
+      <div style="display:grid; grid-template-columns: 150px 1fr; gap:6px 10px; align-items:center;">
         <label>${damageLabel}:</label>
         <input type="number" name="damage" value="${autoDamage}" min="0" style="width:100%;"/>
         <label>${pierceLabel}:</label>
         <input type="number" name="pierce" value="${autoPierce}" min="0" style="width:100%;"/>
+        <label>${parryLabel}:</label>
+        <input type="number" name="parry" value="0" min="0" style="width:100%;"/>
+        <label>${reductionLabel}:</label>
+        <input type="number" name="reduction" value="0" min="0" style="width:100%;"/>
       </div>
     `;
 
@@ -147,6 +153,8 @@ export class ApplyDamage {
             const root = dialog.element;
             const damage = Math.max(0, parseInt(root.querySelector('input[name="damage"]')?.value, 10) || 0);
             const pierce = Math.max(0, parseInt(root.querySelector('input[name="pierce"]')?.value, 10) || 0);
+            const parryRanks = Math.max(0, parseInt(root.querySelector('input[name="parry"]')?.value, 10) || 0);
+            const reduction = Math.max(0, parseInt(root.querySelector('input[name="reduction"]')?.value, 10) || 0);
             const pool = showRadio ? root.querySelector('input[name="pool"]:checked')?.value : "wounds";
             const path = pool === "strain" ? strainPath : woundPath;
             const poolLabel = pool === "strain" ? strainLabel : woundLabel;
@@ -155,8 +163,13 @@ export class ApplyDamage {
               return;
             }
 
+            // Parry / Reflect reduces damage by 2 + ranks (only when ranks were
+            // spent), and Damage Reduction is a flat manual reduction — both come
+            // off the incoming damage BEFORE soak is applied.
+            const parryReduction = parryRanks > 0 ? 2 + parryRanks : 0;
+            const reducedDamage = Math.max(0, damage - parryReduction - reduction);
             const effectiveSoak = Math.max(0, soakValue - pierce);
-            const applied = Math.max(0, damage - effectiveSoak);
+            const applied = Math.max(0, reducedDamage - effectiveSoak);
 
             const speaker = ChatMessage.getSpeaker({ token: target.document });
             const gmIds = game.users.filter((u) => u.isGM).map((u) => u.id);
@@ -175,6 +188,8 @@ export class ApplyDamage {
                 applied,
                 poolLabel,
                 damage,
+                parryReduction,
+                reduction,
                 effectiveSoak,
                 soakWord,
                 pierce,

@@ -1245,36 +1245,10 @@ Hooks.on("renderActorDirectory", (app, html) => {
   }
 });
 
-Hooks.on("renderItemDirectory", (app, html) => {
-  if (app.collection?.documentName !== "Item") return;
-  const root = html instanceof jQuery ? html[0] : html;
-  if (!root) return;
-  const buttonId = "ffgCriticalRoller";
-  if (root.querySelector(`#${buttonId}`)) return;
-
-  const icon = document.createElement("i");
-  icon.classList.add("fa-solid", "fa-user-injured");
-
-  const label = document.createElement("span");
-  label.textContent = game.i18n.localize("SWFFG.CriticalRoller.DirectoryButton");
-
-  const button = document.createElement("button");
-  button.id = buttonId;
-  button.type = "button";
-  button.classList.add("ffg-critical-roller-launch");
-  button.appendChild(icon);
-  button.appendChild(label);
-
-  // V13 sidebar header lives under .header-actions.action-buttons; fall back to the
-  // directory header if the markup differs.
-  const host = root.querySelector(".header-actions.action-buttons") || root.querySelector(".directory-header");
-  host?.appendChild(button);
-
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    CriticalRollerFFG.launch();
-  });
-});
+// The Items-directory Critical Roller launcher was retired: critical rolls
+// from attacks now open the roller in apply mode via the weapon chat card's
+// Apply Crit button (helpers/apply-crit.js). The standalone roller remains
+// reachable from the Destiny Tracker menu and game.ffg.CriticalRollerFFG.
 
 Hooks.on("renderCompendiumDirectory", (app, html, data) => {
   if (game.user.isGM) {

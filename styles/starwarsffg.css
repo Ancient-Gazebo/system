@@ -3856,3 +3856,17 @@ button.ffg-critical-roller-launch {
 .starwarsffg .dice-pool-dialog .adversary-mode-btn.active::before {
   background-color: #f5a623;
 }
+
+/* Critical roller apply mode: target banner + applied-to confirmation line */
+.ffg-critical-roller .crit-target-name {
+  font-size: 14px;
+  font-weight: bold;
+}
+.ffg-critical-card .crit-applied {
+  margin: 6px 0 0;
+  font-weight: bold;
+  color: #58d68d;
+}
+.ffg-critical-card .crit-applied i {
+  margin-right: 4px;
+}

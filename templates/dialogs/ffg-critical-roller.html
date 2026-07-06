@@ -1,4 +1,13 @@
 <form class="ffg-critical-roller-form" autocomplete="off">
+  {{#if applyTargetName}}
+  <div class="crit-row crit-type-row">
+    <label class="crit-label">{{localize "SWFFG.CriticalRoller.Field.Target"}}</label>
+    <span class="crit-target-name">{{applyTargetName}}</span>
+    {{#if applyTableName}}
+    <p class="crit-hint crit-pool-count">{{localize "SWFFG.CriticalRoller.Field.Table"}}: {{applyTableName}}</p>
+    {{/if}}
+  </div>
+  {{else}}
   <div class="crit-row crit-type-row">
     <label class="crit-label">{{localize "SWFFG.CriticalRoller.Field.Type"}}</label>
     <select name="critType" class="crit-type-select">
@@ -8,6 +17,7 @@
     </select>
     <p class="crit-hint crit-pool-count">{{localize "SWFFG.CriticalRoller.Field.PoolCount"}}: {{poolCount}}</p>
   </div>
+  {{/if}}
 
   <fieldset class="crit-modifiers">
     <legend>{{localize "SWFFG.CriticalRoller.Field.Modifiers"}}</legend>

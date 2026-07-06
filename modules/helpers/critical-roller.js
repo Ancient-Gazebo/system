@@ -11,11 +11,19 @@
  *   -10  per rank of the Durable talent the target possesses
  *   +10  per time the weapon's Critical rating is activated
  *
- * Resolving the result onto an actor is intentionally out of scope: the roller
- * only rolls and reports.
+ * Two modes:
+ *  - Standalone (Destiny Tracker menu / macros): rolls and reports only;
+ *    resolving the result onto an actor is out of scope.
+ *  - Apply mode (the weapon chat card's Apply Crit button passes
+ *    `options.applyContext`): the type is fixed by the target, the modifiers
+ *    are pre-seeded from the attack (existing crits, Durable, Vicious), the
+ *    roll draws from the world's Critical RollTable, and the resulting crit
+ *    item is embedded on the target (forwarded to the GM for unowned targets
+ *    via gm-bridge). Roll-twice-and-choose applies the pick on Choose instead.
  *
  * @extends {FormApplication}
  */
+import { applyToTargetActor } from "./gm-bridge.js";
 
 const CRIT_TYPES = {
   criticalinjury: {
@@ -42,6 +50,24 @@ const MODIFIERS = [
 export default class CriticalRollerFFG extends FormApplication {
   constructor(options = {}) {
     super({}, options);
+    // Apply mode: launched from an attack's Apply Crit button. The type is
+    // fixed by the target and the modifiers are pre-seeded from the attack.
+    this.applyContext = options.applyContext ?? null;
+    if (this.applyContext) {
+      this.critType = CRIT_TYPES[this.applyContext.critType] ? this.applyContext.critType : "criticalinjury";
+      const prefill = this.applyContext.prefill ?? {};
+      this.selection = {
+        twice: false,
+        mods: {
+          existing: Math.max(0, prefill.existing ?? 0),
+          lethal: 0,
+          durable: Math.max(0, prefill.durable ?? 0),
+          critrating: 0,
+          other: prefill.other ?? 0,
+        },
+      };
+      return;
+    }
     // Remember the last type chosen by this user so re-opening is sticky.
     const stored = options.critType || game.user.getFlag("starwarsffg", "criticalRollerType");
     this.critType = CRIT_TYPES[stored] ? stored : "criticalinjury";
@@ -68,6 +94,9 @@ export default class CriticalRollerFFG extends FormApplication {
 
   /** @override */
   get title() {
+    if (this.applyContext?.targetName) {
+      return game.i18n.format("SWFFG.ApplyCrit.DialogTitle", { name: this.applyContext.targetName });
+    }
     return game.i18n.localize(CRIT_TYPES[this.critType].titleKey);
   }
 
@@ -92,6 +121,65 @@ export default class CriticalRollerFFG extends FormApplication {
     return game.items.filter((i) => i.type === critType);
   }
 
+  /**
+   * Apply mode rolls against the world's Critical RollTable instead of the raw
+   * item pool: prefer the table named for the target's type ("Critical Damage"
+   * for vehicles, "Critical Injuries" otherwise), falling back to the first
+   * table whose name contains "Critical".
+   */
+  _resolveApplyTable() {
+    const preferred = this.applyContext?.preferredTableName;
+    return (
+      (preferred && game.tables.find((t) => t.name === preferred)) ||
+      game.tables.find((t) => (t.name || "").includes("Critical")) ||
+      null
+    );
+  }
+
+  /**
+   * Match a modified d100 total to a table result, mirroring resolveCritical's
+   * gap handling (below the table -> least severe, gaps/above -> the highest
+   * range at or below the total), then resolve the result's world item.
+   * @returns {Promise<Item|null>}
+   */
+  async _resolveTableCritical(table, total) {
+    let results = table.getResultsForRoll(total);
+    if (!results.length) {
+      const sorted = [...table.results].sort((a, b) => (a.range?.[0] ?? 0) - (b.range?.[0] ?? 0));
+      if (!sorted.length) return null;
+      if (total < (sorted[0].range?.[0] ?? 0)) {
+        results = [sorted[0]];
+      } else {
+        const atOrBelow = sorted.filter((r) => (r.range?.[0] ?? 0) <= total);
+        results = [atOrBelow.length ? atOrBelow[atOrBelow.length - 1] : sorted[sorted.length - 1]];
+      }
+    }
+    const result = results[0];
+    if (!result?.documentUuid) return null;
+    const item = await fromUuid(result.documentUuid);
+    return item?.documentName === "Item" ? item : null;
+  }
+
+  /**
+   * Embed a crit item on the target actor, forwarding to the active GM when
+   * the current user cannot modify it (see gm-bridge.js).
+   * @returns {Promise<"local"|"forwarded"|false>}
+   */
+  static async applyCriticalTo(actorUuid, item) {
+    try {
+      const actor = await fromUuid(actorUuid);
+      if (!actor) {
+        ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
+        return false;
+      }
+      return await applyToTargetActor(actor, { type: "crit", items: [item.toObject()] });
+    } catch (err) {
+      CONFIG.logger?.warn?.("CriticalRoller: failed to apply critical to target", err);
+      ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
+      return false;
+    }
+  }
+
   /* -------------------------------------------- */
   /*  Form data                                   */
   /* -------------------------------------------- */
@@ -112,6 +200,8 @@ export default class CriticalRollerFFG extends FormApplication {
 
     return {
       critType: this.critType,
+      applyTargetName: this.applyContext?.targetName ?? null,
+      applyTableName: this.applyContext ? this._resolveApplyTable()?.name ?? null : null,
       types: Object.entries(CRIT_TYPES).map(([key, def]) => ({
         key,
         label: game.i18n.localize(def.labelKey),
@@ -214,6 +304,8 @@ export default class CriticalRollerFFG extends FormApplication {
   /* -------------------------------------------- */
 
   async _onRoll() {
+    if (this.applyContext) return this._onRollApply();
+
     const pool = this._resolvePool(this.critType);
     if (!pool.length) {
       ui.notifications.warn(game.i18n.localize("SWFFG.CriticalRoller.NoCriticals"));
@@ -240,6 +332,61 @@ export default class CriticalRollerFFG extends FormApplication {
       breakdown,
       results,
     });
+  }
+
+  /**
+   * Apply-mode roll: draw from the Critical RollTable and embed the result on
+   * the target. A single roll applies immediately; roll-twice posts both
+   * options and applies on Choose (see registerChatListeners).
+   */
+  async _onRollApply() {
+    const table = this._resolveApplyTable();
+    if (!table) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.NoTable"));
+      return;
+    }
+
+    const modifier = this._computeTotalModifier();
+    const breakdown = this._modifierBreakdown();
+    const rollCount = this.selection.twice ? 2 : 1;
+
+    const results = [];
+    for (let i = 0; i < rollCount; i++) {
+      const formula = modifier === 0 ? "1d100" : `1d100 ${modifier > 0 ? "+" : "-"} ${Math.abs(modifier)}`;
+      const roll = new Roll(formula);
+      await roll.evaluate();
+      const die = roll.dice?.[0]?.total ?? roll.total - modifier;
+      // Crit totals floor at 1 (a heavily-reduced roll still crits).
+      const total = Math.max(1, roll.total);
+      const critical = await this._resolveTableCritical(table, total);
+      if (!critical) {
+        ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.NoTable"));
+        return;
+      }
+      results.push({ roll, die, total, critical });
+    }
+
+    // Single roll: embed on the target first so the card can report it.
+    let appliedTo = null;
+    if (results.length === 1) {
+      const ok = await CriticalRollerFFG.applyCriticalTo(this.applyContext.actorUuid, results[0].critical);
+      if (ok) appliedTo = this.applyContext.targetName;
+    }
+
+    await CriticalRollerFFG.postResults({
+      critType: this.critType,
+      modifier,
+      breakdown,
+      results,
+      appliedTo,
+      // For the roll-twice flow the chat card's Choose button performs the
+      // apply, so the target rides along in the message flags.
+      apply: results.length > 1
+        ? { actorUuid: this.applyContext.actorUuid, targetName: this.applyContext.targetName }
+        : null,
+    });
+
+    await this.close();
   }
 
   /**
@@ -317,7 +464,7 @@ export default class CriticalRollerFFG extends FormApplication {
       </details>`;
   }
 
-  static async postResults({ critType, modifier, breakdown, results }) {
+  static async postResults({ critType, modifier, breakdown, results, appliedTo = null, apply = null }) {
     const typeLabel = game.i18n.localize(CRIT_TYPES[critType].titleKey);
     const icon = CRIT_TYPES[critType].icon;
     const breakdownHtml = CriticalRollerFFG._renderBreakdown(breakdown, modifier);
@@ -332,6 +479,9 @@ export default class CriticalRollerFFG extends FormApplication {
         modifier,
         total: r.total,
       });
+      if (appliedTo) {
+        body += `<p class="crit-applied"><i class="fa-solid fa-user-check"></i> ${game.i18n.format("SWFFG.CriticalRoller.Card.AppliedTo", { name: appliedTo })}</p>`;
+      }
     } else {
       // Roll-twice-and-choose: show both, with a button to confirm the pick.
       const blocks = [];
@@ -409,6 +559,10 @@ export default class CriticalRollerFFG extends FormApplication {
             critType,
             modifier,
             choices: flagChoices,
+            // Present only for apply-mode roll-twice cards: Choose embeds the
+            // pick on this actor (gm-bridge forwards for non-owners).
+            applyTo: apply?.actorUuid ?? null,
+            targetName: apply?.targetName ?? null,
           },
         },
       },
@@ -426,6 +580,15 @@ export default class CriticalRollerFFG extends FormApplication {
       const data = message.flags?.starwarsffg?.criticalRoller;
       if (!data?.choices?.length) return;
       const $html = html instanceof jQuery ? html : $(html);
+
+      // Apply-mode cards embed the pick on the target, so only the roller
+      // (message author) or a GM may choose; hide the buttons from others.
+      const authorId = message.author?.id ?? message.user;
+      if (data.applyTo && game.user.id !== authorId && !game.user.isGM) {
+        $html.find(".crit-choose").remove();
+        return;
+      }
+
       // Delegate from the message root so the binding survives the system's chat-content
       // rewrite (renderDiceImages replaces .message-content innerHTML on render).
       $html.off("click.ffgCritChoose").on("click.ffgCritChoose", ".crit-choose", async (ev) => {
@@ -433,13 +596,26 @@ export default class CriticalRollerFFG extends FormApplication {
         const idx = parseInt(ev.currentTarget.dataset.choiceIndex, 10);
         const choice = data.choices[idx];
         if (!choice) return;
-        await CriticalRollerFFG._postChosen(data.critType, data.modifier, choice);
+
+        let appliedTo = null;
+        if (data.applyTo) {
+          const item = await fromUuid(choice.uuid);
+          if (!item || item.documentName !== "Item") {
+            ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
+            return;
+          }
+          const ok = await CriticalRollerFFG.applyCriticalTo(data.applyTo, item);
+          if (!ok) return;
+          appliedTo = data.targetName;
+        }
+
+        await CriticalRollerFFG._postChosen(data.critType, data.modifier, choice, appliedTo);
       });
     });
   }
 
   /** Post a clean confirmation card for the option the controller picked. */
-  static async _postChosen(critType, modifier, choice) {
+  static async _postChosen(critType, modifier, choice, appliedTo = null) {
     const typeLabel = game.i18n.localize(CRIT_TYPES[critType].titleKey);
     const icon = CRIT_TYPES[critType].icon;
     const severity = Math.max(0, Math.min(5, parseInt(choice.severity, 10) || 0));
@@ -473,6 +649,7 @@ export default class CriticalRollerFFG extends FormApplication {
             ${severity > 0 ? `<span class="crit-severity">${game.i18n.localize("SWFFG.Severity")}: ${severitySymbols}</span>` : ""}
           </div>
           <div class="crit-description">${description}</div>
+          ${appliedTo ? `<p class="crit-applied"><i class="fa-solid fa-user-check"></i> ${game.i18n.format("SWFFG.CriticalRoller.Card.AppliedTo", { name: appliedTo })}</p>` : ""}
         </div>
       </div>`;
 

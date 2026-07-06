@@ -1,0 +1,155 @@
+<form style="overflow-y: scroll; scrollbar-width: thin;">
+  <div class="dice-pool-dialog">
+    <div class="dice-pool"></div>
+    <div class="simulation" {{#if simDisplay }} {{ else }}style="display: none"{{/if}}>
+      Success chance: <span id="success_chance">{{ success }}</span>
+      <i class="fa-regular fa-block-question" title="Based on {{ simCount }} simulated rolls. Powered by SWRPG Online"></i>
+    </div>
+    <div class="upgrade-buttons">
+      <button id="upgrade-ability">{{localize "SWFFG.UpgradeAbility"}}</button>
+      <button id="upgrade-difficulty">{{localize "SWFFG.UpgradeDifficulty"}}</button>
+    </div>
+    <div class="upgrade-buttons">
+      <button id="downgrade-ability">{{localize "SWFFG.DowngradeAbility"}}</button>
+      <button id="downgrade-difficulty">{{localize "SWFFG.DowngradeDifficulty"}}</button>
+    </div>
+    <div style="margin: 10px 1px 5px 1px;">
+      <span><em>{{localize "SWFFG.DicePoolAddsHint"}}</em></span>
+    </div>
+    {{#if adversary}}
+    <div class="adversary-hint" style="margin: 5px 1px 8px 1px; padding: 5px 8px; border: 1px solid #b8860b; border-radius: 4px; background: rgba(218, 165, 32, 0.12);">
+      <span><i class="fas fa-triangle-exclamation" style="color: #b8860b;"></i> {{adversaryHint}}</span>
+    </div>
+    {{/if}}
+    <details>
+    <summary>Fixed Results</summary>
+    <table class="pool-additional-container">
+      <tr>
+        <td class="pool-additional">{{{ diceSymbols.success }}}</td>
+        <td class="pool-additional"><input type="button" name="success" min="0" /></td>
+        <td class="pool-additional"><label for="success">{{localize "SWFFG.Success"}}</label></td>
+
+        <td class="pool-additional">{{{ diceSymbols.failure }}}</td>
+        <td class="pool-additional"><input type="button" name="failure" min="0" /></td>
+        <td class="pool-additional"><label for="failure">{{localize "SWFFG.Failure"}}</label></td>
+      </tr>
+      <tr>
+        <td class="pool-additional">{{{ diceSymbols.advantage }}}</td>
+        <td class="pool-additional"><input type="button" name="advantage" min="0" /></td>
+        <td class="pool-additional"><label for="advantage">{{localize "SWFFG.Advantage"}}</label></td>
+
+        <td class="pool-additional">{{{ diceSymbols.threat }}}</td>
+        <td class="pool-additional"><input type="button" name="threat" min="0" /></td>
+        <td class="pool-additional"><label for="threat">{{localize "SWFFG.Threat"}}</label></td>
+      </tr>
+      <tr>
+        <td class="pool-additional">{{{ diceSymbols.triumph }}}</td>
+        <td class="pool-additional"><input type="button" name="triumph" min="0" /></td>
+        <td class="pool-additional"><label for="triumph">{{localize "SWFFG.Triumph"}}</label></td>
+
+        <td class="pool-additional">{{{ diceSymbols.despair }}}</td>
+        <td class="pool-additional"><input type="button" name="despair" min="0" /></td>
+        <td class="pool-additional"><label for="despair">{{localize "SWFFG.Despair"}}</label></td>
+      </tr>
+      {{#if enableForceDie}}
+      <tr>
+        <td class="pool-additional">{{{ diceSymbols.light }}}</td>
+        <td class="pool-additional"><input type="button" name="light" min="0" /></td>
+        <td class="pool-additional"><label for="light">{{localize labels.light}}</label></td>
+
+        <td class="pool-additional">{{{ diceSymbols.dark }}}</td>
+        <td class="pool-additional"><input type="button" name="dark" min="0" /></td>
+        <td class="pool-additional"><label for="dark">{{localize labels.dark}}</label></td>
+      </tr>
+      {{/if}}
+    </table>
+    </details>
+    <table class="pool-dice-pool">
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/yellow.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value">
+            <input type="button" name="proficiency" min="0" />
+          </div>
+        </td>
+        <td class="pool-text"><label for="proficiency">{{localize "SWFFG.DiceProficiency"}}</label></td>
+      </tr>
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/green.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value"><input type="button" name="ability" min="0" /></div>
+        </td>
+        <td class="pool-text"><label for="ability">{{localize "SWFFG.DiceAbility"}}</label></td>
+      </tr>
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/red.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value"><input type="button" name="challenge" min="0" /></div>
+        </td>
+        <td class="pool-text"><label for="challenge">{{localize "SWFFG.DiceChallenge"}}</label></td>
+      </tr>
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/purple.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value"><input type="button" name="difficulty" min="0" /></div>
+        </td>
+        <td class="pool-text"><label for="difficulty">{{localize "SWFFG.DiceDifficulty"}}</label></td>
+      </tr>
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/blue.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value"><input type="button" name="boost" min="0" /></div>
+        </td>
+        <td class="pool-text"><label for="boost">{{localize "SWFFG.DiceBoost"}}</label></td>
+      </tr>
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/black.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value"><input type="button" name="setback" min="0" /></div>
+        </td>
+        <td class="pool-text"><label for="setback">{{localize "SWFFG.DiceSetback"}}</label></td>
+      </tr>
+      {{#if enableForceDie}}
+      <tr class="pool-container flex-group-center">
+        <td><img src="systems/starwarsffg/images/dice/starwars/whiteHex.png" width="30" height="30" /></td>
+        <td>
+          <div class="pool-value"><input type="button" name="force" min="0" /></div>
+        </td>
+        <td class="pool-text"><label for="force">{{localize "SWFFG.DiceForce"}}</label></td>
+      </tr>
+      {{/if}}
+    </table>
+    <details>
+    <summary>Options</summary>
+    <div class="pool-roll-options">
+      {{#if (or (eq isGM true) (eq canUserAddAudio true)) }}
+      <div class="flexrow">
+        <button id="add-sound" class="extend-button"><i class="fas fa-volume-up"></i></button>
+        <select class="sound-selection hide">
+          <option></option>
+          {{#each sounds}} <option value="{{this.path}}" {{#if this.selected}}selected{{/if}}>{{this.name}} {{/each}}
+        </select>
+      </div>
+      {{/if}}
+      <div class="flexrow">
+        <button id="add-flavor" class="extend-button"><i class="far fa-comment-dots"></i></button>
+        <input type="text" class="flavor-text hide" placeholder="Flavor Text" value="{{flavor}}" />
+      </div>
+      {{#if isGM}}
+      <div class="flexrow">
+        <button id="send-to-player" class="extend-button"><i class="fas fa-share"></i></button>
+        <select class="user-selection hide">
+          <option></option>
+          {{#each users}}
+          <option value="{{this.id}}">{{this.name}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{/if}}
+    </div>
+    </details>
+    <div class="roll-button flexrow">
+      <button class="btn">{{localize "SWFFG.SkillsRoll"}}</button>
+    </div>
+  </div>
+</form>

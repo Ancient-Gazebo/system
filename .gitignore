@@ -1,0 +1,57 @@
+# ---------------------------------------------------------------------------
+# starwarsffg — .gitignore
+#
+# NOTE: This is a Foundry VTT *system*. Everything Foundry loads at runtime
+# ships in the repo, so the following are DELIBERATELY tracked (do not ignore):
+#   - lib/        vendored libs referenced by system.json (slimselect,
+#                 datatables, jszip, jxon, pure, @swrpg-online). This includes
+#                 their dist/, *.min.js, and *.map files — hence NO global
+#                 dist/ or *.map ignores below.
+#   - images/, fonts/   shipped assets
+#   - styles/*.css      compiled CSS is checked in (no SCSS build in this tree)
+# ---------------------------------------------------------------------------
+
+# Node / tooling (appears after `npm install` of devDependencies)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.npm/
+.eslintcache
+
+# Backups & scratch files
+*.bak
+*.orig
+*.tmp
+*~
+# ...but keep this one: it's a documented rollback reference for the DataModel
+# migration (see modules/datamodels/README.md — the revert procedure restores
+# it over template.json).
+!template.full.json.bak
+
+# OS cruft
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.idea/
+.vscode/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+
+# Local env / secrets (in case any tooling ever needs them)
+.env
+.env.*
+!.env.example
+
+# Foundry may symlink/copy this system into its data dir; ignore any nested
+# Foundry userdata that could accidentally land here.
+Data/
+Logs/
+Config/

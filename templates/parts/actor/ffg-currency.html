@@ -1,0 +1,9 @@
+{{!--
+  Renders one money box per configured currency denomination. Driven by `currencies`, which the
+  actor sheet's getData builds from CONFIG.FFG.currencies. Each entry carries a pre-localized
+  `label`, the form `name` (data.currency.<key> -> system.currency.<key>), and a display `value`
+  (grouped with separators above 999, matching the legacy credits box).
+--}}
+{{#each currencies as |cur|}}
+  {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="double" type="String" title=cur.label name=cur.name value=cur.value)}}
+{{/each}}

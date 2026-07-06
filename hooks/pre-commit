@@ -1,0 +1,53 @@
+#!/bin/sh
+# ---------------------------------------------------------------------------
+# starwarsffg pre-commit hook: JavaScript syntax gate
+#
+# Before each commit, this parses every staged .js file with acorn (the
+# project's established validator). If any file has a syntax error, the commit
+# is blocked and the error is shown, so broken JavaScript never gets committed.
+#
+# It FAILS OPEN: if acorn isn't installed yet, it skips the check and lets you
+# commit normally (so setup issues never block you). Run `npm install` to turn
+# the check on.
+#
+# Emergency bypass (not recommended): git commit --no-verify
+# ---------------------------------------------------------------------------
+
+# Staged files that are Added/Copied/Modified (skip deletions), .js only,
+# excluding the vendored lib/ folder (third-party, not ours to validate).
+files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.js$' | grep -v '^lib/')
+
+# Nothing to check.
+[ -z "$files" ] && exit 0
+
+# Find a runnable acorn: local install first, then a no-download npx.
+if [ -x "node_modules/.bin/acorn" ]; then
+  ACORN="node_modules/.bin/acorn"
+elif command -v acorn >/dev/null 2>&1; then
+  ACORN="acorn"
+elif npx --no-install acorn --help >/dev/null 2>&1; then
+  ACORN="npx --no-install acorn"
+else
+  echo "info: skipping JS syntax check (acorn not installed)."
+  echo "      run 'npm install' in this folder to enable it."
+  exit 0
+fi
+
+fail=0
+for f in $files; do
+  out=$($ACORN --ecma2022 --module "$f" 2>&1)
+  if [ $? -ne 0 ]; then
+    echo "SYNTAX ERROR  $f"
+    echo "$out" | sed 's/^/    /'
+    fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "Commit blocked. Fix the syntax error(s) above, then commit again."
+  echo "Emergency bypass (not recommended): git commit --no-verify"
+  exit 1
+fi
+
+exit 0

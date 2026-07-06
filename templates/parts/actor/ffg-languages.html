@@ -1,0 +1,28 @@
+{{!--
+  Languages section (Basic Information / General tab). Clicking the "Languages" title posts every
+  known language to chat. The "+ Add" control adds a language chosen from the GM-configured master
+  list (world setting "arrayLanguages") or a custom one; the x on each chip removes it.
+  Reads `languages` from the sheet context (populated in ActorSheetFFG.getData).
+--}}
+<div class="resource full languages-block">
+  <div class="attribute flex-group-center">
+    <div class="block-background">
+      <div class="block-title">
+        <a class="languages-roll-all" title="{{localize "SWFFG.Languages.ToChat"}}">{{localize "SWFFG.Languages.Title"}}</a>
+      </div>
+      <div class="block-attribute languages-attribute">
+        <ul class="language-list">
+          {{#each languages as |language|}}
+          <li class="language-entry" data-language="{{language}}">
+            <span class="language-name">{{language}}</span>
+            <a class="language-remove" title="{{localize "SWFFG.Languages.Remove"}}" data-language="{{language}}"><i class="fas fa-times"></i></a>
+          </li>
+          {{/each}}
+          <li class="language-add-entry">
+            <a class="language-add" title="{{localize "SWFFG.Languages.Add"}}"><i class="far fa-plus-square"></i> {{localize "SWFFG.Languages.Add"}}</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>

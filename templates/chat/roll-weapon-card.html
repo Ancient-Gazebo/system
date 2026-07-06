@@ -1,0 +1,26 @@
+<div class="item-display" data-item-id="{{system._id}}">
+  {{#iff (defaultImage system.img) '!=' true}}
+    <img class="item-image" src="{{system.img}}" />
+  {{/iff}}
+  <h2 class="item-name">{{system.name}}</h2>
+  {{#if ffg.success}}
+  {{#iff system.system.damage.adjusted '!=' 0 }}<h4 class="item-damage">{{localize "SWFFG.ItemsDamage"}}: <input class="damage-value" type="text" value="{{system.system.damage.adjusted}} + {{ffg.success}} = {{math system.system.damage.adjusted '+' ffg.success}}" disabled /></h4>
+  <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{system.system.crit.adjusted}}" disabled /></h4>{{/iff}}
+  {{#iff system.system.damage.adjusted '==' 0 }}<h4 class="item-damage">{{localize "SWFFG.ItemsDamage"}}: <input class="damage-value" type="text" value="{{system.system.damage.value}} + {{ffg.success}} = {{math system.system.damage.value '+' ffg.success}}" disabled /></h4>
+  <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{system.system.crit.value}}" disabled /></h4>{{/iff}}
+  {{else}}
+  <h4 class="item-miss">Miss!</h4>
+  {{/if}}
+  {{#if system.system.doNotSubmit.qualities}}
+  <div class="specials">
+    <h5>
+      {{#each system.system.doNotSubmit.qualities as |item id|}}
+        <div class="item-pill-hover hover-tooltip" data-item-type="itemmodifier" data-item-embed-name="{{ name }}" data-item-embed-img="{{ item.img }}" data-desc="{{ item.description }}" data-item-ranks="{{ item.totalRanks }}" data-tooltip="Loading...">
+          {{{name}}} {{ item.totalRanks }}
+        </div>
+      {{/each}}
+    </h5>
+  </div>
+  {{/if}}
+  {{#if system.system.special.value}}{{{ffgDiceSymbols system.system.special.value}}}{{/if}}
+</div>

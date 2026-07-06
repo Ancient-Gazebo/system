@@ -1,0 +1,36 @@
+{
+  "Actor": {
+    "types": [
+      "character",
+      "minion",
+      "vehicle",
+      "homestead",
+      "rival",
+      "nemesis"
+    ]
+  },
+  "Item": {
+    "types": [
+      "ability",
+      "armour",
+      "career",
+      "criticaldamage",
+      "criticalinjury",
+      "forcepower",
+      "gear",
+      "itemattachment",
+      "itemmodifier",
+      "talent",
+      "shipattachment",
+      "shipweapon",
+      "homesteadupgrade",
+      "signatureability",
+      "specialization",
+      "species",
+      "weapon",
+      "background",
+      "obligation",
+      "motivation"
+    ]
+  }
+}

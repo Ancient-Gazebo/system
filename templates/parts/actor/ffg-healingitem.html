@@ -1,0 +1,38 @@
+{{!--
+  Healing-item box (stimpacks / emergency repair patches).
+  Params:
+    kind   - "stim" (default) or "patch"; written to data-medical-kind so the
+             sheet listeners know which counter (system.stats.medical.uses vs
+             .patchUses) to read/write and how to heal.
+    title  - box label; falls back to the default stimpack name.
+    value  - current use count for this counter.
+  Both boxes show "value/5". Uses cap at 5: stim heals 5/4/3/2/1 across the first five
+  uses then 0; patch heals a flat 3 for each of the first five uses then 0.
+--}}
+<div class="attribute ffg-healing-box" style="padding-left: 2px;">
+  <div class="block-background" data-medical-kind="{{#if (ne kind undefined)}}{{kind}}{{else}}stim{{/if}}">
+    <div class="block-title attribute">
+      {{#if (ne title undefined)}}
+        {{title}}
+      {{else}}
+        {{localize "SWFFG.DefaultMedicalItemName"}}
+      {{/if}}
+    </div>
+    <div class="flex block-attribute">
+      <div class="flex">
+        <div>
+          <i class="fas fa-minus-circle medical"></i>
+            {{#if (ne value undefined)}}{{value}}{{else}}0{{/if}}/5
+          <i class="fas fa-plus-circle medical"></i>
+        </div>
+      </div>
+      <div>
+        <button
+          type="button"
+          value="resetUses"
+          class="resetMedical"
+        ><i class="fas fa-recycle"></i></button>
+      </div>
+    </div>
+  </div>
+</div>

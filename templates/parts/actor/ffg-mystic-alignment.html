@@ -1,0 +1,25 @@
+{{!-- Mystic Alignment balance-point scale. Rendered only when the actor has a Maximum Force Rating
+     of at least 1 (hasForceRating, computed in the sheet's getData). Shared by the character,
+     nemesis, and rival sheets. --}}
+{{#if hasForceRating}}
+<div class="resource full force-presence">
+  <div class="attribute flex-group-center">
+    <div class="block-background">
+      <div class="block-title">{{localize "SWFFG.MysticAlignment"}}</div>
+      <div class="force-presence-scale">
+        <img class="force-presence-control force-presence-dark" src="systems/starwarsffg/images/dice/starwars/darkside.png" width="24" height="24" title="{{localize 'SWFFG.ForcePresenceAddDark'}}" />
+        <div class="balance-points">
+          {{#each forcePresence.points as |state idx|}}
+          <span class="balance-point {{state}}" data-index="{{idx}}">
+            {{#if (eq state "dark")}}<svg viewBox="0 0 20 20" class="bp-svg"><circle cx="10" cy="10" r="8" fill="#1a1a1a" stroke="#b8860b" stroke-width="1.5"/></svg>{{/if}}
+            {{#if (eq state "light")}}<svg viewBox="0 0 20 20" class="bp-svg"><circle cx="10" cy="10" r="8" fill="#f5f5f5" stroke="#b8860b" stroke-width="1.5"/></svg>{{/if}}
+            {{#if (eq state "neutral")}}<svg viewBox="0 0 20 20" class="bp-svg"><circle cx="10" cy="10" r="8" fill="#f5f5f5" stroke="#b8860b" stroke-width="1.5"/><path d="M10 2 A8 8 0 0 0 10 18 Z" fill="#1a1a1a"/></svg>{{/if}}
+          </span>
+          {{/each}}
+        </div>
+        <img class="force-presence-control force-presence-light" src="systems/starwarsffg/images/dice/starwars/lightside.png" width="24" height="24" title="{{localize 'SWFFG.ForcePresenceAddLight'}}" />
+      </div>
+    </div>
+  </div>
+</div>
+{{/if}}

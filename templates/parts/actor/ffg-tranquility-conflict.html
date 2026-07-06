@@ -1,0 +1,9 @@
+{{!-- Tranquility (formerly Morality) and Conflict boxes, side by side. Rendered only when the actor
+     has a Maximum Force Rating of at least 1 (hasForceRating). Used by the nemesis and rival sheets;
+     the character sheet keeps its own copy because there the titles link back to the Obligation tab. --}}
+{{#if hasForceRating}}
+<div class="tranquility-conflict-row">
+  {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionTranquility" type="Number" name="data.morality.value" value=data.morality.value)}}
+  {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionConflict" type="Number" name="data.conflict.value" value=data.conflict.value)}}
+</div>
+{{/if}}

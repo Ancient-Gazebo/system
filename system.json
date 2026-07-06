@@ -1,0 +1,65 @@
+{
+  "id": "starwarsffg",
+  "title": "Star Wars FFG",
+  "description": "A system for playing Star Wars FFG games.",
+  "version": "2.0.3",
+  "compatibility": {
+    "minimum": 13,
+    "verified": 13,
+    "maximum": 13
+  },
+  "authors": [{"name": "Esrin"}, {"name": "CStadther"}, {"name": "Wrycu"}, {"name": "Jaxxa"}],
+  "esmodules": ["modules/dice-pool-ffg.js", "modules/swffg-main.js", "lib/slimselect/slimselect.js", "lib/datatables/datatables.min.js", "tools/datamodel-prune-scan.js"],
+  "styles": ["styles/starwarsffg.css", "lib/pure/grids-min.css", "lib/slimselect/slimselect.css", "lib/datatables/datatables.min.css"],
+  "scripts": ["lib/jszip/jszip.min.js", "lib/jxon/jxon.min.js", "lib/slimselect/slimselect.js"],
+  "socket": true,
+  "packs": [],
+  "packFolders": [],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    },
+    {
+      "lang": "de",
+      "name": "Deutsch (German)",
+      "path": "lang/de.json"
+    },
+    {
+      "lang": "fr",
+      "name": "Français (French)",
+      "path": "lang/fr.json"
+    },
+    {
+      "lang": "es",
+      "name": "Español (Spanish)",
+      "path": "lang/es.json"
+    },
+    {
+      "lang": "pt-BR",
+      "name": "Português (BR)",
+      "path": "lang/pt-BR.json"
+    },
+    {
+      "lang": "ca",
+      "name": "Català (Catalan)",
+      "path": "lang/ca.json"
+    },
+    {
+      "lang": "ua",
+      "name": "Українська мова (Ukrainian)",
+      "path": "lang/ua.json"
+    }
+  ],
+  "grid": {
+    "distance": 5,
+    "units": "ft"
+  },
+  "primaryTokenAttribute": "wounds",
+  "secondaryTokenAttribute": "strain",
+  "url": "https://github.com/StarWarsFoundryVTT/StarWarsFFG",
+  "manifest": "https://github.com/StarWarsFoundryVTT/StarWarsFFG/releases/latest/download/system.json",
+  "download": "https://github.com/StarWarsFoundryVTT/StarWarsFFG/releases/download/v2.0.3/system.zip",
+  "license": "LICENSE.txt"
+}

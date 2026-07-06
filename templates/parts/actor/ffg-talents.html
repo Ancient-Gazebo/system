@@ -1,0 +1,80 @@
+<ul class="talent-list">
+  <li class="talents-header flexrow">
+    <div class="header-name ffg-purchase" data-buy-action="talent">{{localize "SWFFG.Talents"}}</div>
+    <div class="talent-col-activation">{{localize "SWFFG.TalentsActivation"}}</div>
+    <div class="talent-col-rank">{{localize "SWFFG.TalentsRank"}}</div>
+    {{#if (ne this.FFG.theme "starwars" )}}
+    <div class="talent-col-tier">{{localize "SWFFG.TalentsCurrentTier"}}</div>
+    {{/if}}
+    <div class="talent-org-controls talent-col-actions">
+      {{#if talentOrg.enabled}}
+      <a class="talent-org-add-tab" title="{{localize "SWFFG.TalentOrganization.AddTab"}}"><i class="fas fa-folder-plus"></i></a>
+      <a class="talent-org-toggle active" title="{{localize "SWFFG.TalentOrganization.Disable"}}"><i class="fas fa-list-ul"></i></a>
+      {{else}}
+      <a class="talent-org-toggle" title="{{localize "SWFFG.TalentOrganization.Enable"}}"><i class="fas fa-folder-tree"></i></a>
+      {{/if}}
+    </div>
+  </li>
+
+  {{#if talentOrg.enabled}}
+  {{!-- Manual organization: collapsible, user-named tabs --}}
+  {{#each talentOrg.groups as |group|}}
+  <li class="talent-tab-header flexrow {{#if group.collapsed}}collapsed{{/if}}" data-tab-id="{{group.id}}">
+    <div class="talent-tab-title">
+      {{#unless group.isDefault}}<a class="talent-tab-drag-handle" draggable="true" data-tab-id="{{group.id}}" title="{{localize "SWFFG.TalentOrganization.ReorderTab"}}"><i class="fas fa-grip-vertical"></i></a>{{/unless}}
+      <a class="talent-tab-collapse" title="{{localize "SWFFG.TalentOrganization.Collapse"}}"><i class="fas {{#if group.collapsed}}fa-caret-right{{else}}fa-caret-down{{/if}}"></i></a>
+      {{#if group.isDefault}}
+      <span class="talent-tab-name">{{group.name}}</span>
+      {{else}}
+      <input class="talent-tab-name-input" type="text" value="{{group.name}}" data-tab-id="{{group.id}}" draggable="false" />
+      {{/if}}
+      <span class="talent-tab-count">({{group.talents.length}})</span>
+    </div>
+    <div class="talent-tab-actions">
+      {{#unless group.isDefault}}
+      <a class="talent-tab-delete" title="{{localize "SWFFG.TalentOrganization.DeleteTab"}}" data-tab-id="{{group.id}}"><i class="fas fa-trash"></i></a>
+      {{/unless}}
+    </div>
+  </li>
+  <ul class="talent-org-list {{#if group.collapsed}}hidden{{/if}}" data-tab-id="{{group.id}}">
+    {{#each group.talents as |item id|}}
+    <li class="item specialization-talent-item talent-org-item flexrow" draggable="true" data-item-id="{{item.itemId}}" data-item-name="{{item.name}}" data-talent-key="{{item.talentKey}}" data-tab-id="{{group.id}}">
+      <div class="item-name">
+        <i class="fas fa-grip-vertical talent-org-handle"></i>&nbsp;{{item.name}}
+      </div>
+      <div class="talent-col-activation">{{localize item.activation}}</div>
+      <div class="talent-col-rank">{{item.rank}}</div>
+      {{#if (ne ../../FFG.theme "starwars" )}}
+      <div class="talent-col-tier">{{item.tier}}</div>
+      {{/if}}
+      <div class="item-controls talent-col-actions">
+        {{#if item.isDirectlyAdded}}<a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>{{/if}}
+        <a class="item-control item-info" title="Item Information"><i class="fas fa-info-circle"></i></a>
+      </div>
+    </li>
+    {{/each}}
+    <li class="talent-org-dropzone {{#if group.talents.length}}empty-hidden{{/if}}" data-tab-id="{{group.id}}">{{#unless group.talents.length}}{{localize "SWFFG.TalentOrganization.DropHere"}}{{/unless}}</li>
+  </ul>
+  {{/each}}
+  {{else}}
+  {{!-- Default (flat) rendering --}}
+  <ul class="items-list">
+    {{#each talentList as |item id|}}
+    <li class="item specialization-talent-item flexrow" data-item-id="{{item.itemId}}" data-item-name="{{item.name}}">
+      <div class="item-name">
+        {{item.name}}
+      </div>
+      <div class="talent-col-activation">{{localize item.activation}}</div>
+      <div class="talent-col-rank">{{item.rank}}</div>
+      {{#if (ne ../this.FFG.theme "starwars" )}}
+      <div class="talent-col-tier">{{item.tier}}</div>
+      {{/if}}
+      <div class="item-controls talent-col-actions">
+        {{#if item.isDirectlyAdded}}<a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>{{/if}}
+        <a class="item-control item-info" title="Item Information"><i class="fas fa-info-circle"></i></a>
+      </div>
+    </li>
+    {{/each}}
+  </ul>
+  {{/if}}
+</ul>

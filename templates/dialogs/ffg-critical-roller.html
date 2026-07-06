@@ -1,0 +1,49 @@
+<form class="ffg-critical-roller-form" autocomplete="off">
+  <div class="crit-row crit-type-row">
+    <label class="crit-label">{{localize "SWFFG.CriticalRoller.Field.Type"}}</label>
+    <select name="critType" class="crit-type-select">
+      {{#each types as |t|}}
+        <option value="{{t.key}}" {{#if t.selected}}selected{{/if}}>{{t.label}}</option>
+      {{/each}}
+    </select>
+    <p class="crit-hint crit-pool-count">{{localize "SWFFG.CriticalRoller.Field.PoolCount"}}: {{poolCount}}</p>
+  </div>
+
+  <fieldset class="crit-modifiers">
+    <legend>{{localize "SWFFG.CriticalRoller.Field.Modifiers"}}</legend>
+    <p class="crit-hint">{{localize "SWFFG.CriticalRoller.Field.ModifiersHint"}}</p>
+
+    {{#each mods as |m|}}
+      <div class="crit-mod-line" title="{{m.hint}}">
+        <label for="mod-{{m.key}}">{{m.label}}</label>
+        <input id="mod-{{m.key}}" name="mod-{{m.key}}" type="number" min="0" step="1" value="{{m.value}}" />
+        <span class="crit-mod-step">{{m.signLabel}}{{m.step}} {{localize "SWFFG.CriticalRoller.Field.Each"}}</span>
+      </div>
+    {{/each}}
+
+    <div class="crit-mod-line crit-other-line" title="{{localize 'SWFFG.CriticalRoller.Mod.OtherHint'}}">
+      <label for="mod-other">{{localize "SWFFG.CriticalRoller.Mod.Other"}}</label>
+      <input id="mod-other" name="mod-other" type="number" step="1" value="{{other}}" />
+      <span class="crit-mod-step">{{localize "SWFFG.CriticalRoller.Field.Flat"}}</span>
+    </div>
+
+    <div class="crit-total-line">
+      <span>{{localize "SWFFG.CriticalRoller.Field.TotalModifier"}}</span>
+      <span class="crit-total-value {{totalClass}}">{{totalDisplay}}</span>
+    </div>
+  </fieldset>
+
+  <div class="crit-row crit-twice-row">
+    <label class="crit-checkbox">
+      <input name="twice" type="checkbox" {{#if twice}}checked{{/if}} />
+      {{localize "SWFFG.CriticalRoller.Field.Twice"}}
+    </label>
+    <p class="crit-hint">{{localize "SWFFG.CriticalRoller.Field.TwiceHint"}}</p>
+  </div>
+
+  <footer class="crit-footer">
+    <button type="button" class="crit-roll-button">
+      <i class="fa-solid fa-dice-d20"></i> {{localize "SWFFG.CriticalRoller.Field.Roll"}}
+    </button>
+  </footer>
+</form>

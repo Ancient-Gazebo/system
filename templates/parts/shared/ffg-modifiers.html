@@ -1,0 +1,25 @@
+<header class="attributes-header flexrow">
+  <span class="attribute-modtype">{{localize "SWFFG.ModifierType"}}</span>
+  <span class="attribute-mod">{{localize "SWFFG.Modifier"}}</span>
+  <span class="attribute-value">{{localize "SWFFG.ModifierValue"}}</span>
+  <a class="attribute-control" data-action="create"><i class="fas fa-plus"></i></a>
+</header>
+<ol class="attributes-list">
+  {{#each data.attributes as |attr key|}} {{#if attr.exclude}} {{else}}
+  <li class="attribute flexrow" data-attribute="{{key}}">
+    <input class="attribute-key" type="text" name="data.attributes.{{key}}.key" value="{{key}}" style="display: none;" />
+    <select name="data.attributes.{{ key }}.modtype" class="flat_editor dropdown modtype" data-type="modtype" data-attr-key="{{ key }}">
+      {{ selectOptions ../modifierTypes selected=attr.modtype valueAttr="value" labelAttr="label" localize=true }}
+    </select>
+    <select name="data.attributes.{{ key }}.mod" class="flat_editor dropdown mod" data-type="mod" data-attr-key="{{ key }}">
+      {{ selectOptions (lookup ../modifierChoices attr.modtype) selected=attr.mod  valueAttr="value" labelAttr="label"localize=true }}
+    </select>
+    {{#if (eq attr.modtype "Career Skill")}}
+    <input name="data.attributes.{{ key }}.value" type="checkbox" class="modvalue" {{#if attr.value}}checked{{/if}} data-attr-key="{{ key }}">
+    {{else}}
+    <input name="data.attributes.{{ key }}.value" type="number" class="modvalue" value="{{ attr.value }}" data-attr-key="{{ key }}">
+    {{/if}}
+    <a class="attribute-control flat_editor add-mod" data-action="delete"><i class="fas fa-trash"></i></a>
+  </li>
+  {{/if}} {{/each}}
+</ol>

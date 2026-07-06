@@ -1,0 +1,147 @@
+<form class="{{cssClass}} item-sheet-forcepower" autocomplete="off">
+  <header class="sheet-header">
+    <div class="header-fields">
+      <div class="talent-background talent-block">
+        <div class="talent-header">
+          <div></div>
+          <div class="required_fr">
+            {{localize 'SWFFG.ForcePowerRequiredFR'}} <input name="system.required_force_rating" type="text" value="{{item.system.required_force_rating}}" placeholder="{{localize 'SWFFG.ForcePowerRequiredFR'}}"/>
+          </div><br><br>
+          <div class="talent-name"><input name="name" type="text" value="{{item.name}}" placeholder="{{localize 'SWFFG.ForcePowerName'}}" /></div>
+          <div>{{localize 'SWFFG.ForceBasicPower'}}</div>
+        </div>
+        <div class="talent-body">
+          <div class="popout-editor" data-target="data.description" data-label="{{item.name}} {{localize 'SWFFG.ForceBasicPower'}}">
+            <div class="popout-editor-button"><i class="fas fa-edit"></i></div>
+            {{{ffgDiceSymbols data.enrichedDescription}}}
+          </div>
+        </div>
+        <div class="talent-actions">
+          <a class="talent-action hover" data-itemid="{{item._id}}"
+            ><i class="fas fa-cog"></i>
+            <div class="tooltip">Modifiers</div>
+          </a>
+          <a class="talent-action" data-action="edit"><i class="fas fa-edit"></i></a>
+          <input class="talent-hidden" name="data.isEditing" type="text" value="{{data.isEditing}}" data-dtype="Boolean" />
+          <a class="talent-action" data-action="img"><i class="fas fa-image"></i></a>
+        </div>
+        <div class="talent-cost">{{ localize "SWFFG.Cost"}}<input name="data.base_cost" type="text" value="{{item.system.base_cost}}" data-dtype="String" /></div>
+      </div>
+    </div>
+  </header>
+
+  {{!-- Sheet Tab Navigation --}}
+  {{> "systems/starwarsffg/templates/parts/shared/ffg-tabs.html" displayLimited=true limited=limited items=(array
+    (object tab="talents" label="SWFFG.TabTalents" icon="fab fa-superpowers" cls=classType)
+    (object tab="sources" label="SWFFG.TabSources" icon="fa-light fa-book-open-cover" cls=classType)
+    (object tab="tags" label="SWFFG.TabTags" icon="fa-sharp fa-regular fa-tags" cls=classType)
+  )}}
+
+  {{!-- Sheet Body --}}
+  <section class="sheet-body">
+    <div class="talent-grid {{#if data.isEditing}}{{else}}talent-disable-edit{{/if}}">
+      {{#each data.upgrades as |upgrade key|}}
+      <div class="talent-block talent-upgrade talent-{{#if upgrade.size}}{{upgrade.size}}{{else}}single{{/if}} {{#if upgrade.visible}}{{else}}talent-hidden{{/if}} force-power" id="{{key}}" data-cost="{{upgrade.cost}}" data-base-item-name="{{../item.name}}">
+        <div class="talent-background">
+          <div class="talent-header">
+            <div><input type="checkbox" name="data.upgrades.{{key}}.islearned" data-dtype="Boolean" {{#if upgrade.islearned }}checked{{else}} {{/if}}></div>
+            <div class="talent-name" data-name="{{upgrade.name}}"><input name="data.upgrades.{{key}}.name" type="text" value="{{upgrade.name}}" placeholder="{{localize 'SWFFG.ForceUpgradeName'}}" /></div>
+          </div>
+          <div class="talent-body">
+            <div class="popout-editor" data-target="data.upgrades.{{key}}.description" data-value="data.upgrades.{{key}}.enrichedDescription" data-label="{{upgrade.name}}">
+              <div class="popout-editor-button"><i class="fas fa-edit"></i></div>
+              {{{upgrade.enrichedDescription}}}
+            </div>
+            <input class="talent-hidden" name="data.upgrades.{{key}}.size" type="text" value="{{upgrade.size}}" data-dtype="String" />
+            <input class="talent-hidden" name="data.upgrades.{{key}}.visible" type="text" value="{{upgrade.visible}}" data-dtype="Boolean" />
+          </div>
+        </div>
+        <div class="talent-cost">{{ localize "SWFFG.Cost"}}<input name="data.upgrades.{{key}}.cost" type="text" value="{{upgrade.cost}}" data-dtype="String" /></div>
+        <div class="talent-modifiers">
+          <a class="talent-action" data-itemid="{{key}}">
+            {{#if ../item.isOwned }}
+              {{#if upgrade.islearned}}
+              <i class="fa-regular fa-circle-down ffg-refund" data-refund-action="forcepower-upgrade" data-base-item-name="{{../item.name}}" data-upgrade-name="{{ upgrade.name }}" data-upgrade-id="{{ key }}" title="{{localize 'SWFFG.Actors.Sheets.Refund.Tooltip'}}"></i>
+              {{else}}
+              <i class="fa-regular fa-circle-up ffg-purchase" data-buy-action="forcepower-upgrade" data-cost="{{upgrade.cost}}" data-base-item-name="{{../item.name}}" data-upgrade-name="{{ upgrade.name }}" data-upgrade-id="{{ key }}"></i>
+              {{/if}}
+            {{/if}}
+          </a>
+          <a class="talent-action" data-itemid="{{key}}">
+            <i class="fas fa-cog"></i>
+          </a>
+        </div>
+        <div class="talent-actions {{#if upgrade.canCombine}}talent-canCombine{{/if}} {{#if upgrade.canSplit}}talent-canSplit{{/if}}">
+          <div class="talent-action combine hover" data-action="combine" data-key="{{key}}">
+            <i class="fas fa-compress-alt"></i>
+            <div class="tooltip">{{localize 'SWFFG.CombineBox'}}</div>
+          </div>
+          <div class="talent-action split hover" data-action="split" data-key="{{key}}">
+            <i class="fas fa-expand-alt"></i>
+            <div class="tooltip">{{localize 'SWFFG.SplitBox'}}</div>
+          </div>
+        </div>
+        <div class="talent-connections">
+          <div class="talent-connection-point-top">
+            <div class="{{#if upgrade.links-top-1}}talent-connector{{/if}} talent-action {{#if upgrade.canLinkTop}}talent-connection-point-top{{else}}talent-hidden{{/if}} talent-{{upgrade.size}}" data-action="link-top" data-key="{{key}}" data-linknumber="1">
+              <i class="fas fa-chevron-up"></i>
+              <div class="talent-connector-up {{#if (or upgrade.islearned upgrade.isTop1Learned)}}lightsaber-blue{{else}}lightsaber-red{{/if}}">
+                <i class="fas fa-chevron-down"></i>
+              </div>
+              <input class="talent-hidden" name="data.upgrades.{{key}}.links-top-1" type="text" value="{{upgrade.links-top-1}}" data-dtype="Boolean" />
+            </div>
+            {{#iff upgrade.sizeInt ">" 1}}
+            <div class="{{#if upgrade.links-top-2}}talent-connector{{/if}} talent-action {{#if upgrade.canLinkTop}}talent-connection-point-top{{else}}talent-hidden{{/if}} talent-{{upgrade.size}}" data-action="link-top" data-key="{{key}}" data-linknumber="2">
+              <i class="fas fa-chevron-up"></i>
+              <div class="talent-connector-up {{#if (or upgrade.islearned upgrade.isTop2Learned)}}lightsaber-blue{{else}}lightsaber-red{{/if}}">
+                <i class="fas fa-chevron-down"></i>
+              </div>
+              <input class="talent-hidden" name="data.upgrades.{{key}}.links-top-2" type="text" value="{{upgrade.links-top-2}}" data-dtype="Boolean" />
+            </div>
+            {{/iff}} {{#iff upgrade.sizeInt ">" 2}}
+            <div class="{{#if upgrade.links-top-3}}talent-connector{{/if}} talent-action {{#if upgrade.canLinkTop}}talent-connection-point-top{{else}}talent-hidden{{/if}} talent-{{upgrade.size}}" data-action="link-top" data-key="{{key}}" data-linknumber="3">
+              <i class="fas fa-chevron-up"></i>
+              <div class="talent-connector-up {{#if (or upgrade.islearned upgrade.isTop3Learned)}}lightsaber-blue{{else}}lightsaber-red{{/if}}">
+                <i class="fas fa-chevron-down"></i>
+              </div>
+              <input class="talent-hidden" name="data.upgrades.{{key}}.links-top-3" type="text" value="{{upgrade.links-top-3}}" data-dtype="Boolean" />
+            </div>
+            {{/iff}} {{#iff upgrade.sizeInt ">" 3}}
+            <div class="{{#if upgrade.links-top-4}}talent-connector{{/if}} talent-action {{#if upgrade.canLinkTop}}talent-connection-point-top{{else}}talent-hidden{{/if}} talent-{{upgrade.size}}" data-action="link-top" data-key="{{key}}" data-linknumber="4">
+              <i class="fas fa-chevron-up"></i>
+              <div class="talent-connector-up {{#if (or upgrade.islearned upgrade.isTop4Learned)}}lightsaber-blue{{else}}lightsaber-red{{/if}}">
+                <i class="fas fa-chevron-down"></i>
+              </div>
+              <input class="talent-hidden" name="data.upgrades.{{key}}.links-top-4" type="text" value="{{upgrade.links-top-4}}" data-dtype="Boolean" />
+            </div>
+            {{/iff}}
+          </div>
+
+          <div class="{{#if upgrade.links-right}}talent-connector{{/if}} talent-action {{#if upgrade.canLinkRight}}talent-connection-point-right{{else}}talent-hidden{{/if}}" data-action="link-right" data-key="{{key}}">
+            <i class="fas fa-chevron-right"></i>
+            <div class="talent-connector-side {{#if (or upgrade.islearned upgrade.isRightLearned)}}lightsaber-blue{{else}}lightsaber-red{{/if}}">
+              <i class="fas fa-chevron-right"></i>
+              <i class="fas fa-chevron-left"></i>
+            </div>
+            <input class="talent-hidden" name="data.upgrades.{{key}}.links-right" type="text" value="{{upgrade.links-right}}" data-dtype="Boolean" />
+          </div>
+        </div>
+      </div>
+
+      {{/each}}
+    </div>
+    <div class="hidden-content">
+      {{> "systems/starwarsffg/templates/parts/shared/ffg-modifiers.html"}}
+    </div>
+
+    {{!-- Long Description and Sources Tab --}}
+    <div class="tab sources" data-group="primary" data-tab="sources">
+      {{> "systems/starwarsffg/templates/parts/shared/ffg-sources.html" data=data}}
+    </div>
+
+    {{!-- Tags Tab --}}
+    <div class="tab tags" data-group="primary" data-tab="tags">
+      {{> "systems/starwarsffg/templates/parts/shared/ffg-tags.html" data=data}}
+    </div>
+  </section>
+</form>

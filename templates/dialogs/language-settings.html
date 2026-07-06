@@ -1,0 +1,57 @@
+<form autocomplete="off" class="language_selection" style="overflow-y: auto;">
+  <section class="content">
+    <div class="settings-list">
+      <h2 class="module-header">{{ systemTitle }}</h2>
+      <p class="notes">{{ localize "SWFFG.Languages.Settings.Hint" }}</p>
+      <div class="form-group">
+        <div class="form-fields" style="display: flex; flex-direction: column; flex-wrap: wrap;">
+          <div class="language_container"></div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="add_row"><i class="fas fa-plus"></i> {{ localize "SWFFG.Languages.Settings.AddRow" }}</button>
+  </section>
+  <footer class="sheet-footer flexrow">
+    <button type="submit" name="submit" class="submit_language_changes"><i class="far fa-save"></i> {{ localize 'SETTINGS.Save'}}</button>
+    <button type="button" name="reset"><i class="fas fa-undo"></i> {{ localize 'SETTINGS.Reset'}}</button>
+  </footer>
+</form>
+
+<script>
+  $(document).ready(function () {
+    // add the existing languages into the form
+    {{#each languages}}
+      add_language("{{ this }}");
+    {{/each}}
+
+    $(".add_row").on("click", function (e) {
+      e.preventDefault();
+      add_language("");
+      // focus the newly added input for quick typing
+      $(".language_container .language-row:last-child input").trigger("focus");
+    });
+
+    $(".language_selection").on("click", ".remove_language", function (e) {
+      e.preventDefault();
+      $(this).closest(".language-row").remove();
+    });
+
+    /**
+     * Append an editable row for a single language name.
+     * @param name string - the language name
+     */
+    function add_language(name) {
+      const row = `
+      <div class="flexrow language-row" style="margin-bottom: 4px;">
+        <div class="flex1">
+          <input type="text" name="language_name" value="${name}" data-dtype="String" />
+        </div>
+        <div class="flex0">
+          <i class="fas fa-trash remove_language" style="cursor: pointer; line-height: 26px;"></i>
+        </div>
+      </div>
+      `;
+      $(".language_container").append(row);
+    }
+  });
+</script>

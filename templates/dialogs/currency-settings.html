@@ -1,0 +1,76 @@
+<form autocomplete="off" class="currency_settings" style="overflow-y: auto;">
+  <section class="content">
+    <div class="settings-list">
+      <h2 class="module-header">{{ systemTitle }}</h2>
+      <p class="notes">{{ localize "SWFFG.Currency.Settings.Hint" }}</p>
+      <div class="form-group">
+        <div class="currency-header flexrow" style="font-weight: bold; margin-bottom: 4px;">
+          <div class="flex2">{{ localize "SWFFG.Currency.Settings.Col.Label" }}</div>
+          <div class="flex1">{{ localize "SWFFG.Currency.Settings.Col.Abbr" }}</div>
+          <div class="flex1">{{ localize "SWFFG.Currency.Settings.Col.Key" }}</div>
+          <div class="flex1">{{ localize "SWFFG.Currency.Settings.Col.Conversion" }}</div>
+          <div class="flex0" style="width: 50px; text-align: center;">{{ localize "SWFFG.Currency.Settings.Col.Default" }}</div>
+          <div class="flex0" style="width: 24px;"></div>
+        </div>
+        <div class="form-fields" style="display: flex; flex-direction: column;">
+          <div class="currency_container"></div>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="add_row"><i class="fas fa-plus"></i> {{ localize "SWFFG.Currency.Settings.AddRow" }}</button>
+  </section>
+  <footer class="sheet-footer flexrow">
+    <button type="submit" name="submit" class="submit_currency_changes"><i class="far fa-save"></i> {{ localize 'SETTINGS.Save'}}</button>
+    <button type="button" name="reset"><i class="fas fa-undo"></i> {{ localize 'SETTINGS.Reset'}}</button>
+  </footer>
+</form>
+
+<script>
+  $(document).ready(function () {
+    {{#each currencies}}
+      add_currency({
+        key: "{{ this.key }}",
+        label: "{{ this.label }}",
+        abbreviation: "{{ this.abbreviation }}",
+        conversion: "{{ this.conversion }}",
+        isDefault: {{#if this.isDefault}}true{{else}}false{{/if}}
+      });
+    {{/each}}
+
+    $(".add_row").on("click", function (e) {
+      e.preventDefault();
+      add_currency({ key: "", label: "", abbreviation: "", conversion: "1", isDefault: false });
+      $(".currency_container .currency-row:last-child input[name='currency_label']").trigger("focus");
+    });
+
+    $(".currency_settings").on("click", ".remove_currency", function (e) {
+      e.preventDefault();
+      $(this).closest(".currency-row").remove();
+    });
+
+    /**
+     * Append an editable row for a single currency denomination.
+     * @param data object - { key, label, abbreviation, conversion, isDefault }
+     */
+    function add_currency(data) {
+      const checked = data.isDefault ? "checked" : "";
+      const row = `
+      <div class="flexrow currency-row" style="margin-bottom: 4px; align-items: center;">
+        <div class="flex2"><input type="text" name="currency_label" value="${data.label}" placeholder="Glass" data-dtype="String" /></div>
+        <div class="flex1"><input type="text" name="currency_abbr" value="${data.abbreviation}" placeholder="G" data-dtype="String" /></div>
+        <div class="flex1"><input type="text" name="currency_key" value="${data.key}" placeholder="glass" data-dtype="String" /></div>
+        <div class="flex1"><input type="number" name="currency_conversion" value="${data.conversion}" step="any" min="0" data-dtype="Number" /></div>
+        <div class="flex0" style="width: 50px; text-align: center;"><input type="radio" name="defaultKey" value="${data.key}" ${checked} /></div>
+        <div class="flex0" style="width: 24px;"><i class="fas fa-trash remove_currency" style="cursor: pointer; line-height: 26px;"></i></div>
+      </div>
+      `;
+      $(".currency_container").append(row);
+    }
+
+    // Keep each row's default-radio value in sync with its key field so selecting "default" works
+    // even for freshly added rows whose key is typed after creation.
+    $(".currency_settings").on("input", "input[name='currency_key']", function () {
+      $(this).closest(".currency-row").find("input[name='defaultKey']").val($(this).val());
+    });
+  });
+</script>

@@ -1,0 +1,19 @@
+{{!--
+  Cybernetics tracker for the inventory tab.
+  Shows the number of installed cybernetics over the character's cybernetics cap (installed / cap),
+  with controls to manually raise or lower the cap. The cap defaults to Brawn; the +/- controls
+  adjust a stored, signed offset that accounts for species, items, talents, etc.
+  Expects the sheet context (reads data.stats.cybernetics, populated in ActorFFG._prepareCyberneticsData).
+--}}
+<div class="resource cybernetics-tracker {{data.stats.cybernetics.cssClass}}">
+  <div class="attribute flex-group-center">
+    <div class="block-background">
+      <div class="block-title">{{localize "SWFFG.Cybernetics.Label"}}</div>
+      <div class="block-attribute cybernetics-block-attribute">
+        <a class="cybernetics-cap decrease" title="{{localize "SWFFG.Cybernetics.DecreaseCap"}}"><i class="fas fa-minus-circle"></i></a>
+        <span class="cybernetics-count" title="{{localize "SWFFG.Cybernetics.CountHint"}}">{{data.stats.cybernetics.value}} / {{data.stats.cybernetics.max}}</span>
+        <a class="cybernetics-cap increase" title="{{localize "SWFFG.Cybernetics.IncreaseCap"}}"><i class="fas fa-plus-circle"></i></a>
+      </div>
+    </div>
+  </div>
+</div>

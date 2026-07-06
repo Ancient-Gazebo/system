@@ -720,7 +720,10 @@ Hooks.once("init", async function () {
       boost: [],
       setback: [],
       upgrade: [],
+      upgradeDifficulty: [],
       success: [],
+      advantage: [],
+      difficulty: [],
       light: [],
       dark: [],
     };
@@ -740,8 +743,23 @@ Hooks.once("init", async function () {
         mode: CONST.ACTIVE_EFFECT_MODES.ADD,
         value: "1",
       });
+      allSkillChanges['upgradeDifficulty'].push({
+        key: `system.skills.${skill}.upgradeDifficulty`,
+        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        value: "1",
+      });
       allSkillChanges['success'].push({
         key: `system.skills.${skill}.success`,
+        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        value: "1",
+      });
+      allSkillChanges['advantage'].push({
+        key: `system.skills.${skill}.advantage`,
+        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        value: "1",
+      });
+      allSkillChanges['difficulty'].push({
+        key: `system.skills.${skill}.difficulty`,
         mode: CONST.ACTIVE_EFFECT_MODES.ADD,
         value: "1",
       });
@@ -757,16 +775,14 @@ Hooks.once("init", async function () {
       });
     }
 
-    // set up our own statuses
+    // set up our own statuses — FFG-specific statuses first (dice statuses for the
+    // next check, then for the whole combat, then FFG conditions); the generic
+    // D&D-style markers follow below. All dice statuses use ADD-mode changes and
+    // `system.duration` markers, which is what the roll builder's one-time cleanup
+    // and the Status Icon Counters stack scaling (ActiveEffectFFG.apply) key off.
     CONFIG.statusEffects = [];
-    CONFIG.statusEffects.push({
-      id: "starwarsffg-defeated",
-      img: "systems/starwarsffg/images/status/defeated.svg",
-      name: "SWFFG.Status.Defeated",
-      changes: [],
-    });
 
-    // one-time statuses
+    // FFG dice statuses — next check (consumed after one roll)
     CONFIG.statusEffects.push({
       id: "starwarsffg-boost-once",
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/blue.png`,
@@ -795,10 +811,37 @@ Hooks.once("init", async function () {
       }
     });
     CONFIG.statusEffects.push({
+      id: "starwarsffg-upgrade-difficulty-once",
+      img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/red.png`,
+      name: "SWFFG.Status.UpgradeDifficulty.Next",
+      changes: allSkillChanges['upgradeDifficulty'],
+      system: {
+        duration: "once",
+      }
+    });
+    CONFIG.statusEffects.push({
       id: "starwarsffg-success-once",
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/success.png`,
       name: "SWFFG.Status.Success.Next",
       changes: allSkillChanges['success'],
+      system: {
+        duration: "once",
+      }
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-advantage-once",
+      img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/advantage.png`,
+      name: "SWFFG.Status.Advantage.Next",
+      changes: allSkillChanges['advantage'],
+      system: {
+        duration: "once",
+      }
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-difficulty-once",
+      img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/purple.png`,
+      name: "SWFFG.Status.Difficulty.Next",
+      changes: allSkillChanges['difficulty'],
       system: {
         duration: "once",
       }
@@ -824,43 +867,8 @@ Hooks.once("init", async function () {
         duration: "once",
       }
     });
-    CONFIG.statusEffects.push({
-      id: "starwarsffg-heavy-cover",
-      img: "icons/equipment/shield/buckler-wooden-boss-lightning.webp",
-      name: "SWFFG.Status.Cover.Heavy",
-      changes: [
-        {
-          key: "system.stats.defence.melee",
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
-          value: "2",
-        },
-        {
-          key: "system.stats.defence.ranged",
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
-          value: "2",
-        },
-      ],
-    });
-    CONFIG.statusEffects.push({
-      id: "starwarsffg-disoriented",
-      img: "systems/starwarsffg/images/status/disoriented.svg",
-      name: "SWFFG.Status.Disoriented",
-      changes: allSkillChanges['setback'],
-    });
-    CONFIG.statusEffects.push({
-      id: "starwarsffg-immobilized",
-      img: "systems/starwarsffg/images/status/immobilized.svg",
-      name: "SWFFG.Status.Immobilized",
-      changes: [],
-    });
-    CONFIG.statusEffects.push({
-      // Renamed from "Staggered"; id kept for backward-compat with existing applied effects.
-      id: "starwarsffg-staggered",
-      img: "icons/svg/falling.svg",
-      name: "SWFFG.Status.Prone",
-      changes: [],
-    });
-    // combat-length statuses
+
+    // FFG dice statuses — this combat
     CONFIG.statusEffects.push({
       id: "starwarsffg-boost-combat",
       img: `systems/starwarsffg/images/status/blue.png`,
@@ -889,6 +897,15 @@ Hooks.once("init", async function () {
       }
     });
     CONFIG.statusEffects.push({
+      id: "starwarsffg-upgrade-difficulty-combat",
+      img: `systems/starwarsffg/images/status/red.png`,
+      name: "SWFFG.Status.UpgradeDifficulty.Combat",
+      changes: allSkillChanges['upgradeDifficulty'],
+      system: {
+        duration: "combat",
+      }
+    });
+    CONFIG.statusEffects.push({
       id: "starwarsffg-success-combat",
       img: `systems/starwarsffg/images/status/success.png`,
       name: "SWFFG.Status.Success.Combat",
@@ -896,6 +913,68 @@ Hooks.once("init", async function () {
       system: {
         duration: "combat",
       }
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-advantage-combat",
+      img: `systems/starwarsffg/images/status/advantage.png`,
+      name: "SWFFG.Status.Advantage.Combat",
+      changes: allSkillChanges['advantage'],
+      system: {
+        duration: "combat",
+      }
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-difficulty-combat",
+      img: `systems/starwarsffg/images/status/purple.png`,
+      name: "SWFFG.Status.Difficulty.Combat",
+      changes: allSkillChanges['difficulty'],
+      system: {
+        duration: "combat",
+      }
+    });
+
+    // FFG conditions
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-disoriented",
+      img: "systems/starwarsffg/images/status/disoriented.svg",
+      name: "SWFFG.Status.Disoriented",
+      changes: allSkillChanges['setback'],
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-immobilized",
+      img: "systems/starwarsffg/images/status/immobilized.svg",
+      name: "SWFFG.Status.Immobilized",
+      changes: [],
+    });
+    CONFIG.statusEffects.push({
+      // Renamed from "Staggered"; id kept for backward-compat with existing applied effects.
+      id: "starwarsffg-staggered",
+      img: "icons/svg/falling.svg",
+      name: "SWFFG.Status.Prone",
+      changes: [],
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-heavy-cover",
+      img: "icons/equipment/shield/buckler-wooden-boss-lightning.webp",
+      name: "SWFFG.Status.Cover.Heavy",
+      changes: [
+        {
+          key: "system.stats.defence.melee",
+          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          value: "2",
+        },
+        {
+          key: "system.stats.defence.ranged",
+          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          value: "2",
+        },
+      ],
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-defeated",
+      img: "systems/starwarsffg/images/status/defeated.svg",
+      name: "SWFFG.Status.Defeated",
+      changes: [],
     });
 
     // Generic condition markers (Foundry-default / D&D-5e-style). These are cosmetic icon
@@ -1276,6 +1355,9 @@ Hooks.once("ready", async () => {
 
   // Forward Apply Damage / Apply Crit writes from non-owning players to the GM.
   registerGMBridge();
+
+  // Log adversary-roll diagnostics forwarded from players on the GM machine.
+  RollBuilderFFG.registerRollLogBridge();
 
   // NOTE: the "currentVersion" will be updated in handleUpdate, preventing the code below from running in the future
   // this is intended to encourage migrating code to this file to clean up the main file

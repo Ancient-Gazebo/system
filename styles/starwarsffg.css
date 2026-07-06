@@ -3810,3 +3810,49 @@ button.ffg-critical-roller-launch {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Base/Adversary pool toggle in the roll dialog */
+.starwarsffg .dice-pool-dialog .adversary-pool-toggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.45);
+}
+.starwarsffg .dice-pool-dialog .adversary-mode-btn {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  box-shadow: none;
+}
+.starwarsffg .dice-pool-dialog .adversary-mode-btn::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+.starwarsffg .dice-pool-dialog .adversary-mode-btn:hover {
+  color: #fff;
+  box-shadow: none;
+}
+.starwarsffg .dice-pool-dialog .adversary-mode-btn.active {
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.starwarsffg .dice-pool-dialog .adversary-mode-btn.active::before {
+  background-color: #f5a623;
+}

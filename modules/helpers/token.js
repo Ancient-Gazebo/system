@@ -26,6 +26,15 @@ export function registerTokenControls() {
     type: String,
     onChange: (rule) => window.location.reload()
   });
+  game.settings.register("starwarsffg", "enableAdversaryCalc", {
+    name: game.i18n.localize("SWFFG.Settings.enableAdversaryCalc.Name"),
+    hint: game.i18n.localize("SWFFG.Settings.enableAdversaryCalc.Hint"),
+    scope: "world",
+    config: false,
+    default: true,
+    type: Boolean,
+    onChange: (rule) => window.location.reload()
+  });
 }
 
 export function drawMinionCount(token) {

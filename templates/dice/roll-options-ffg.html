@@ -1,5 +1,9 @@
 <form style="overflow-y: scroll; scrollbar-width: thin;">
   <div class="dice-pool-dialog">
+    <div class="adversary-pool-toggle" style="display: none;">
+      <button type="button" class="adversary-mode-btn" data-mode="base">{{localize "SWFFG.Adversary.BasePool"}}</button>
+      <button type="button" class="adversary-mode-btn" data-mode="adversary"><span class="adversary-pool-label"></span></button>
+    </div>
     <div class="dice-pool"></div>
     <div class="simulation" {{#if simDisplay }} {{ else }}style="display: none"{{/if}}>
       Success chance: <span id="success_chance">{{ success }}</span>
@@ -16,11 +20,6 @@
     <div style="margin: 10px 1px 5px 1px;">
       <span><em>{{localize "SWFFG.DicePoolAddsHint"}}</em></span>
     </div>
-    {{#if adversary}}
-    <div class="adversary-hint" style="margin: 5px 1px 8px 1px; padding: 5px 8px; border: 1px solid #b8860b; border-radius: 4px; background: rgba(218, 165, 32, 0.12);">
-      <span><i class="fas fa-triangle-exclamation" style="color: #b8860b;"></i> {{adversaryHint}}</span>
-    </div>
-    {{/if}}
     <details>
     <summary>Fixed Results</summary>
     <table class="pool-additional-container">

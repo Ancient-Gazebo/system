@@ -105,10 +105,12 @@ export default class DiceHelpers {
       despair: skill.despair ?? 0,
       upgrades: skill.upgrades ?? 0,
       remsetback: skill.remsetback ?? 0,
-      difficulty: 2 + status.difficulty, // default to average difficulty
+      difficulty: 2 + status.difficulty + (skill.difficulty ?? 0), // default average + status-effect difficulty dice
     });
 
     dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
+    // status-effect difficulty upgrades (mirrors skill.upgrades for ability)
+    dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
 
     if (type === "ability") {
       dicePool.upgrade();
@@ -222,10 +224,11 @@ export default class DiceHelpers {
       despair: skill?.despair ? skill.despair : 0,
       upgrades: skill?.upgrades ? skill.upgrades : 0,
       remsetback: skill?.remsetback ? skill.remsetback : 0,
-      difficulty: 2 + status.difficulty, // default to average difficulty
+      difficulty: 2 + status.difficulty + (skill.difficulty ?? 0), // default average + status-effect difficulty dice
     });
 
     dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
+    dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
 
     dicePool = new DicePoolFFG(await this.getModifiers(dicePool, item));
 
@@ -239,7 +242,7 @@ export default class DiceHelpers {
       boost: skill.boost,
       setback: skill.setback,
       force: skill.force,
-      difficulty: difficulty,
+      difficulty: difficulty + (skill.difficulty ?? 0),
       advantage: skill.advantage,
       dark: skill.dark,
       light: skill.light,
@@ -253,6 +256,7 @@ export default class DiceHelpers {
     });
 
     dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
+    dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
 
     this.displayRollDialog(sheet, dicePool, `${game.i18n.localize("SWFFG.Rolling")} ${skill.label}`, skill.label, { name: game.i18n.localize(skill.label), type: "skill" }, flavorText, sound);
   }
@@ -410,9 +414,10 @@ export function get_dice_pool(actor_id, skill_name, incoming_roll) {
     despair: (skill.despair ?? 0) + incoming_roll.despair,
     upgrades: (skill.upgrades ?? 0) + incoming_roll.upgrades,
     remsetback: skill?.remsetback ? skill.remsetback : 0 + incoming_roll.remsetback,
-    difficulty: +incoming_roll.difficulty,
+    difficulty: +incoming_roll.difficulty + (skill.difficulty ?? 0),
     challenge: +incoming_roll.challenge,
   });
+  dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
   return dicePool;
 }
 

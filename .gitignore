@@ -50,8 +50,11 @@ desktop.ini
 .env.*
 !.env.example
 
-# Foundry may symlink/copy this system into its data dir; ignore any nested
-# Foundry userdata that could accidentally land here.
-Data/
-Logs/
-Config/
+# Foundry may symlink/copy this system into its data dir; ignore Foundry
+# userdata that could accidentally land here. Anchored to the repo root:
+# unanchored `Config/` matched `modules/config/` too (git is case-insensitive
+# on Windows), which silently dropped every config module from the repo and
+# broke manifest/zip installs (Forge) with 404s on all modules/config/*.js.
+/Data/
+/Logs/
+/Config/

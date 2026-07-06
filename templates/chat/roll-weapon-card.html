@@ -8,6 +8,14 @@
   <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{system.system.crit.adjusted}}" disabled /></h4>{{/iff}}
   {{#iff system.system.damage.adjusted '==' 0 }}<h4 class="item-damage">{{localize "SWFFG.ItemsDamage"}}: <input class="damage-value" type="text" value="{{system.system.damage.value}} + {{ffg.success}} = {{math system.system.damage.value '+' ffg.success}}" disabled /></h4>
   <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{system.system.crit.value}}" disabled /></h4>{{/iff}}
+  <div class="ffg-chat-actions">
+    <button type="button" class="ffg-apply-damage">
+      <i class="fas fa-burst"></i> {{localize "SWFFG.ApplyDamage.Button"}}
+    </button>
+    <button type="button" class="ffg-apply-crit">
+      <i class="fas fa-skull-crossbones"></i> {{localize "SWFFG.ApplyCrit.Button"}}
+    </button>
+  </div>
   {{else}}
   <h4 class="item-miss">Miss!</h4>
   {{/if}}

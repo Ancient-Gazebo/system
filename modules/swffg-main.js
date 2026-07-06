@@ -56,6 +56,10 @@ import ActorHelpers, {xpLogUndo} from "./helpers/actor-helpers.js";
 import StackHelpers from "./helpers/stack-helpers.js";
 import CurrencyManager from "./helpers/currency.js";
 import CurrencySettings from "./settings/currency-settings.js";
+import { ApplyDamage } from "./helpers/apply-damage.js";
+import { ApplyCrit } from "./helpers/apply-crit.js";
+import { registerGMBridge } from "./helpers/gm-bridge.js";
+import { setupCriticalTables } from "./helpers/crit-tables.js";
 import { registerGlitchSmithIntegration } from "./integrations/glitchsmith.js";
 import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-details.js";
 import {register_system_tours} from "./helpers/tours.js";
@@ -113,6 +117,7 @@ Hooks.once("init", async function () {
     CriticalRollerFFG,
     migrateSpeciesInherentEffects,
     cleanupSpeciesTalentEffects,
+    setupCriticalTables,
   };
 
   // Define custom log prefix and logger
@@ -1219,6 +1224,11 @@ Hooks.on("renderChatMessage", async (app, html, messageData) => {
   const content = html.find(".message-content");
   content[0].innerHTML = await PopoutEditor.renderDiceImages(content[0].innerHTML);
 
+  // Apply Damage / Apply Crit buttons on weapon-attack cards. `app` is the
+  // ChatMessage document; both binders expect (message, jQuery html).
+  ApplyDamage.bindChatMessage(app, html);
+  ApplyCrit.bindChatMessage(app, html);
+
   html.on("click", ".ffg-pool-to-player", () => {
     const poolData = messageData.message.flags.starwarsffg;
 
@@ -1263,6 +1273,9 @@ function isCurrentVersionNullOrBlank(currentVersion) {
 // Handle migration duties
 Hooks.once("ready", async () => {
   SettingsHelpers.readyLevelSetting();
+
+  // Forward Apply Damage / Apply Crit writes from non-owning players to the GM.
+  registerGMBridge();
 
   // NOTE: the "currentVersion" will be updated in handleUpdate, preventing the code below from running in the future
   // this is intended to encourage migrating code to this file to clean up the main file

@@ -3784,3 +3784,29 @@ button.ffg-critical-roller-launch {
   margin-top: 6px;
   text-align: center;
 }
+
+/* Apply Damage / Apply Crit buttons on weapon-attack chat cards */
+.ffg-chat-actions {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.ffg-apply-crit,
+.ffg-apply-damage {
+  flex: 1 1 0;
+  font-size: 0.85em;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.ffg-apply-crit i.fas,
+.ffg-apply-damage i.fas {
+  margin-right: 4px;
+}
+
+.ffg-apply-crit[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

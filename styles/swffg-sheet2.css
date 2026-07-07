@@ -228,11 +228,19 @@
 .starwarsffg .attribute .shadow-right .shadow-text {
   text-shadow: none !important;
 }
-/* Bold RANGED on the actor sheets (space-op forces it normal); form-scoped so
-   vehicles are untouched. character covers nemesis/rival too (shared form class). */
+/* Bold the blue strip labels (space-op forces them normal): RANGED on the
+   actor sheets, THRESHOLD on the vehicle Speed / Encum Cpty strips.
+   character covers nemesis/rival too (shared form class). */
 .starwarsffg.sheet form.character .attribute .shadow-right .shadow-text,
-.starwarsffg.sheet form.minion .attribute .shadow-right .shadow-text {
+.starwarsffg.sheet form.minion .attribute .shadow-right .shadow-text,
+.starwarsffg.sheet form.vehicle .attribute .shadow-right .shadow-text {
   font-weight: bold !important;
+}
+
+/* Speed fills its header grid cell like the vital blocks beside it. */
+.starwarsffg .vehicle .grid-3col .resource.split .attribute,
+.starwarsffg .vehicle .grid-3col .resource.split .block-background {
+  width: 100%;
 }
 
 /* Beats mandar's `.resource input { width:100%; height:1.5rem }` (which loads

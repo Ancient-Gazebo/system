@@ -81,12 +81,17 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* FA glyphs inherit the theme's line-height and drift a pixel off-centre
-   inside these small flex-centred buttons — zero it so the glyph box centres. */
-.starwarsffg button.ffg2-rest i,
+/* FA minus/plus glyphs sit up-and-left of the true centre inside these small
+   round buttons (glyph side-bearing) — nudge them like Codex does. The bed
+   glyph is bottom-heavy, so it gets a downward nudge instead. */
 .starwarsffg button.ffg2-step i,
 .starwarsffg button.ffg2-ratio-step i {
-  line-height: 0;
+  line-height: 1;
+  transform: translateX(1.5px);
+}
+.starwarsffg button.ffg2-rest i {
+  line-height: 1;
+  transform: translateY(1px);
 }
 
 /* Stack stepline → labels vertically. Guarded with !important because block
@@ -130,9 +135,25 @@
 
 .starwarsffg .ffg2-thresh {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: center;
   gap: 2px;
+}
+
+/* Value + label column: the label is locked centred under its number box. */
+.starwarsffg .ffg2-vcol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.starwarsffg .ffg2-vlabel {
+  font-size: 0.55rem;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  opacity: 0.75;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 /* Beats mandar's `.resource input { width:100%; height:1.5rem }` (which loads
@@ -152,9 +173,14 @@
   opacity: 0.9;
 }
 
+/* Line-height matches the 1.35rem number row so the slash centres on the
+   numbers, not on the taller label-bearing columns; the side margins keep the
+   two columns comfortably apart. */
 .starwarsffg .ffg2-slash {
   font-weight: 900;
   opacity: 0.6;
+  line-height: 1.7rem;
+  margin: 0 5px;
 }
 
 /* Now a direct child of the block body, spanning the full width below the
@@ -169,22 +195,6 @@
 .starwarsffg .ffg2-track-fill {
   height: 100%;
   border-radius: 2px;
-}
-
-/* Sits inside the stepline's mid column, directly beneath the numbers. */
-.starwarsffg .ffg2-vital-sub {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 1px;
-  padding: 0 2px;
-  width: 100%;
-}
-.starwarsffg .ffg2-vital-sub span {
-  font-size: 0.55rem;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  opacity: 0.75;
 }
 
 /* ---- Word tabs -------------------------------------------------------- */
@@ -341,8 +351,15 @@
   overflow-y: auto !important;
 }
 .starwarsffg.sheet form.character .tab.biography .biography-editor {
-  height: 20rem;
+  height: auto;
+  min-height: 10rem;
   flex: 0 0 auto;
+}
+/* The editor grows with its content; empty editors keep a usable floor. */
+.starwarsffg.sheet form.character .tab.biography .biography-editor .editor,
+.starwarsffg.sheet form.character .tab.biography .biography-editor .editor-content {
+  height: auto;
+  min-height: 9rem;
 }
 
 /* ---- Collapsible identity header --------------------------------------- */

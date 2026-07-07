@@ -30,11 +30,18 @@
           <button type="button" class="ffg2-step" data-stat="{{stat}}" data-dir="-1" title="&minus;1"><i class="fas fa-minus"></i></button>
           <div class="ffg2-stepline-mid">
             <div class="ffg2-thresh">
-              <input type="text" name="data.stats.{{stat}}.value" value="{{value}}" data-dtype="Number" />
+              {{!-- Each value + its label share a column, so the label is locked
+                   dead-centre under its number box. --}}
+              <div class="ffg2-vcol">
+                <input type="text" name="data.stats.{{stat}}.value" value="{{value}}" data-dtype="Number" />
+                <span class="ffg2-vlabel">{{localize "SWFFG.Current"}}</span>
+              </div>
               <span class="ffg2-slash">/</span>
-              <input type="text" name="data.stats.{{stat}}.max" value="{{max}}" data-dtype="Number" {{#if disabled}}disabled{{/if}} />
+              <div class="ffg2-vcol">
+                <input type="text" name="data.stats.{{stat}}.max" value="{{max}}" data-dtype="Number" {{#if disabled}}disabled{{/if}} />
+                <span class="ffg2-vlabel">{{localize "SWFFG.Threshold"}}</span>
+              </div>
             </div>
-            <div class="ffg2-vital-sub"><span>{{localize "SWFFG.Current"}}</span><span>{{localize "SWFFG.Threshold"}}</span></div>
           </div>
           <button type="button" class="ffg2-step" data-stat="{{stat}}" data-dir="1" title="+1"><i class="fas fa-plus"></i></button>
         </div>

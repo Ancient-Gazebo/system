@@ -640,11 +640,15 @@
 .starwarsffg .weapon-items .gear-org-list .item:hover {
   background: rgba(25, 24, 19, 0.12);
 }
+/* Weapons use the red-fist (unequipped) / green-fist (equipped) colouring, NOT
+   gear's grey/black. space-op provides that red/green but only scopes it to the
+   flat `.items-list`, so the tabbed rows (.gear-org-list) need it here. Vars
+   match space-op's palette with red/green fallbacks for other themes. */
 .starwarsffg .weapon-items .gear-org-list .item .toggle-equipped {
-  color: #888;
+  color: var(--red-light, #e01a1a);
 }
 .starwarsffg .weapon-items .gear-org-list .item .toggle-equipped.active {
-  color: #191813;
+  color: var(--green, #5aa02f);
 }
 .starwarsffg .weapon-items .gear-org-list .item-name {
   margin: 0;

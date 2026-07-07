@@ -81,18 +81,15 @@
       </div>
 
       <div class="container flex-group-center">
-        <div class="grid grid-4col">
-          {{!-- Speed Box --}}
-          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.VehicleSpeed" fields=(array (object name="data.stats.speed.max" value=data.stats.speed.max type="Number" label="SWFFG.Threshold" disabled=disabled) (object name="data.stats.speed.value" value=data.stats.speed.value type="Number" label="SWFFG.Current") ))}}
+        <div class="grid grid-3col">
+          {{!-- Speed Box (Current before Threshold, matching the vital blocks) --}}
+          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.VehicleSpeed" fields=(array (object name="data.stats.speed.value" value=data.stats.speed.value type="Number" label="SWFFG.Current") (object name="data.stats.speed.max" value=data.stats.speed.max type="Number" label="SWFFG.Threshold" disabled=disabled) ))}}
 
           {{!-- Hull Trauma Box: Current / Threshold with steppers --}}
           {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.VehicleHullTrauma" stat="hullTrauma" value=data.stats.hullTrauma.value max=data.stats.hullTrauma.max disabled=disabled track=vitalTracks.hullTrauma)}}
 
           {{!-- System Strain Box: Current / Threshold with steppers --}}
           {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.VehicleHullStrain" stat="systemStrain" value=data.stats.systemStrain.value max=data.stats.systemStrain.max disabled=disabled track=vitalTracks.systemStrain)}}
-
-          {{!-- Encumbrance Capacity Box --}}
-          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.VehicleEncumbranceCapacity" fields=(array (object name="data.stats.encumbrance.max" value=data.stats.encumbrance.max type="Number" label="SWFFG.Threshold" disabled=disabled) (object name="data.stats.encumbrance.value" value=data.stats.encumbrance.value type="Number" label="SWFFG.Current") ))}}
         </div>
       </div>
      {{/if}}
@@ -150,6 +147,10 @@
 
     {{!-- Cargo Tab --}}
     <div class="tab items" data-group="primary" data-tab="items">
+      <div class="container flex-group-center item-values">
+        {{!-- Encumbrance Capacity Box (moved from the header; Current before Threshold) --}}
+        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.VehicleEncumbranceCapacity" fields=(array (object name="data.stats.encumbrance.value" value=data.stats.encumbrance.value type="Number" label="SWFFG.Current") (object name="data.stats.encumbrance.max" value=data.stats.encumbrance.max type="Number" label="SWFFG.Threshold" disabled=disabled) ))}}
+      </div>
       {{!-- Cargo List --}}
       {{> "systems/starwarsffg/templates/parts/actor/ffg-vehicle-cargo.html"}}
     </div>

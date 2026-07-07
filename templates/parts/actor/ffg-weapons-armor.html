@@ -6,7 +6,7 @@
   quantity, split/give/edit/delete, drag from .items-list .item) keeps working.
 --}}
 {{!-- Weapons List --}}
-<ul class="items">
+<ul class="items weapon-items">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsWeapons"}}</div>
     <div class="">{{localize "SWFFG.Equipped"}}</div>
@@ -14,9 +14,88 @@
     <div class="">{{localize "SWFFG.ItemsRange"}}</div>
     <div class="">{{localize "SWFFG.ItemsCrit"}}</div>
     {{#if showWeaponQuantity}}<div class="weapon-col-quantity">{{localize "SWFFG.ItemsQuantity"}}</div>{{/if}}
-    <div class="item-add weapon"><i class="far fa-plus-square"></i></div>
+    <div class="gear-col-actions">
+      <span class="gear-org-controls" data-org-type="weapon">
+        {{#if weaponOrg.enabled}}
+        <a class="gear-org-add-tab" data-org-type="weapon" title="{{localize "SWFFG.WeaponOrganization.AddTab"}}"><i class="fas fa-folder-plus"></i></a>
+        <a class="gear-org-toggle active" data-org-type="weapon" title="{{localize "SWFFG.WeaponOrganization.Disable"}}"><i class="fas fa-list-ul"></i></a>
+        {{else}}
+        <a class="gear-org-toggle" data-org-type="weapon" title="{{localize "SWFFG.WeaponOrganization.Enable"}}"><i class="fas fa-folder-tree"></i></a>
+        {{/if}}
+      </span>
+      <div class="item-add weapon"><i class="far fa-plus-square"></i></div>
+    </div>
   </li>
 
+  {{#if weaponOrg.enabled}}
+  {{!-- Manual organization: collapsible, user-named tabs. Row markup matches
+       the flat list exactly (same nesting for the roll button), so skill rolls
+       and their ammo check/spend keep working from tabs-mode rows. --}}
+  {{#each weaponOrg.groups as |group|}}
+  <li class="gear-tab-header flexrow {{#if group.collapsed}}collapsed{{/if}}" data-tab-id="{{group.id}}" data-org-type="weapon">
+    <div class="gear-tab-title">
+      {{#unless group.isDefault}}<a class="gear-tab-drag-handle" draggable="true" data-tab-id="{{group.id}}" title="{{localize "SWFFG.WeaponOrganization.ReorderTab"}}"><i class="fas fa-grip-vertical"></i></a>{{/unless}}
+      <a class="gear-tab-collapse" title="{{localize "SWFFG.WeaponOrganization.Collapse"}}"><i class="fas {{#if group.collapsed}}fa-caret-right{{else}}fa-caret-down{{/if}}"></i></a>
+      {{#if group.isDefault}}
+      <span class="gear-tab-name">{{group.name}}</span>
+      {{else}}
+      <input class="gear-tab-name-input" type="text" value="{{group.name}}" data-tab-id="{{group.id}}" draggable="false" />
+      {{/if}}
+      <span class="gear-tab-count">({{group.items.length}})</span>
+    </div>
+    <div class="gear-tab-actions">
+      {{#unless group.isDefault}}
+      <a class="gear-tab-delete" title="{{localize "SWFFG.WeaponOrganization.DeleteTab"}}" data-tab-id="{{group.id}}"><i class="fas fa-trash"></i></a>
+      {{/unless}}
+    </div>
+  </li>
+  <ul class="gear-org-list {{#if group.collapsed}}hidden{{/if}}" data-tab-id="{{group.id}}" data-org-type="weapon">
+    {{#each group.items as |item id|}}
+    <li class="item gear-org-item flexrow" draggable="true" data-item-id="{{item._id}}" data-gear-key="{{item._id}}" data-tab-id="{{group.id}}" data-org-type="weapon" data-ability="{{item.system.skill.value}}">
+      <div class="item-name">
+        <i class="fas fa-grip-vertical gear-org-handle"></i>
+        <div class="roll-button">
+          <!-- Create define a button with mouseover events to update the icon and generate rolls when clicked and moused over -->
+          <div class="skill-label rollable roll-button starwarsffg item-rollable" style="background-image: url('{{ item.img }}')"></div>
+        </div>
+        <div class="hover {{#if item.system.rarity.isrestricted}}restricted{{/if}}">
+          {{item.name}} {{#if item.system.rarity.isrestricted}}
+          <div class="tooltip2">This is a Restricted item</div>
+          {{/if}}
+        </div>
+      </div>
+      <div>
+        {{#if item.system.equippable.equipped}}
+        <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-fist-raised"></i></a>
+        {{else}}
+        <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-fist-raised"></i></a>
+        {{/if}}
+      </div>
+      <div>{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
+      <div>{{localize item.system.range.label}}</div>
+      <div>{{item.system.crit.value}} {{#if (and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0)))}}({{item.system.crit.adjusted}}){{/if}}</div>
+      {{#if @root.showWeaponQuantity}}
+      <div class="item-quantity weapon-col-quantity">
+        {{#if (or (eq item.flags.starwarsffg.config.enableQuantity true) (gt item.system.quantity.value 1))}}
+        <div class="quantity increase"><i class="far fa-plus-square"></i></div>
+        {{item.system.quantity.value}}
+        <div class="quantity decrease"><i class="far fa-minus-square"></i></div>
+        {{/if}}
+      </div>
+      {{/if}}
+      <div class="item-controls">
+        {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
+        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
+        <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
+      </div>
+    </li>
+    {{/each}}
+    <li class="gear-org-dropzone {{#if group.items.length}}empty-hidden{{/if}}" data-tab-id="{{group.id}}" data-org-type="weapon">{{#unless group.items.length}}{{localize "SWFFG.WeaponOrganization.DropHere"}}{{/unless}}</li>
+  </ul>
+  {{/each}}
+  {{else}}
+  {{!-- Default (flat) rendering --}}
   <ul class="items-list">
     {{#each items as |item id|}} {{#iff item.type '==' 'weapon'}}
     <li class="item flexrow" data-item-id="{{item._id}}" data-ability="{{item.system.skill.value}}">
@@ -59,6 +138,7 @@
     </li>
     {{/iff}} {{/each}}
   </ul>
+  {{/if}}
 </ul>
 
 {{!-- Armour List --}}

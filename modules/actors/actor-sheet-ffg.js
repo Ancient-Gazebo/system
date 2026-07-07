@@ -16,6 +16,7 @@ import EmbeddedItemHelpers from "../helpers/embeddeditem-helpers.js";
 import EffectHelpers from "../helpers/effects.js";
 import TalentOrganization from "../helpers/talent-organization.js";
 import GearOrganization from "../helpers/gear-organization.js";
+import WeaponOrganization from "../helpers/weapon-organization.js";
 import {
   change_role,
   deregister_crew,
@@ -449,6 +450,9 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
     // Build the (optional) manual gear organization into collapsible tabs
     data.gearOrg = GearOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "gear"));
+
+    // Same for the Combat tab's weapons list
+    data.weaponOrg = WeaponOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "weapon"));
 
     // Languages known by the actor (chosen from the GM-configured master list). Stored as a flag.
     data.languages = this.actor.getFlag("starwarsffg", "languages") || [];
@@ -1471,49 +1475,62 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       await TalentOrganization.moveTalent(this.actor, this.actor.talentList, data.talentKey, targetTabId, beforeKey);
     });
 
-    // === Gear organization: manual sort + custom collapsible tabs (Gear list on the Gear & Equipment tab) ===
-    // Current gear list, ordered the same way getData() presents items, used when re-sorting.
-    const getGearList = () => this.actor.items.contents
-      .filter((i) => i.type === "gear")
+    // === Gear/Weapon organization: manual sort + custom collapsible tabs ===
+    // The Gear list (Gear tab) and the Weapons list (Combat tab) share one set
+    // of listeners and DOM classes (.gear-org-* / .gear-tab-*); each element
+    // carries data-org-type ("gear" default, or "weapon") which resolves the
+    // helper class and item list to operate on.
+    const ORG_TYPES = {
+      gear: { Org: GearOrganization, itemType: "gear" },
+      weapon: { Org: WeaponOrganization, itemType: "weapon" },
+    };
+    // Current item list, ordered the same way getData() presents items, used when re-sorting.
+    const getOrgList = (itemType) => this.actor.items.contents
+      .filter((i) => i.type === itemType)
       .slice()
       .sort((a, b) => (a.sort - b.sort) || a.name.localeCompare(b.name));
+    // Resolve the org config from an element (falling back to the nearest tagged ancestor).
+    const orgOf = (el) => ORG_TYPES[el.dataset.orgType || el.closest("[data-org-type]")?.dataset.orgType || "gear"];
 
     html.find(".gear-org-toggle").on("click", async (ev) => {
       ev.preventDefault();
-      await GearOrganization.setEnabled(this.actor, !GearOrganization.isEnabled(this.actor));
+      const { Org } = orgOf(ev.currentTarget);
+      await Org.setEnabled(this.actor, !Org.isEnabled(this.actor));
     });
 
     html.find(".gear-org-add-tab").on("click", async (ev) => {
       ev.preventDefault();
-      await GearOrganization.addTab(this.actor);
+      await orgOf(ev.currentTarget).Org.addTab(this.actor);
     });
 
     html.find(".gear-tab-collapse").on("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
-      const tabId = $(ev.currentTarget).closest(".gear-tab-header").data("tabId");
+      const header = $(ev.currentTarget).closest(".gear-tab-header");
+      const tabId = header.data("tabId");
       if (!tabId) return;
-      await GearOrganization.toggleCollapse(this.actor, tabId);
+      await orgOf(header[0]).Org.toggleCollapse(this.actor, tabId);
     });
 
     html.find(".gear-tab-delete").on("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       const tabId = $(ev.currentTarget).data("tabId");
+      const { Org } = orgOf(ev.currentTarget);
       const confirmed = await Dialog.confirm({
-        title: game.i18n.localize("SWFFG.GearOrganization.DeleteTabConfirmTitle"),
-        content: `<p>${game.i18n.localize("SWFFG.GearOrganization.DeleteTabConfirm")}</p>`,
+        title: game.i18n.localize(`${Org.LOC}.DeleteTabConfirmTitle`),
+        content: `<p>${game.i18n.localize(`${Org.LOC}.DeleteTabConfirm`)}</p>`,
         defaultYes: false,
       });
       if (!confirmed) return;
-      await GearOrganization.deleteTab(this.actor, tabId);
+      await Org.deleteTab(this.actor, tabId);
     });
 
     html.find(".gear-tab-name-input")
       .on("click", (ev) => ev.stopPropagation())
       .on("change", async (ev) => {
         const tabId = $(ev.currentTarget).data("tabId");
-        await GearOrganization.renameTab(this.actor, tabId, ev.currentTarget.value);
+        await orgOf(ev.currentTarget).Org.renameTab(this.actor, tabId, ev.currentTarget.value);
       });
 
     html.find(".gear-org-item").on("dragstart", (ev) => {
@@ -1523,12 +1540,16 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       // (dragSelector ".items-list .item") never fires for them and the drag used
       // to carry ONLY the internal reorder token — making the row invisible to
       // every external drop target (other actor sheets, module dropzones such as
-      // swffg-netrunning's cyberdeck/ice-node drops). Mirror the flat gear list's
+      // swffg-netrunning's cyberdeck/ice-node drops). Mirror the flat list's
       // "Transfer" envelope alongside the reorder fields so tabs mode drags
       // behave identically to flat mode. The internal gear-org drop handler keys
       // off ffgGearOrg and ignores the extra fields.
       const item = this.actor.items.get(ev.currentTarget.dataset.itemId);
-      const dragData = { ffgGearOrg: true, gearKey: ev.currentTarget.dataset.gearKey };
+      const dragData = {
+        ffgGearOrg: true,
+        gearKey: ev.currentTarget.dataset.gearKey,
+        orgType: ev.currentTarget.dataset.orgType || "gear",
+      };
       if (item) {
         dragData.type = "Transfer";
         dragData.actorId = this.actor.id;
@@ -1546,7 +1567,12 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     html.find(".gear-tab-drag-handle").on("dragstart", (ev) => {
       ev.stopPropagation();
       ev.originalEvent.dataTransfer.effectAllowed = "move";
-      ev.originalEvent.dataTransfer.setData("text/plain", JSON.stringify({ ffgGearTabOrg: true, tabId: ev.currentTarget.dataset.tabId }));
+      const header = ev.currentTarget.closest(".gear-tab-header");
+      ev.originalEvent.dataTransfer.setData("text/plain", JSON.stringify({
+        ffgGearTabOrg: true,
+        tabId: ev.currentTarget.dataset.tabId,
+        orgType: header?.dataset.orgType || "gear",
+      }));
     });
 
     const gearDropTargets = ".gear-org-list, .gear-org-item, .gear-tab-header, .gear-org-dropzone";
@@ -1562,8 +1588,8 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
         return;
       }
 
-      // Same rule as the talent list above: only intercept our own internal reorder drags. A piece
-      // of gear dragged onto the sheet from a compendium/sidebar must fall through to the native
+      // Same rule as the talent list above: only intercept our own internal reorder drags. An item
+      // dragged onto the sheet from a compendium/sidebar must fall through to the native
       // item-drop handler, so don't preventDefault/stopPropagation for foreign drops.
       if (!data?.ffgGearOrg && !data?.ffgGearTabOrg) return;
 
@@ -1572,18 +1598,25 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       // cross-actor drops bubble up to _onTransferItemDrop and transfer the item instead.
       if (data?.actorId && data.actorId !== this.actor.id) return;
 
+      // Weapon rows only reorder within weapon tabs and gear within gear tabs — a
+      // mismatched drop (e.g. weapon dragged over the Gear list) is not ours to handle.
+      const targetEl = ev.currentTarget;
+      const targetOrgType = targetEl.dataset.orgType || "gear";
+      if ((data.orgType || "gear") !== targetOrgType) return;
+
       ev.preventDefault();
       ev.stopPropagation();
 
-      const targetEl = ev.currentTarget;
       const targetTabId = targetEl.dataset.tabId;
       if (!targetTabId) return;
+
+      const { Org, itemType } = ORG_TYPES[targetOrgType];
 
       // reordering a tab: only meaningful when dropped onto a tab header
       if (data?.ffgGearTabOrg && data.tabId) {
         if (!targetEl.classList.contains("gear-tab-header")) return;
         if (data.tabId === targetTabId) return;
-        await GearOrganization.moveTab(this.actor, data.tabId, targetTabId);
+        await Org.moveTab(this.actor, data.tabId, targetTabId);
         return;
       }
 
@@ -1601,7 +1634,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
           if (next && next.classList.contains("gear-org-item")) beforeKey = next.dataset.gearKey;
         }
       }
-      await GearOrganization.moveGear(this.actor, getGearList(), data.gearKey, targetTabId, beforeKey);
+      await Org.moveGear(this.actor, getOrgList(itemType), data.gearKey, targetTabId, beforeKey);
     });
 
     html.find(".item-info").click((ev) => {

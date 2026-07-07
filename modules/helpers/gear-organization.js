@@ -14,6 +14,7 @@
  */
 export default class GearOrganization {
   static FLAG = "gearOrganization";
+  static LOC = "SWFFG.GearOrganization";
   static DEFAULT_TAB = "__default__";
   static SORT_STEP = 1000;
 
@@ -28,7 +29,7 @@ export default class GearOrganization {
 
   /** Return a normalized organization object (never null). */
   static get(actor) {
-    const raw = actor?.getFlag?.("starwarsffg", GearOrganization.FLAG) || {};
+    const raw = actor?.getFlag?.("starwarsffg", this.FLAG) || {};
     return {
       enabled: !!raw.enabled,
       defaultCollapsed: !!raw.defaultCollapsed,
@@ -42,11 +43,11 @@ export default class GearOrganization {
   }
 
   static async save(actor, org) {
-    return actor.setFlag("starwarsffg", GearOrganization.FLAG, org);
+    return actor.setFlag("starwarsffg", this.FLAG, org);
   }
 
   static isEnabled(actor) {
-    return GearOrganization.get(actor).enabled;
+    return this.get(actor).enabled;
   }
 
   /**
@@ -56,7 +57,7 @@ export default class GearOrganization {
    * @returns {{enabled: boolean, groups: Array}} groups whose `items` are the gear documents in order
    */
   static buildGroups(actor, gearList) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     const list = Array.isArray(gearList) ? gearList : [];
 
     if (!org.enabled) {
@@ -64,19 +65,19 @@ export default class GearOrganization {
     }
 
     // valid tab ids (plus the implicit default)
-    const validTabIds = new Set([GearOrganization.DEFAULT_TAB, ...org.tabs.map((t) => t.id)]);
+    const validTabIds = new Set([this.DEFAULT_TAB, ...org.tabs.map((t) => t.id)]);
 
     // bucket gear by their assigned tab (unknown/missing -> default)
     const buckets = {};
-    buckets[GearOrganization.DEFAULT_TAB] = [];
+    buckets[this.DEFAULT_TAB] = [];
     for (const tab of org.tabs) buckets[tab.id] = [];
 
     list.forEach((item, index) => {
-      const key = GearOrganization.gearKey(item);
+      const key = this.gearKey(item);
       const assignment = org.assignments[key];
       let tabId = assignment?.tab;
-      if (!tabId || !validTabIds.has(tabId)) tabId = GearOrganization.DEFAULT_TAB;
-      const sort = Number.isFinite(assignment?.sort) ? assignment.sort : (index + 1) * GearOrganization.SORT_STEP;
+      if (!tabId || !validTabIds.has(tabId)) tabId = this.DEFAULT_TAB;
+      const sort = Number.isFinite(assignment?.sort) ? assignment.sort : (index + 1) * this.SORT_STEP;
       buckets[tabId].push({ doc: item, _sort: sort, _index: index });
     });
 
@@ -86,11 +87,11 @@ export default class GearOrganization {
     const groups = [];
     // default group always first
     groups.push({
-      id: GearOrganization.DEFAULT_TAB,
-      name: game.i18n.localize("SWFFG.GearOrganization.DefaultTab"),
+      id: this.DEFAULT_TAB,
+      name: game.i18n.localize(`${this.LOC}.DefaultTab`),
       collapsed: org.defaultCollapsed,
       isDefault: true,
-      items: sortBucket(buckets[GearOrganization.DEFAULT_TAB]),
+      items: sortBucket(buckets[this.DEFAULT_TAB]),
     });
     // then user tabs in their defined order
     for (const tab of org.tabs) {
@@ -107,40 +108,40 @@ export default class GearOrganization {
   }
 
   static async setEnabled(actor, enabled) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     org.enabled = !!enabled;
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 
   static async addTab(actor, name) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     org.enabled = true;
     org.tabs.push({
       id: `tab_${foundry.utils.randomID()}`,
-      name: name || game.i18n.localize("SWFFG.GearOrganization.NewTab"),
+      name: name || game.i18n.localize(`${this.LOC}.NewTab`),
       collapsed: false,
     });
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 
   static async renameTab(actor, tabId, name) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     const tab = org.tabs.find((t) => t.id === tabId);
     if (!tab) return;
     tab.name = name;
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 
   static async toggleCollapse(actor, tabId) {
-    const org = GearOrganization.get(actor);
-    if (tabId === GearOrganization.DEFAULT_TAB) {
+    const org = this.get(actor);
+    if (tabId === this.DEFAULT_TAB) {
       org.defaultCollapsed = !org.defaultCollapsed;
-      return GearOrganization.save(actor, org);
+      return this.save(actor, org);
     }
     const tab = org.tabs.find((t) => t.id === tabId);
     if (!tab) return;
     tab.collapsed = !tab.collapsed;
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 
   /**
@@ -148,31 +149,31 @@ export default class GearOrganization {
    * implicit default tab places it first among the user tabs.
    */
   static async moveTab(actor, tabId, beforeTabId = null) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     const idx = org.tabs.findIndex((t) => t.id === tabId);
     if (idx < 0) return;
     const [tab] = org.tabs.splice(idx, 1);
     let insertIndex = org.tabs.length;
-    if (beforeTabId && beforeTabId !== GearOrganization.DEFAULT_TAB) {
+    if (beforeTabId && beforeTabId !== this.DEFAULT_TAB) {
       const bi = org.tabs.findIndex((t) => t.id === beforeTabId);
       if (bi >= 0) insertIndex = bi;
-    } else if (beforeTabId === GearOrganization.DEFAULT_TAB) {
+    } else if (beforeTabId === this.DEFAULT_TAB) {
       insertIndex = 0;
     }
     org.tabs.splice(insertIndex, 0, tab);
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 
   static async deleteTab(actor, tabId) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     org.tabs = org.tabs.filter((t) => t.id !== tabId);
     // any gear assigned to the removed tab falls back to the default group
     for (const key of Object.keys(org.assignments)) {
       if (org.assignments[key]?.tab === tabId) {
-        org.assignments[key].tab = GearOrganization.DEFAULT_TAB;
+        org.assignments[key].tab = this.DEFAULT_TAB;
       }
     }
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 
   /**
@@ -185,15 +186,15 @@ export default class GearOrganization {
    * @param {string|null} beforeKey - gearKey of the row to insert before, or null for end
    */
   static async moveGear(actor, gearList, movedKey, targetTabId, beforeKey = null) {
-    const org = GearOrganization.get(actor);
+    const org = this.get(actor);
     org.enabled = true;
-    const validTabIds = new Set([GearOrganization.DEFAULT_TAB, ...org.tabs.map((t) => t.id)]);
-    if (!validTabIds.has(targetTabId)) targetTabId = GearOrganization.DEFAULT_TAB;
+    const validTabIds = new Set([this.DEFAULT_TAB, ...org.tabs.map((t) => t.id)]);
+    if (!validTabIds.has(targetTabId)) targetTabId = this.DEFAULT_TAB;
 
     // current ordering of the destination tab (using the same logic as buildGroups)
-    const built = GearOrganization.buildGroups(actor, gearList);
+    const built = this.buildGroups(actor, gearList);
     const targetGroup = built.groups.find((g) => g.id === targetTabId);
-    let orderedKeys = targetGroup ? targetGroup.items.map((it) => GearOrganization.gearKey(it)) : [];
+    let orderedKeys = targetGroup ? targetGroup.items.map((it) => this.gearKey(it)) : [];
 
     // remove the moved item if it is already in this tab, then insert at the target spot
     orderedKeys = orderedKeys.filter((k) => k !== movedKey);
@@ -206,9 +207,9 @@ export default class GearOrganization {
 
     // persist explicit tab + sort for everything now in the destination tab
     orderedKeys.forEach((key, index) => {
-      org.assignments[key] = { tab: targetTabId, sort: (index + 1) * GearOrganization.SORT_STEP };
+      org.assignments[key] = { tab: targetTabId, sort: (index + 1) * this.SORT_STEP };
     });
 
-    return GearOrganization.save(actor, org);
+    return this.save(actor, org);
   }
 }

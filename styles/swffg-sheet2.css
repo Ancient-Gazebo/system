@@ -44,10 +44,45 @@
   min-width: 150px;
   width: 100%;
 }
-/* The vehicle header packs four stat boxes into a fixed grid — let the vital
-   blocks compress with their grid cells instead of forcing an overflow. */
+/* Compact variant for the dense stat grids (minion 3-col, vehicle 4-col):
+   the full-size block's min-content is wider than those cells at the default
+   sheet size, which made neighbouring blocks overlap until the window was
+   resized. Smaller numbers/buttons/labels bring the whole stepline under the
+   cell width; overflow:hidden guarantees no bleed into the next cell even at
+   extreme sizes. */
+.starwarsffg .minion .ffg2-vital,
+.starwarsffg .vehicle .ffg2-vital {
+  min-width: 0;
+}
+.starwarsffg .minion .ffg2-vital .block-background,
 .starwarsffg .vehicle .ffg2-vital .block-background {
   min-width: 0;
+  overflow: hidden;
+}
+.starwarsffg .minion .ffg2-vital .ffg2-thresh input,
+.starwarsffg .vehicle .ffg2-vital .ffg2-thresh input {
+  font-size: 1.15rem;
+  width: 2em;
+}
+.starwarsffg .minion .ffg2-vital .ffg2-slash,
+.starwarsffg .vehicle .ffg2-vital .ffg2-slash {
+  margin: 0 2px;
+  line-height: 1.45rem;
+}
+.starwarsffg .minion .ffg2-vital button.ffg2-step,
+.starwarsffg .vehicle .ffg2-vital button.ffg2-step {
+  width: 15px;
+  height: 15px;
+  font-size: 8px;
+}
+.starwarsffg .minion .ffg2-vital .ffg2-stepline,
+.starwarsffg .vehicle .ffg2-vital .ffg2-stepline {
+  gap: 2px;
+}
+.starwarsffg .minion .ffg2-vital .ffg2-vlabel,
+.starwarsffg .vehicle .ffg2-vital .ffg2-vlabel {
+  font-size: 0.5rem;
+  padding: 2px 3px;
 }
 
 .starwarsffg .ffg2-vital .block-title.ffg2-vital-title {
@@ -149,12 +184,15 @@
   gap: 2px;
 }
 
-/* Value + label column: the label is locked centred under its number box. */
+/* Value + label column: the label is locked centred under its number box.
+   min-width:0 lets the columns shrink inside narrow stat-grid cells (minion /
+   vehicle headers) instead of overflowing into the neighbouring block. */
 .starwarsffg .ffg2-vcol {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  min-width: 0;
 }
 /* Labels wear the classic split-block shadow colours (mandar's red / blue,
    same pair the Defense MELEE/RANGED strip uses), as notched chips. */
@@ -165,7 +203,10 @@
   white-space: nowrap;
   line-height: 1;
   width: 100%;
-  min-width: 3.4em;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: center;
   padding: 2px 5px;
   --notchSize: 4px;
@@ -180,6 +221,8 @@
   background-color: #7da9c2;
   color: black;
   font-weight: bold;
+  /* space-op's black drop-shadow smudges black-on-blue text (same as RANGED) */
+  text-shadow: none !important;
 }
 
 /* space-op paints its standard drop-shadow under the Defense strip labels;

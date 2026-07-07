@@ -13,7 +13,8 @@
    `.sheet-body { height: calc(100% - 15.75rem) }` sizing, which can't follow
    a collapsed header or an in-flow (word) tab strip. */
 
-.starwarsffg.sheet .window-content > form.character {
+.starwarsffg.sheet .window-content > form.character,
+.starwarsffg.sheet .window-content > form.minion {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -21,14 +22,17 @@
   height: 100%;
 }
 /* mandar pins the header at flex-basis 100px — let it size to content. */
-.starwarsffg.sheet form.character header.sheet-header {
+.starwarsffg.sheet form.character header.sheet-header,
+.starwarsffg.sheet form.minion header.sheet-header {
   flex: 0 0 auto !important;
   height: auto;
 }
-.starwarsffg.sheet form.character nav.sheet-tabs {
+.starwarsffg.sheet form.character nav.sheet-tabs,
+.starwarsffg.sheet form.minion nav.sheet-tabs {
   flex: 0 0 auto;
 }
-.starwarsffg.sheet form.character section.sheet-body {
+.starwarsffg.sheet form.character section.sheet-body,
+.starwarsffg.sheet form.minion section.sheet-body {
   flex: 1 1 0 !important;
   height: auto !important;
   min-height: 0 !important;
@@ -39,6 +43,11 @@
 .starwarsffg .ffg2-vital .block-background {
   min-width: 150px;
   width: 100%;
+}
+/* The vehicle header packs four stat boxes into a fixed grid — let the vital
+   blocks compress with their grid cells instead of forcing an overflow. */
+.starwarsffg .vehicle .ffg2-vital .block-background {
+  min-width: 0;
 }
 
 .starwarsffg .ffg2-vital .block-title.ffg2-vital-title {
@@ -169,8 +178,14 @@
 }
 .starwarsffg .ffg2-thresh .ffg2-vcol:last-of-type .ffg2-vlabel {
   background-color: #7da9c2;
-  color: white;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+  color: black;
+  font-weight: bold;
+}
+
+/* space-op paints its standard drop-shadow under the Defense strip labels;
+   under the black-on-blue RANGED text it reads as a smudge. */
+.starwarsffg .attribute .shadow-right .shadow-text {
+  text-shadow: none !important;
 }
 
 /* Beats mandar's `.resource input { width:100%; height:1.5rem }` (which loads

@@ -469,11 +469,11 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
         (i.flags?.starwarsffg?.config?.enableQuantity === true || Number(i.system?.quantity?.value) > 1)
     );
 
-    // Damage tracks for the wounds/strain header blocks (ffg-vital-block.html):
-    // fill percentage plus a colour that escalates green -> amber -> red as
-    // current approaches the threshold.
+    // Damage tracks for the wounds/strain header blocks (ffg-vital-block.html;
+    // hull trauma / system strain on vehicles): fill percentage plus a colour
+    // that escalates green -> amber -> red as current approaches the threshold.
     data.vitalTracks = {};
-    for (const stat of ["wounds", "strain"]) {
+    for (const stat of ["wounds", "strain", "hullTrauma", "systemStrain"]) {
       const s = data.data?.stats?.[stat];
       if (!s || s.max === undefined) continue;
       const ratio = (Number(s.max) || 0) > 0 ? (Number(s.value) || 0) / Number(s.max) : 0;

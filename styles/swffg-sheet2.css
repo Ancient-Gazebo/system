@@ -237,7 +237,15 @@
   font-weight: bold !important;
 }
 
-/* Speed fills its header grid cell like the vital blocks beside it. */
+/* Vehicle header row: space-op remakes `.vehicle .grid` as a FLEX row (not a
+   grid), so the three stat blocks need equal flex to share the width — the
+   Speed block otherwise sits at its content width and never grows. Inert
+   under a real grid layout, where the equal columns + width:100% do the job. */
+.starwarsffg .vehicle .grid-3col > .resource {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+}
 .starwarsffg .vehicle .grid-3col .resource.split .attribute,
 .starwarsffg .vehicle .grid-3col .resource.split .block-background {
   width: 100%;

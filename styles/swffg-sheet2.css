@@ -1,14 +1,44 @@
 /*
  * swffg-sheet2.css — Codex-inspired character-sheet enhancements.
  * Loaded from system.json unconditionally (unlike starwarsffg.css, which the
- * Mandar theme setting disables), so these rules apply on every theme and are
- * written to be palette-neutral: layout + sizing here, colours from the theme.
+ * Mandar theme setting disables), so these rules apply on every theme.
+ * !important is used deliberately where a theme (mandar.css, or the space-op-ui
+ * module) pins layout with fixed heights/positions that these features must
+ * release; each such fight is noted inline.
  */
+
+/* ---- Character sheet frame --------------------------------------------- */
+/* Flex-column the character form so the body simply takes whatever room the
+   header + tab strip leave. This replaces mandar's fragile
+   `.sheet-body { height: calc(100% - 15.75rem) }` sizing, which can't follow
+   a collapsed header or an in-flow (word) tab strip. */
+
+.starwarsffg.sheet .window-content > form.character {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+/* mandar pins the header at flex-basis 100px — let it size to content. */
+.starwarsffg.sheet form.character header.sheet-header {
+  flex: 0 0 auto !important;
+  height: auto;
+}
+.starwarsffg.sheet form.character nav.sheet-tabs {
+  flex: 0 0 auto;
+}
+.starwarsffg.sheet form.character section.sheet-body {
+  flex: 1 1 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
 
 /* ---- Vital blocks (Wounds / Strain) ---------------------------------- */
 
 .starwarsffg .ffg2-vital .block-background {
-  min-width: 172px;
+  min-width: 150px;
+  width: 100%;
 }
 
 .starwarsffg .ffg2-vital .block-title.ffg2-vital-title {
@@ -51,7 +81,12 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
-.starwarsffg .ffg2-vital-body {
+/* Stack stepline → labels vertically. Guarded with !important because block
+   containers pick up grid/flex-row layouts from the themes. */
+.starwarsffg .ffg2-vital .block-attribute.ffg2-vital-body {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100%;
   padding: 2px 4px 4px;
 }
 
@@ -59,6 +94,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  width: 100%;
 }
 
 .starwarsffg button.ffg2-step {
@@ -86,8 +122,11 @@
   gap: 2px;
 }
 
-.starwarsffg .ffg2-thresh input {
+/* Beats mandar's `.resource input { width:100%; height:1.5rem }` (which loads
+   after this sheet and would stretch each input full-width). */
+.starwarsffg .ffg2-vital .ffg2-thresh input {
   width: 2.2em;
+  height: auto;
   text-align: center;
   background: transparent;
   border: none;
@@ -96,7 +135,7 @@
   padding: 0;
   color: inherit;
 }
-.starwarsffg .ffg2-thresh input[disabled] {
+.starwarsffg .ffg2-vital .ffg2-thresh input[disabled] {
   opacity: 0.9;
 }
 
@@ -123,6 +162,7 @@
   gap: 8px;
   margin-top: 2px;
   padding: 0 4px;
+  width: 100%;
 }
 .starwarsffg .ffg2-vital-sub span {
   font-size: 0.55rem;
@@ -131,43 +171,49 @@
   opacity: 0.75;
 }
 
-.starwarsffg .ffg2-heal {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(0, 0, 0, 0.2);
-}
-.starwarsffg .ffg2-heal-k {
-  font-size: 0.6rem;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  opacity: 0.85;
-}
-.starwarsffg .ffg2-heal-v {
-  font-weight: 900;
-  font-size: 0.8rem;
-}
-.starwarsffg .ffg2-heal .medical {
-  cursor: pointer;
-}
-
 /* ---- Word tabs -------------------------------------------------------- */
+/* mandar's V2 rule pins `.starwarsffg.v2 .tabs` as an absolute 2.5rem-wide
+   vertical icon rail off the right edge, and sizes each `.item` as a 2.5rem
+   square — words get clipped to nothing. Put the word strip back in the
+   layout flow as a horizontal row of Codex-style clickable words, and let the
+   themes keep colouring the items. */
 
-.starwarsffg nav.sheet-tabs.word-tabs {
-  display: flex;
+.starwarsffg.sheet nav.sheet-tabs.word-tabs {
+  position: static !important;
+  width: 100% !important;
+  right: auto !important;
+  top: auto !important;
+  display: flex !important;
+  flex-direction: row !important;
   flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: flex-end;
+  gap: 2px;
+  height: auto !important;
+  margin: 0 0 2px !important;
 }
-.starwarsffg nav.sheet-tabs.word-tabs .item {
+.starwarsffg.sheet nav.sheet-tabs.word-tabs .item {
+  position: static !important;
+  width: auto !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
+  height: 1.6rem !important;
+  line-height: 1.1rem !important;
+  font-size: 0.7rem !important;
+  padding: 0.25rem 0.9rem !important;
+  margin: 0 !important;
   text-transform: uppercase;
   letter-spacing: 1px;
   white-space: nowrap;
-  padding: 0 10px;
+  text-align: center;
+}
+.starwarsffg.sheet nav.sheet-tabs.word-tabs .item.active {
+  height: 1.6rem !important;
+  line-height: 1.1rem !important;
+  flex: 0 0 auto !important;
 }
 /* Module-injected tabs (e.g. swffg-netrunning) prepend an icon — words only here. */
-.starwarsffg nav.sheet-tabs.word-tabs .item i {
+.starwarsffg.sheet nav.sheet-tabs.word-tabs .item i {
   display: none;
 }
 
@@ -180,27 +226,41 @@
   grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
-
+/* The number fills the theme's characteristic circle like a real
+   characteristic; the −/+ steppers straddle the circle's left/right edges
+   (Codex style) instead of squeezing inside it. */
 .starwarsffg .ffg2-force-chip .characteristic-value.ffg2-ratio-box {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 2px;
-  padding: 0 2px;
+  justify-content: center;
+  min-height: 50px;
+  overflow: visible !important;
 }
 
 .starwarsffg button.ffg2-ratio-step {
-  width: 16px;
-  height: 16px;
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
   font-size: 8px;
   padding: 0;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(0, 0, 0, 0.4);
-  color: inherit;
+  background: rgba(30, 30, 30, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  z-index: 3;
+}
+.starwarsffg button.ffg2-ratio-step.minus {
+  left: 0;
+  transform: translate(-40%, -50%);
+}
+.starwarsffg button.ffg2-ratio-step.plus {
+  right: 0;
+  transform: translate(40%, -50%);
 }
 .starwarsffg button.ffg2-ratio-step:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(80, 80, 80, 0.95);
 }
 
 .starwarsffg .ffg2-ratio-nums {
@@ -208,32 +268,42 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  line-height: 1.1;
+  line-height: 1;
   min-width: 0;
 }
 .starwarsffg .ffg2-ratio-nums .ffg2-ratio-c {
   font-weight: 900;
-  font-size: 1.3rem;
+  font-size: 1.7rem;
   line-height: 1;
   text-align: center;
 }
-.starwarsffg .ffg2-ratio-nums input.ffg2-ratio-c {
+.starwarsffg .ffg2-ratio-nums .ffg2-ratio-t {
+  font-size: 0.6rem;
+  opacity: 0.8;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+/* Edit-mode inputs: outrank mandar's `.characteristic .characteristic-value
+   input` (49px circled 2rem inputs, loaded after this sheet). */
+.starwarsffg .ffg2-force-chip .characteristic .ffg2-ratio-nums input.ffg2-ratio-c {
   width: 1.6em;
+  height: auto;
   background: transparent;
   border: none;
+  border-radius: 0;
+  margin: 0;
   padding: 0;
+  font-size: 1.7rem;
   color: inherit;
 }
-.starwarsffg .ffg2-ratio-nums .ffg2-ratio-t {
-  font-size: 0.55rem;
-  opacity: 0.75;
-  white-space: nowrap;
-}
-.starwarsffg .ffg2-ratio-nums input.ffg2-ratio-m {
+.starwarsffg .ffg2-force-chip .characteristic .ffg2-ratio-nums input.ffg2-ratio-m {
   width: 1.6em;
+  height: auto;
   text-align: center;
   background: transparent;
   border: none;
+  border-radius: 0;
+  margin: 0;
   padding: 0;
   font-size: 0.6rem;
   color: inherit;
@@ -249,10 +319,10 @@
 /* ---- Collapsible identity header --------------------------------------- */
 /* The species/career/spec/force/sig block collapses via a Codex-style toggle
    hanging off its bottom edge. The collapsed class lives on the sheet <form>
-   (form.character.ffg2-hdr-collapsed) so these rules can also release the
-   theme's fixed header-block heights and hand the reclaimed room to the body:
-   mandar pins .header-description-block at 170px (space-op: 145px) and sizes
-   .sheet-body as calc(100% - 15.75rem). */
+   (form.character.ffg2-hdr-collapsed). Collapsed = portrait and details table
+   hidden, name kept; the themes' fixed block heights (mandar 170px, space-op
+   145px + !important backgrounds) are released so the header genuinely
+   shrinks, and the flex frame above hands the room to the body. */
 
 .starwarsffg .ffg2-header-id {
   position: relative;
@@ -290,23 +360,15 @@
 }
 
 .starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .character-details-table {
-  display: none;
+  display: none !important;
+}
+.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block {
+  display: none !important;
 }
 .starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .header-fields .header-description-block {
-  height: auto;
-  min-height: 0;
-  overflow: visible;
-}
-.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .header-fields .profile-block {
-  height: auto;
-  max-width: 64px;
-}
-.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .profile-block .profile-img {
-  width: 56px;
-  height: 56px;
-}
-.starwarsffg.sheet .character.ffg2-hdr-collapsed .sheet-body {
-  height: calc(100% - 9.25rem);
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
 }
 
 /* ---- Editor list rendering fix ---------------------------------------- */

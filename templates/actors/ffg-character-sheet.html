@@ -102,8 +102,8 @@
       {{!-- Primary Stats Container --}}
       <div class="container" style="flex-wrap: nowrap;{{#if limited}}display:none;{{/if}}">
         <div class="container flex-group-center">
-          {{!-- Wounds Box: Current / Threshold with steppers, Rest button and stimpacks --}}
-          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Wounds" stat="wounds" value=data.stats.wounds.value max=data.stats.wounds.max disabled=disabled track=vitalTracks.wounds showRest=true stimEnabled=(or (eq actor.flags.starwarsffg.config.enableStimpacks undefined) (eq actor.flags.starwarsffg.config.enableStimpacks true)) stimTitle=actor.flags.starwarsffg.config.medicalItemName stimValue=data.stats.medical.uses)}}
+          {{!-- Wounds Box: Current / Threshold with steppers and Rest button --}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Wounds" stat="wounds" value=data.stats.wounds.value max=data.stats.wounds.max disabled=disabled track=vitalTracks.wounds showRest=true)}}
 
           {{#if (or (eq actor.flags.starwarsffg.config.enableStrainThreshold undefined) (eq actor.flags.starwarsffg.config.enableStrainThreshold true) )}}
           {{!-- Strain Box: no separate reset — the Wounds Rest button already recovers strain --}}
@@ -189,7 +189,11 @@
     {{!-- Owned Items (Gear) Tab --}}
     <div class="tab items" data-group="primary" data-tab="items">
       <div class="container flex-group-center item-values">
-        {{!-- Emergency Repair Patch Box (stimpacks live in the Wounds block now) --}}
+        {{!-- Stimpack Box --}}
+        {{#if (or (eq actor.flags.starwarsffg.config.enableStimpacks undefined) (eq actor.flags.starwarsffg.config.enableStimpacks true) )}}
+        {{> "systems/starwarsffg/templates/parts/actor/ffg-healingitem.html" (object kind="stim" title=actor.flags.starwarsffg.config.medicalItemName name="data.stats.medical.uses" value=data.stats.medical.uses)}}
+        {{/if}}
+        {{!-- Emergency Repair Patch Box --}}
         {{#if (eq actor.flags.starwarsffg.config.enableRepairPatches true)}}
         {{> "systems/starwarsffg/templates/parts/actor/ffg-healingitem.html" (object kind="patch" title=(localize "SWFFG.DefaultPatchItemName") name="data.stats.medical.patchUses" value=data.stats.medical.patchUses)}}
         {{/if}}

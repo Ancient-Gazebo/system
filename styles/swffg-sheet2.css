@@ -212,7 +212,7 @@
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: flex-end;
   gap: 2px;
   height: auto !important;
@@ -350,16 +350,27 @@
 .starwarsffg.sheet form.character .tab.biography {
   overflow-y: auto !important;
 }
+/* Shrink-wrap the whole editor chain: every layer (mandar's 83%-of-tab, core's
+   percentage heights, any inline sizing) is forced to content height so no
+   invisible remainder pushes the general/duty sections down; the floor keeps
+   an empty editor usable, and it simply grows as the biography fills out. */
 .starwarsffg.sheet form.character .tab.biography .biography-editor {
-  height: auto;
-  min-height: 10rem;
-  flex: 0 0 auto;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  flex: 0 0 auto !important;
 }
-/* The editor grows with its content; empty editors keep a usable floor. */
 .starwarsffg.sheet form.character .tab.biography .biography-editor .editor,
 .starwarsffg.sheet form.character .tab.biography .biography-editor .editor-content {
-  height: auto;
-  min-height: 9rem;
+  height: auto !important;
+  min-height: 9rem !important;
+  max-height: none !important;
+}
+/* The (mostly empty on V2) values strip between the editor and the merged
+   sections contributes no height of its own. */
+.starwarsffg.sheet form.character .tab.biography .container.biography-values {
+  height: auto !important;
+  min-height: 0 !important;
 }
 
 /* ---- Collapsible identity header --------------------------------------- */

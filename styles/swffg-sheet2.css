@@ -694,6 +694,41 @@
   min-height: 4px;
 }
 
+/* ---- Weapon / armour column alignment ---------------------------------- */
+/* The stock weapons/armour lists left their stat cells unclassed, so header
+   cells (wide labels) and row cells (short values) sized to their own content
+   and drifted out of column as the sheet widened. Give each stat column an
+   equal, identical flex on BOTH header and row (they share the class), so the
+   value always sits under its header. Name keeps the base flex:1 0 120px and
+   absorbs the leading slack; the actions column is fixed. */
+.starwarsffg .weapon-items .wpn-col-equipped,
+.starwarsffg .weapon-items .wpn-col-damage,
+.starwarsffg .weapon-items .wpn-col-range,
+.starwarsffg .weapon-items .wpn-col-crit,
+.starwarsffg .armor-items .arm-col-equipped,
+.starwarsffg .armor-items .arm-col-defense,
+.starwarsffg .armor-items .arm-col-soak,
+.starwarsffg .armor-items .arm-col-hp {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+}
+/* Actions column: fixed width on header and rows alike. The row override has
+   to out-specify the base `.items .items-list .item-controls { width:20px;
+   margin:auto }`, which would otherwise steal the name column's slack and
+   throw every column off. Covers flat (.items-list) and tabbed (.gear-org-list)
+   weapon rows plus the flat armour rows. */
+.starwarsffg .weapon-items .items-header .gear-col-actions,
+.starwarsffg .armor-items .items-header .gear-col-actions,
+.starwarsffg .weapon-items .items-list .item-controls.gear-col-actions,
+.starwarsffg .weapon-items .gear-org-list .item-controls.gear-col-actions,
+.starwarsffg .armor-items .items-list .item-controls.gear-col-actions {
+  flex: 0 0 96px;
+  width: auto;
+  margin: 0;
+  text-align: right;
+}
+
 /* ---- Editor list rendering fix ---------------------------------------- */
 /* The space-op-ui module applies `padding: 5px 5px 0 5px` to EVERY element
    inside sheet editors (.editor-content *), which collapses the default left

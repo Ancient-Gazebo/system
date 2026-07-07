@@ -9,10 +9,10 @@
 <ul class="items weapon-items">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsWeapons"}}</div>
-    <div class="">{{localize "SWFFG.Equipped"}}</div>
-    <div class="">{{localize "SWFFG.ItemsDamage"}}</div>
-    <div class="">{{localize "SWFFG.ItemsRange"}}</div>
-    <div class="">{{localize "SWFFG.ItemsCrit"}}</div>
+    <div class="wpn-col-equipped">{{localize "SWFFG.Equipped"}}</div>
+    <div class="wpn-col-damage">{{localize "SWFFG.ItemsDamage"}}</div>
+    <div class="wpn-col-range">{{localize "SWFFG.ItemsRange"}}</div>
+    <div class="wpn-col-crit">{{localize "SWFFG.ItemsCrit"}}</div>
     {{#if showWeaponQuantity}}<div class="weapon-col-quantity">{{localize "SWFFG.ItemsQuantity"}}</div>{{/if}}
     <div class="gear-col-actions">
       <span class="gear-org-controls" data-org-type="weapon">
@@ -64,16 +64,16 @@
           {{/if}}
         </div>
       </div>
-      <div>
+      <div class="wpn-col-equipped">
         {{#if item.system.equippable.equipped}}
         <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-fist-raised"></i></a>
         {{else}}
         <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-fist-raised"></i></a>
         {{/if}}
       </div>
-      <div>{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
-      <div>{{localize item.system.range.label}}</div>
-      <div>{{item.system.crit.value}} {{#if (and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0)))}}({{item.system.crit.adjusted}}){{/if}}</div>
+      <div class="wpn-col-damage">{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
+      <div class="wpn-col-range">{{localize item.system.range.label}}</div>
+      <div class="wpn-col-crit">{{item.system.crit.value}} {{#if (and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0)))}}({{item.system.crit.adjusted}}){{/if}}</div>
       {{#if @root.showWeaponQuantity}}
       <div class="item-quantity weapon-col-quantity">
         {{#if (or (eq item.flags.starwarsffg.config.enableQuantity true) (gt item.system.quantity.value 1))}}
@@ -83,7 +83,7 @@
         {{/if}}
       </div>
       {{/if}}
-      <div class="item-controls">
+      <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
         <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
@@ -110,16 +110,16 @@
           {{/if}}
         </div>
       </div>
-      <div>
+      <div class="wpn-col-equipped">
         {{#if item.system.equippable.equipped}}
         <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-fist-raised"></i></a>
         {{else}}
         <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-fist-raised"></i></a>
         {{/if}}
       </div>
-      <div>{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
-      <div>{{localize item.system.range.label}}</div>
-      <div>{{item.system.crit.value}} {{#if (and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0)))}}({{item.system.crit.adjusted}}){{/if}}</div>
+      <div class="wpn-col-damage">{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
+      <div class="wpn-col-range">{{localize item.system.range.label}}</div>
+      <div class="wpn-col-crit">{{item.system.crit.value}} {{#if (and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0)))}}({{item.system.crit.adjusted}}){{/if}}</div>
       {{#if @root.showWeaponQuantity}}
       <div class="item-quantity weapon-col-quantity">
         {{#if (or (eq item.flags.starwarsffg.config.enableQuantity true) (gt item.system.quantity.value 1))}}
@@ -129,7 +129,7 @@
         {{/if}}
       </div>
       {{/if}}
-      <div class="item-controls">
+      <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
         <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
@@ -142,14 +142,14 @@
 </ul>
 
 {{!-- Armour List --}}
-<ul class="items">
+<ul class="items armor-items">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsArmor"}}</div>
-    <div>{{localize "SWFFG.Equipped"}}</div>
-    <div>{{localize "SWFFG.ItemsDefense"}}</div>
-    <div>{{localize "SWFFG.ItemsSoak"}}</div>
-    <div>{{localize "SWFFG.ItemsHP"}}</div>
-    <div class="item-add armour"><i class="far fa-plus-square"></i></div>
+    <div class="arm-col-equipped">{{localize "SWFFG.Equipped"}}</div>
+    <div class="arm-col-defense">{{localize "SWFFG.ItemsDefense"}}</div>
+    <div class="arm-col-soak">{{localize "SWFFG.ItemsSoak"}}</div>
+    <div class="arm-col-hp">{{localize "SWFFG.ItemsHP"}}</div>
+    <div class="gear-col-actions"><div class="item-add armour"><i class="far fa-plus-square"></i></div></div>
   </li>
 
   <ul class="items-list">
@@ -163,17 +163,17 @@
           {{/if}}
         </div>
       </div>
-      <div>
+      <div class="arm-col-equipped">
         {{#if item.system.equippable.equipped}}
         <a class="toggle-equipped active" data-item-id="{{item._id}}" title="Equipped"><i class="fas fa-shield-alt"></i></a>
         {{else}}
         <a class="toggle-equipped" data-item-id="{{item._id}}" title="Equipped"><i class="fas fa-shield-alt"></i></a>
         {{/if}}
       </div>
-      <div>{{item.system.defence.value}} {{#if (and (ne item.system.defence.value item.system.defence.adjusted) (or (gt item.system.defence.adjusted.length 0) (gt item.system.defence.adjusted 0)))}}({{item.system.defence.adjusted}}){{/if}}</div>
-      <div>{{item.system.soak.value}} {{#if (and (ne item.system.soak.value item.system.soak.adjusted) (or (gt item.system.soak.adjusted.length 0) (gt item.system.soak.adjusted 0)))}}({{item.system.soak.adjusted}}){{/if}}</div>
-      <div>{{item.system.hardpoints.value}} {{#if (and (ne item.system.hardpoints.adjusted item.system.hardpoints.current) (or (gt item.system.hardpoints.current.length 0) (gt item.system.hardpoints.current 0)))}}({{item.system.hardpoints.current}}){{/if}}</div>
-      <div class="item-controls">
+      <div class="arm-col-defense">{{item.system.defence.value}} {{#if (and (ne item.system.defence.value item.system.defence.adjusted) (or (gt item.system.defence.adjusted.length 0) (gt item.system.defence.adjusted 0)))}}({{item.system.defence.adjusted}}){{/if}}</div>
+      <div class="arm-col-soak">{{item.system.soak.value}} {{#if (and (ne item.system.soak.value item.system.soak.adjusted) (or (gt item.system.soak.adjusted.length 0) (gt item.system.soak.adjusted 0)))}}({{item.system.soak.adjusted}}){{/if}}</div>
+      <div class="arm-col-hp">{{item.system.hardpoints.value}} {{#if (and (ne item.system.hardpoints.adjusted item.system.hardpoints.current) (or (gt item.system.hardpoints.current.length 0) (gt item.system.hardpoints.current 0)))}}({{item.system.hardpoints.current}}){{/if}}</div>
+      <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
         <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>

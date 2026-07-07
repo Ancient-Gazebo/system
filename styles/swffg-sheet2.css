@@ -81,6 +81,14 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* FA glyphs inherit the theme's line-height and drift a pixel off-centre
+   inside these small flex-centred buttons — zero it so the glyph box centres. */
+.starwarsffg button.ffg2-rest i,
+.starwarsffg button.ffg2-step i,
+.starwarsffg button.ffg2-ratio-step i {
+  line-height: 0;
+}
+
 /* Stack stepline → labels vertically. Guarded with !important because block
    containers pick up grid/flex-row layouts from the themes. */
 .starwarsffg .ffg2-vital .block-attribute.ffg2-vital-body {
@@ -90,9 +98,13 @@
   padding: 2px 4px 4px;
 }
 
+/* The mid column holds the numbers plus the label row beneath them, so the
+   steppers use a fixed top offset that centres them on the NUMBER row alone
+   (number row ≈26px at 1.35rem, button 18px → 4px) instead of on the column's
+   overall centre. */
 .starwarsffg .ffg2-stepline {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   width: 100%;
 }
@@ -100,6 +112,7 @@
 .starwarsffg button.ffg2-step {
   width: 18px;
   height: 18px;
+  margin-top: 4px;
   font-size: 9px;
   padding: 0;
   background: rgba(0, 0, 0, 0.08);
@@ -144,9 +157,11 @@
   opacity: 0.6;
 }
 
+/* Now a direct child of the block body, spanning the full width below the
+   stepline. */
 .starwarsffg .ffg2-track {
   height: 4px;
-  margin: 2px 4px 0;
+  margin: 4px 2px 0;
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.15);
   overflow: hidden;
@@ -156,12 +171,13 @@
   border-radius: 2px;
 }
 
+/* Sits inside the stepline's mid column, directly beneath the numbers. */
 .starwarsffg .ffg2-vital-sub {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 2px;
-  padding: 0 4px;
+  margin-top: 1px;
+  padding: 0 2px;
   width: 100%;
 }
 .starwarsffg .ffg2-vital-sub span {
@@ -278,10 +294,11 @@
   text-align: center;
 }
 .starwarsffg .ffg2-ratio-nums .ffg2-ratio-t {
-  font-size: 0.6rem;
-  opacity: 0.8;
+  font-size: 0.8rem;
+  font-weight: 700;
+  opacity: 0.9;
   white-space: nowrap;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 /* Edit-mode inputs: outrank mandar's `.characteristic .characteristic-value
    input` (49px circled 2rem inputs, loaded after this sheet). */
@@ -305,7 +322,7 @@
   border-radius: 0;
   margin: 0;
   padding: 0;
-  font-size: 0.6rem;
+  font-size: 0.8rem;
   color: inherit;
 }
 
@@ -314,6 +331,18 @@
 }
 .starwarsffg .ffg2-force-roll:hover {
   filter: brightness(1.25);
+}
+
+/* ---- Merged Bio tab ----------------------------------------------------- */
+/* General info and Obligation/Duty/Morality fold into the Bio tab (Codex
+   style). The tab scrolls, and the editor gets a bounded height instead of
+   mandar's 83%-of-tab (which assumed the editor was the only occupant). */
+.starwarsffg.sheet form.character .tab.biography {
+  overflow-y: auto !important;
+}
+.starwarsffg.sheet form.character .tab.biography .biography-editor {
+  height: 20rem;
+  flex: 0 0 auto;
 }
 
 /* ---- Collapsible identity header --------------------------------------- */
@@ -362,8 +391,17 @@
 .starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .character-details-table {
   display: none !important;
 }
+/* Codex keeps the character art visible when collapsed — shrink it instead of
+   hiding it (the themes pin the block at 130px, hence the !important). */
 .starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block {
-  display: none !important;
+  height: auto !important;
+  max-width: 52px !important;
+  margin: 0 4px 0 0 !important;
+}
+.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block .profile-img {
+  width: 48px !important;
+  height: 48px !important;
+  object-fit: cover;
 }
 .starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .header-fields .header-description-block {
   height: auto !important;

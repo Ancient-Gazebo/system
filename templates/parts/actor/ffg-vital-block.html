@@ -1,8 +1,9 @@
 {{!--
   Vital stat block (Wounds / Strain), Codex-inspired: Current before Threshold,
-  −/+ steppers on either side, a slim damage track underneath, and an optional
-  Rest button in the header. The Rest button reuses the stock .resetMedical
-  handler (Rest / Reset per the HealingItemAction setting).
+  −/+ steppers on either side, CURRENT/THRESHOLD labels directly under the
+  numbers, a slim damage track along the bottom, and an optional Rest button in
+  the header. The Rest button reuses the stock .resetMedical handler
+  (Rest / Reset per the HealingItemAction setting).
   NOTE: deliberately NOT classed "split" — mandar's `.split .attribute
   .block-attribute` grid rule would lay the stepline and the label row out
   side-by-side instead of stacked.
@@ -33,13 +34,13 @@
               <span class="ffg2-slash">/</span>
               <input type="text" name="data.stats.{{stat}}.max" value="{{max}}" data-dtype="Number" {{#if disabled}}disabled{{/if}} />
             </div>
-            {{#if track}}
-            <div class="ffg2-track"><div class="ffg2-track-fill" style="width:{{track.pct}}%;background:{{track.color}}"></div></div>
-            {{/if}}
+            <div class="ffg2-vital-sub"><span>{{localize "SWFFG.Current"}}</span><span>{{localize "SWFFG.Threshold"}}</span></div>
           </div>
           <button type="button" class="ffg2-step" data-stat="{{stat}}" data-dir="1" title="+1"><i class="fas fa-plus"></i></button>
         </div>
-        <div class="ffg2-vital-sub"><span>{{localize "SWFFG.Current"}}</span><span>{{localize "SWFFG.Threshold"}}</span></div>
+        {{#if track}}
+        <div class="ffg2-track"><div class="ffg2-track-fill" style="width:{{track.pct}}%;background:{{track.color}}"></div></div>
+        {{/if}}
       </div>
     </div>
   </div>

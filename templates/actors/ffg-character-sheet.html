@@ -128,8 +128,6 @@
     (object tab="crits" label="SWFFG.TabCritsShort" icon="fa-solid fa-notes-medical" cls=classType)
     (object tab="talents" label="SWFFG.TabTalents" icon="fab fa-superpowers" cls=classType)
     (object tab="description" label="SWFFG.TabBioShort" icon="fas fa-sticky-note" cls=classType)
-    (object tab="general" label="SWFFG.TabGeneralShort" icon="fas fa-address-card" cls=classType isHidden=true)
-    (object tab="obligation" label="SWFFG.TabDutyShort" icon="fas fa-balance-scale" cls=classType isHidden=true)
     (object tab="xp" label="SWFFG.TabXpShort" icon="far fa-note" cls=classType isHidden=true)
     (object tab="effects" label="SWFFG.TabEffectsShort" icon="far fa-star" cls=classType isHidden=true)
   )}}
@@ -234,6 +232,10 @@
 
         </div>
       </div>
+
+      {{!-- General info + Obligation/Duty/Morality, folded into Bio (Codex style) --}}
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-bio-general.html"}}
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-bio-obligation.html"}}
     </div>
 
     {{!-- Critical injuries Tab --}}
@@ -245,104 +247,6 @@
     {{!-- Modifiers Tab --}}
     <div class="tab attributes" data-group="primary" data-tab="attributes">
       {{> "systems/starwarsffg/templates/parts/shared/ffg-modifiers.html"}}
-    </div>
-
-    {{!-- General Tab (basic information) --}}
-    <div class="tab general" data-group="primary" data-tab="general">
-      <div class="grid grid-2col">
-        <div>
-          <div class="grid grid-2col">
-            {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Gender" type="String" name="data.general.gender" value=data.general.gender)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Age" type="String" name="data.general.age" value=data.general.age)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Height" type="String" name="data.general.height" value=data.general.height)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Build" type="String" name="data.general.build" value=data.general.build)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Hair" type="String" name="data.general.hair" value=data.general.hair)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Eyes" type="String" name="data.general.eyes" value=data.general.eyes)}}
-          </div>
-        </div>
-        <div class="block-editor">
-          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="double" title="SWFFG.NotableFeature" type="PopoutEditor" name="data.general.features" value=data.general.enrichedFeatures)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="double" title="SWFFG.Notes" type="PopoutEditor" name="data.general.notes" value=data.general.enrichedNotes)}}
-        </div>
-      </div>
-      <div>
-        {{!-- Languages --}}
-        {{> "systems/starwarsffg/templates/parts/actor/ffg-languages.html"}}
-        {{#if (eq this.FFG.theme "starwars")}}
-        <div class="resource full">
-          <div class="attribute flex-group-center">
-            <div class="block-background">
-              <div class="block-title">
-                {{localize "SWFFG.Motivations"}}
-              </div>
-              <div class="block-attribute">
-                <table>
-                  <thead>
-                    <th>{{localize "SWFFG.MotivationCategory"}}</th>
-                    <th>{{localize "SWFFG.MotivationType"}}</th>
-                    <th>{{localize "SWFFG.MotivationDescription"}}</th>
-                    <th>
-                      <a class="add-motivation"><i class="far fa-plus-square"></i></a>
-                    </th>
-                    <th></th>
-                  </thead>
-                  <tbody>
-                    {{#each items as |item|}}
-                    {{#if (eq item.type "motivation")}}
-                    <tr>
-                      <td>{{ item.name }}</td>
-                      <td>{{ item.system.type }}</td>
-                      <td>{{{ item.system.renderedDesc }}}</td>
-                      <td class="morality-controls">
-                        <a class="edit-item" data-id="{{id}}"><i class="fas fa-edit"></i></a>
-                        <a class="remove-item" data-id="{{id}}"><i class="fas fa-trash"></i></a>
-                      </td>
-                    </tr>
-                    {{/if}}
-                    {{/each }}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-        {{else}}
-
-        <div class="grid grid-2col genesys">
-          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Strength" type="PopoutEditor" name="data.motivation.strength" value=data.motivation.strength)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Flaw" type="PopoutEditor" name="data.motivation.flaw" value=data.motivation.flaw)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Desire" type="PopoutEditor" name="data.motivation.desire" value=data.motivation.desire)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Fear" type="PopoutEditor" name="data.motivation.fear" value=data.motivation.fear)}}
-        </div>
-
-        {{/if}}
-        <div class="resource full">
-          <div class="attribute flex-group-center">
-            <div class="block-background">
-              <div class="block-title">
-                {{localize "SWFFG.Backgrounds"}}
-              </div>
-              <div class="block-attribute">
-                <table>
-                  <thead>
-                    <th>{{localize "SWFFG.BackgroundName"}}</th>
-                    <th>{{localize "SWFFG.BackgroundDescription"}}</th>
-                    <th>
-                      <a class="add-background"><i class="far fa-plus-square"></i></a>
-                    </th>
-                    <th></th>
-                  </thead>
-                  <tbody>
-                    {{#each items as |item|}}
-                    {{#if (eq item.type "background")}}
-                    <tr>
-                      <td>{{ item.name }}</td>
-                      <td>{{{ item.system.renderedDesc }}}</td>
-                      <td class="morality-controls">
-                        <a class="edit-item" data-id="{{id}}"><i class="fas fa-edit"></i></a>
-                        <a class="remove-item" data-id="{{id}}"><i class="fas fa-trash"></i></a>
-                      </td>
-                    </tr>
-                    {{/if}}
-                    {{/each }}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <div class="tab xp" data-group="primary" data-tab="xp">
@@ -361,72 +265,5 @@
       {{> "systems/starwarsffg/templates/parts/shared/ffg-effects.html" type="effects"}}
     </div>
 
-    <div class="tab obligation" data-group="primary" data-tab="obligation">
-      {{!-- Obligation Tab --}}
-      {{!-- Mystic Alignment Scale --}}
-      {{> "systems/starwarsffg/templates/parts/actor/ffg-mystic-alignment.html"}}
-      {{!-- Obligation Box --}}
-      {{#if obligationItems.obligations.length }}
-        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionObligation" headerlink=true headerclass="alt-tab" headerattributes="data-tab='obligation'" type="Number" name="data.obligation.value" value=data.obligation.value )}}
-      {{/if}}
-
-      {{!-- Duty Box --}}
-      {{#if obligationItems.duties.length }}
-        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionDuty" type="Number" name="data.duty.value" value=data.duty.value headerlink=true headerclass="alt-tab" headerattributes="data-tab='obligation'")}}
-      {{/if}}
-
-      {{!-- Tranquility (formerly Morality) + Conflict, side by side --}}
-      {{#if hasForceRating }}
-      <div class="tranquility-conflict-row">
-        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionTranquility" type="Number" name="data.morality.value" value=data.morality.value headerlink=true headerclass="alt-tab" headerattributes="data-tab='obligation'" )}}
-        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionConflict" type="Number" name="data.conflict.value" value=data.conflict.value headerlink=true headerclass="alt-tab" headerattributes="data-tab='obligation'" )}}
-      </div>
-      {{/if}}
-      <div class="resource full">
-        <div class="attribute flex-group-center">
-          <div class="block-background">
-            <div class="block-title">
-              {{localize "SWFFG.DescriptionObligation"}}
-            </div>
-            <div class="block-attribute">
-              <table>
-                <thead>
-                <tr>
-                  <th>{{ localize "SWFFG.MotivationName" }}</th>
-                  <th>{{ localize "SWFFG.MotivationMagnitude" }}</th>
-                  <th>{{localize "SWFFG.MotivationDescription"}}</th>
-                  <th>
-                    <a class="add-obligation"><i class="far fa-plus-square"></i></a>
-                  </th>
-                  <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                {{#each items as |item|}}
-                  {{#if (or (eq item.type "duty")(eq item.type "obligation")(eq item.type "morality") )}}
-                    <tr>
-                      <td>{{ item.name }}</td>
-                      <td>
-                        {{#if (eq item.system.type "morality") }}
-                          {{ item.system.subtype }}
-                        {{ else }}
-                          {{ item.system.magnitude }}
-                        {{/if }}
-                      </td>
-                      <td>{{{ item.system.renderedDesc }}}</td>
-                      <td class="morality-controls">
-                        <a class="edit-item" data-id="{{id}}"><i class="fas fa-edit"></i></a>
-                        <a class="remove-item" data-id="{{id}}"><i class="fas fa-trash"></i></a>
-                      </td>
-                    </tr>
-                  {{/if}}
-                {{/each}}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </section>
 </form>

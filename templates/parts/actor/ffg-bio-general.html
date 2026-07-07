@@ -1,0 +1,102 @@
+{{!--
+  General / basic information (gender, age, features, notes, languages,
+  motivations, backgrounds). Formerly its own "General" tab; folded into the
+  Bio tab Codex-style. The wrapper keeps the `general` class the theme CSS
+  scopes its table/grid rules to.
+--}}
+<div class="general">
+  <div class="grid grid-2col">
+    <div>
+      <div class="grid grid-2col">
+        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Gender" type="String" name="data.general.gender" value=data.general.gender)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Age" type="String" name="data.general.age" value=data.general.age)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Height" type="String" name="data.general.height" value=data.general.height)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Build" type="String" name="data.general.build" value=data.general.build)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Hair" type="String" name="data.general.hair" value=data.general.hair)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Eyes" type="String" name="data.general.eyes" value=data.general.eyes)}}
+      </div>
+    </div>
+    <div class="block-editor">
+      {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="double" title="SWFFG.NotableFeature" type="PopoutEditor" name="data.general.features" value=data.general.enrichedFeatures)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="double" title="SWFFG.Notes" type="PopoutEditor" name="data.general.notes" value=data.general.enrichedNotes)}}
+    </div>
+  </div>
+  <div>
+    {{!-- Languages --}}
+    {{> "systems/starwarsffg/templates/parts/actor/ffg-languages.html"}}
+    {{#if (eq this.FFG.theme "starwars")}}
+    <div class="resource full">
+      <div class="attribute flex-group-center">
+        <div class="block-background">
+          <div class="block-title">
+            {{localize "SWFFG.Motivations"}}
+          </div>
+          <div class="block-attribute">
+            <table>
+              <thead>
+                <th>{{localize "SWFFG.MotivationCategory"}}</th>
+                <th>{{localize "SWFFG.MotivationType"}}</th>
+                <th>{{localize "SWFFG.MotivationDescription"}}</th>
+                <th>
+                  <a class="add-motivation"><i class="far fa-plus-square"></i></a>
+                </th>
+                <th></th>
+              </thead>
+              <tbody>
+                {{#each items as |item|}}
+                {{#if (eq item.type "motivation")}}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{ item.system.type }}</td>
+                  <td>{{{ item.system.renderedDesc }}}</td>
+                  <td class="morality-controls">
+                    <a class="edit-item" data-id="{{id}}"><i class="fas fa-edit"></i></a>
+                    <a class="remove-item" data-id="{{id}}"><i class="fas fa-trash"></i></a>
+                  </td>
+                </tr>
+                {{/if}}
+                {{/each }}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {{else}}
+
+    <div class="grid grid-2col genesys">
+      {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Strength" type="PopoutEditor" name="data.motivation.strength" value=data.motivation.strength)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Flaw" type="PopoutEditor" name="data.motivation.flaw" value=data.motivation.flaw)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Desire" type="PopoutEditor" name="data.motivation.desire" value=data.motivation.desire)}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Fear" type="PopoutEditor" name="data.motivation.fear" value=data.motivation.fear)}}
+    </div>
+
+    {{/if}}
+    <div class="resource full">
+      <div class="attribute flex-group-center">
+        <div class="block-background">
+          <div class="block-title">
+            {{localize "SWFFG.Backgrounds"}}
+          </div>
+          <div class="block-attribute">
+            <table>
+              <thead>
+                <th>{{localize "SWFFG.BackgroundName"}}</th>
+                <th>{{localize "SWFFG.BackgroundDescription"}}</th>
+                <th>
+                  <a class="add-background"><i class="far fa-plus-square"></i></a>
+                </th>
+                <th></th>
+              </thead>
+              <tbody>
+                {{#each items as |item|}}
+                {{#if (eq item.type "background")}}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>{{{ item.system.renderedDesc }}}</td>
+                  <td class="morality-controls">
+                    <a class="edit-item" data-id="{{id}}"><i class="fas fa-edit"></i></a>
+                    <a class="remove-item" data-id="{{id}}"><i class="fas fa-trash"></i></a>
+                  </td>
+                </tr>
+                {{/if}}
+                {{/each }}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

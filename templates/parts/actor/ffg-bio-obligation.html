@@ -1,0 +1,73 @@
+{{!--
+  Obligation / Duty / Morality (mystic alignment scale, value boxes, item
+  table). Formerly its own tab; folded into the Bio tab Codex-style. The
+  wrapper keeps the `obligation` class the theme CSS scopes its rules to.
+  The old header alt-tab links (which jumped to the removed tab) are gone —
+  the titles are plain now.
+--}}
+<div class="obligation">
+  {{!-- Mystic Alignment Scale --}}
+  {{> "systems/starwarsffg/templates/parts/actor/ffg-mystic-alignment.html"}}
+  {{!-- Obligation Box --}}
+  {{#if obligationItems.obligations.length }}
+    {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionObligation" type="Number" name="data.obligation.value" value=data.obligation.value )}}
+  {{/if}}
+
+  {{!-- Duty Box --}}
+  {{#if obligationItems.duties.length }}
+    {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionDuty" type="Number" name="data.duty.value" value=data.duty.value)}}
+  {{/if}}
+
+  {{!-- Tranquility (formerly Morality) + Conflict, side by side --}}
+  {{#if hasForceRating }}
+  <div class="tranquility-conflict-row">
+    {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionTranquility" type="Number" name="data.morality.value" value=data.morality.value )}}
+    {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.DescriptionConflict" type="Number" name="data.conflict.value" value=data.conflict.value )}}
+  </div>
+  {{/if}}
+  <div class="resource full">
+    <div class="attribute flex-group-center">
+      <div class="block-background">
+        <div class="block-title">
+          {{localize "SWFFG.DescriptionObligation"}}
+        </div>
+        <div class="block-attribute">
+          <table>
+            <thead>
+            <tr>
+              <th>{{ localize "SWFFG.MotivationName" }}</th>
+              <th>{{ localize "SWFFG.MotivationMagnitude" }}</th>
+              <th>{{localize "SWFFG.MotivationDescription"}}</th>
+              <th>
+                <a class="add-obligation"><i class="far fa-plus-square"></i></a>
+              </th>
+              <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {{#each items as |item|}}
+              {{#if (or (eq item.type "duty")(eq item.type "obligation")(eq item.type "morality") )}}
+                <tr>
+                  <td>{{ item.name }}</td>
+                  <td>
+                    {{#if (eq item.system.type "morality") }}
+                      {{ item.system.subtype }}
+                    {{ else }}
+                      {{ item.system.magnitude }}
+                    {{/if }}
+                  </td>
+                  <td>{{{ item.system.renderedDesc }}}</td>
+                  <td class="morality-controls">
+                    <a class="edit-item" data-id="{{id}}"><i class="fas fa-edit"></i></a>
+                    <a class="remove-item" data-id="{{id}}"><i class="fas fa-trash"></i></a>
+                  </td>
+                </tr>
+              {{/if}}
+            {{/each}}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -10,6 +10,8 @@ export default class TemplateHelpers {
       "systems/starwarsffg/templates/parts/actor/ffg-weapons-armor.html",
       "systems/starwarsffg/templates/parts/actor/ffg-gear.html",
       "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html",
+      "systems/starwarsffg/templates/parts/actor/ffg-bio-general.html",
+      "systems/starwarsffg/templates/parts/actor/ffg-bio-obligation.html",
       "systems/starwarsffg/templates/parts/actor/ffg-vehicle-weapon-attachments.html",
       "systems/starwarsffg/templates/parts/ffg-qualities-attachments-mods.html",
       "systems/starwarsffg/templates/parts/ffg-mods.html",

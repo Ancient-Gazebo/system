@@ -1,11 +1,11 @@
-<form class="{{cssClass}} character" autocomplete="off">
+<form class="{{cssClass}} character{{#if headerCollapsed}} ffg2-hdr-collapsed{{/if}}" autocomplete="off">
   {{!-- Sheet Header --}}
   <header class="sheet-header">
     <div id="actor-id" data-actor="{{actor._id}}" style="display: none;"></div>
 
     <div class="header-fields">
-      {{!-- Character Details Container --}}
-      <div class="container" style="flex-wrap: nowrap;">
+      {{!-- Character Details Container (collapsible — see ffg2-hcollapse-btn) --}}
+      <div class="container ffg2-header-id" style="flex-wrap: nowrap;">
         <div class="profile-block">
           <div>
             <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="100" width="100" />
@@ -93,17 +93,21 @@
             </table>
           </div>
         </div>
+        <button type="button" class="ffg2-hcollapse-btn" title="{{#if headerCollapsed}}{{localize "SWFFG.HeaderExpand"}}{{else}}{{localize "SWFFG.HeaderCollapse"}}{{/if}}">
+          <i class="fas fa-caret-{{#if headerCollapsed}}down{{else}}up{{/if}}"></i>
+          <span class="ffg2-hcollapse-label">{{#if headerCollapsed}}{{localize "SWFFG.HeaderExpand"}}{{else}}{{localize "SWFFG.HeaderCollapse"}}{{/if}}</span>
+        </button>
       </div>
 
       {{!-- Primary Stats Container --}}
       <div class="container" style="flex-wrap: nowrap;{{#if limited}}display:none;{{/if}}">
         <div class="container flex-group-center">
-          {{!-- Wounds Box --}}
-          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.Wounds" fields=(array (object name="data.stats.wounds.max" value=data.stats.wounds.max type="Number" label="SWFFG.Threshold" disabled=disabled) (object name="data.stats.wounds.value" value=data.stats.wounds.value type="Number" label="SWFFG.Current") ))}}
+          {{!-- Wounds Box: Current / Threshold with steppers, Rest button and stimpacks --}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Wounds" stat="wounds" value=data.stats.wounds.value max=data.stats.wounds.max disabled=disabled track=vitalTracks.wounds showRest=true stimEnabled=(or (eq actor.flags.starwarsffg.config.enableStimpacks undefined) (eq actor.flags.starwarsffg.config.enableStimpacks true)) stimTitle=actor.flags.starwarsffg.config.medicalItemName stimValue=data.stats.medical.uses)}}
 
           {{#if (or (eq actor.flags.starwarsffg.config.enableStrainThreshold undefined) (eq actor.flags.starwarsffg.config.enableStrainThreshold true) )}}
-          {{!-- Strain Box --}}
-          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.Strain" fields=(array (object name="data.stats.strain.max" value=data.stats.strain.max type="Number" label="SWFFG.Threshold" disabled=disabled) (object name="data.stats.strain.value" value=data.stats.strain.value type="Number" label="SWFFG.Current") ))}}
+          {{!-- Strain Box: no separate reset — the Wounds Rest button already recovers strain --}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Strain" stat="strain" value=data.stats.strain.value max=data.stats.strain.max disabled=disabled track=vitalTracks.strain)}}
           {{/if}}
 
           {{!-- Soak Box --}}
@@ -116,17 +120,18 @@
     </div>
   </header>
 
-  {{!-- Sheet Tab Navigation --}}
-  {{> "systems/starwarsffg/templates/parts/shared/ffg-tabs.html" displayLimited=false limited=limited items=(array
-    (object tab="characteristics" label="SWFFG.TabCharacteristics" icon="fas fa-user-circle" cls=classType)
-    (object tab="items" label="SWFFG.TabGear" icon="fas fa-toolbox" cls=classType)
+  {{!-- Sheet Tab Navigation: Codex-style word tabs (short labels, no icons) --}}
+  {{> "systems/starwarsffg/templates/parts/shared/ffg-tabs.html" displayLimited=false limited=limited wordtabs=true items=(array
+    (object tab="characteristics" label="SWFFG.Skills" icon="fas fa-user-circle" cls=classType)
+    (object tab="combat" label="SWFFG.TabCombat" icon="fas fa-fist-raised" cls=classType)
+    (object tab="items" label="SWFFG.TabGearShort" icon="fas fa-toolbox" cls=classType)
+    (object tab="crits" label="SWFFG.TabCritsShort" icon="fa-solid fa-notes-medical" cls=classType)
     (object tab="talents" label="SWFFG.TabTalents" icon="fab fa-superpowers" cls=classType)
-    (object tab="crits" label="SWFFG.TabCrits" icon="fa-solid fa-notes-medical" cls=classType)
-    (object tab="general" label="SWFFG.TabGeneral" icon="fas fa-address-card" cls=classType isHidden=true)
-    (object tab="description" label="SWFFG.TabBiography" icon="fas fa-sticky-note" cls=classType)
-    (object tab="obligation" label="SWFFG.TabObligationDutyMorality" icon="fas fa-balance-scale" cls=classType isHidden=true)
-    (object tab="xp" label="SWFFG.TabXpLog" icon="far fa-note" cls=classType isHidden=true)
-    (object tab="effects" label="SWFFG.TabEffects" icon="far fa-star" cls=classType isHidden=true)
+    (object tab="description" label="SWFFG.TabBioShort" icon="fas fa-sticky-note" cls=classType)
+    (object tab="general" label="SWFFG.TabGeneralShort" icon="fas fa-address-card" cls=classType isHidden=true)
+    (object tab="obligation" label="SWFFG.TabDutyShort" icon="fas fa-balance-scale" cls=classType isHidden=true)
+    (object tab="xp" label="SWFFG.TabXpShort" icon="far fa-note" cls=classType isHidden=true)
+    (object tab="effects" label="SWFFG.TabEffectsShort" icon="far fa-star" cls=classType isHidden=true)
   )}}
   {{!-- Sheet Body --}}
   <section class="sheet-body" style="{{#if limited}}display:none;{{/if}}">
@@ -134,7 +139,7 @@
     <div class="tab characteristics active" data-group="primary" data-tab="characteristics">
       {{!-- Characteristics Scores --}}
 
-      <div class="grid grid-6col">
+      <div class="grid {{#if forcePoolEnabled}}grid-7col{{else}}grid-6col{{/if}}">
         {{#each data.characteristics as |characteristic id|}}
         <div class="characteristic-item flex-group-center" data-ability="{{id}}">
           <div class="characteristic">
@@ -147,19 +152,44 @@
           </div>
         </div>
         {{/each}}
+        {{#if forcePoolEnabled}}
+        {{!-- Codex-style Force chip: committed / rating with steppers; clicking
+             the label rolls the actor's available (uncommitted) Force dice. --}}
+        <div class="characteristic-item flex-group-center ffg2-force-chip">
+          <div class="characteristic">
+            <div class="characteristic-value ffg2-ratio-box">
+              <button type="button" class="ffg2-ratio-step minus" data-dir="-1" data-path="system.stats.forcePool.value" data-max="{{data.stats.forcePool.max}}" title="{{localize "SWFFG.ForcePoolCommitted"}}"><i class="fas fa-minus"></i></button>
+              <div class="ffg2-ratio-nums">
+                {{#if disabled}}
+                <span class="ffg2-ratio-c">{{data.stats.forcePool.value}}</span>
+                <span class="ffg2-ratio-t">of {{data.stats.forcePool.max}}</span>
+                {{else}}
+                <input class="ffg2-ratio-c" type="text" name="data.stats.forcePool.value" value="{{data.stats.forcePool.value}}" data-dtype="Number" />
+                <span class="ffg2-ratio-t">of <input class="ffg2-ratio-m" type="text" name="data.stats.forcePool.max" value="{{data.stats.forcePool.max}}" data-dtype="Number" /></span>
+                {{/if}}
+              </div>
+              <button type="button" class="ffg2-ratio-step plus" data-dir="1" data-path="system.stats.forcePool.value" data-max="{{data.stats.forcePool.max}}" title="{{localize "SWFFG.ForcePoolCommitted"}}"><i class="fas fa-plus"></i></button>
+            </div>
+          </div>
+          <div class="characteristic-label ffg2-force-roll" title="{{localize "SWFFG.RollForceDice"}}">
+            {{localize "SWFFG.Force"}}
+          </div>
+        </div>
+        {{/if}}
       </div>
 
       {{> "systems/starwarsffg/templates/parts/actor/ffg-skills.html"}}
     </div>
 
-    {{!-- Owned Items Tab --}}
+    {{!-- Combat Tab (weapons + armour) --}}
+    <div class="tab combat items" data-group="primary" data-tab="combat">
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-weapons-armor.html"}}
+    </div>
+
+    {{!-- Owned Items (Gear) Tab --}}
     <div class="tab items" data-group="primary" data-tab="items">
       <div class="container flex-group-center item-values">
-        {{!-- Stimpack Box --}}
-        {{#if (or (eq actor.flags.starwarsffg.config.enableStimpacks undefined) (eq actor.flags.starwarsffg.config.enableStimpacks true) )}}
-        {{> "systems/starwarsffg/templates/parts/actor/ffg-healingitem.html" (object kind="stim" title=actor.flags.starwarsffg.config.medicalItemName name="data.stats.medical.uses" value=data.stats.medical.uses)}}
-        {{/if}}
-        {{!-- Emergency Repair Patch Box --}}
+        {{!-- Emergency Repair Patch Box (stimpacks live in the Wounds block now) --}}
         {{#if (eq actor.flags.starwarsffg.config.enableRepairPatches true)}}
         {{> "systems/starwarsffg/templates/parts/actor/ffg-healingitem.html" (object kind="patch" title=(localize "SWFFG.DefaultPatchItemName") name="data.stats.medical.patchUses" value=data.stats.medical.patchUses)}}
         {{/if}}
@@ -171,16 +201,13 @@
         {{> "systems/starwarsffg/templates/parts/actor/ffg-cybernetics.html"}}
       </div>
 
-      {{> "systems/starwarsffg/templates/parts/actor/ffg-weapon-armor-gear.html"}}
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-gear.html"}}
     </div>
 
     {{!-- Talents Tab --}}
 
     <div class="tab talents items" data-group="primary" data-tab="talents">
-      {{!-- Talents List --}}
-      <div class="container flex-group-center item-values">
-        {{!-- Force Box --}} {{#if (or (eq actor.flags.starwarsffg.config.enableForcePool undefined) (eq actor.flags.starwarsffg.config.enableForcePool true) )}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.ForcePool" fields=(array (object name="data.stats.forcePool.value" value=data.stats.forcePool.value type="Number" label="SWFFG.ForcePoolCommitted") (object name="data.stats.forcePool.max" value=data.stats.forcePool.max type="Number" label="SWFFG.ForcePoolAvailable" disabled=disabled) ))}} {{/if}}
-      </div>
+      {{!-- Talents List (the Force pool chip lives on the Skills tab now) --}}
       {{> "systems/starwarsffg/templates/parts/actor/ffg-talents.html"}}
       {{!-- Abilities List --}} {{> "systems/starwarsffg/templates/parts/actor/ffg-abilities.html"}}
       {{!-- Force Powers List --}} {{> "systems/starwarsffg/templates/parts/actor/ffg-forcepowers.html"}}

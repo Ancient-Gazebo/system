@@ -1,6 +1,19 @@
-<nav class="sheet-tabs tabs" data-group="primary" style="{{#if (and (eq limited true) (eq displayLimited false)) }}display:none;{{/if}}">
+{{!--
+  Tab strip. Three render modes:
+    - V2 sheet + wordtabs=true  -> Codex-style word tabs (uppercase text, no icons;
+      styling in styles/swffg-sheet2.css via the .word-tabs class). All tabs stay
+      visible unless isHiddenV2.
+    - V2 sheet (default)        -> icon tabs (legacy V2 look).
+    - V1 sheet                  -> word tabs honouring isHidden (hidden tabs are
+      reached through in-sheet .alt-tab header links instead).
+--}}
+<nav class="sheet-tabs tabs {{#if wordtabs}}word-tabs{{/if}}" data-group="primary" style="{{#if (and (eq limited true) (eq displayLimited false)) }}display:none;{{/if}}">
   {{#each items}} {{#if (contains cls "V2")}}
+  {{#if ../wordtabs}}
+  <a class="item {{#if isHiddenV2}}hidden-content{{/if}}" data-tab="{{tab}}" title="{{localize label}}">{{localize label}}</a>
+  {{else}}
   <a class="item {{#if isHiddenV2}}hidden-content{{/if}}" data-tab="{{tab}}" title="{{localize label}}"><i class="{{icon}}"></i></a>
+  {{/if}}
   {{else}}
   <a class="item {{#if isHidden}}hidden-content{{/if}}" data-tab="{{tab}}">{{localize label}}</a>
   {{/if}} {{/each}}

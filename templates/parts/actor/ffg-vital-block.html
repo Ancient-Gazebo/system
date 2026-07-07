@@ -1,0 +1,57 @@
+{{!--
+  Vital stat block (Wounds / Strain), Codex-inspired: Current before Threshold,
+  −/+ steppers on either side, a slim damage track underneath, an optional Rest
+  button in the header, and an optional stimpack row.
+  The Rest button reuses the stock .resetMedical handler (Rest / Reset per the
+  HealingItemAction setting); the stimpack −/+ reuse the stock .medical handler
+  (the row carries data-medical-kind="stim").
+  Params (hash):
+    title       localization key for the header ("SWFFG.Wounds" / "SWFFG.Strain")
+    stat        system stats key ("wounds" / "strain") — drives input names and
+                the .ffg2-step handler
+    value,max   current / threshold numbers
+    disabled    when true the threshold input is locked (edit mode off)
+    track       {pct,color} for the damage bar (from getData vitalTracks)
+    showRest    render the Rest (bed) button in the header
+    stimEnabled render the stimpack row
+    stimTitle   stimpack label override (medicalItemName flag); falls back to
+                the default medical item name
+    stimValue   current stimpack uses
+--}}
+<div class="resource split data.stats.{{stat}} ffg2-vital">
+  <div class="attribute flex-group-center">
+    <div class="block-background">
+      <div class="block-title ffg2-vital-title">
+        <span>{{localize title}}</span>
+        {{#if showRest}}
+        <button type="button" class="resetMedical ffg2-rest" title="{{localize "SWFFG.MedicalItemNameUseRest"}}"><i class="fas fa-bed"></i></button>
+        {{/if}}
+      </div>
+      <div class="block-attribute ffg2-vital-body">
+        <div class="ffg2-stepline">
+          <button type="button" class="ffg2-step" data-stat="{{stat}}" data-dir="-1" title="&minus;1"><i class="fas fa-minus"></i></button>
+          <div class="ffg2-stepline-mid">
+            <div class="ffg2-thresh">
+              <input type="text" name="data.stats.{{stat}}.value" value="{{value}}" data-dtype="Number" />
+              <span class="ffg2-slash">/</span>
+              <input type="text" name="data.stats.{{stat}}.max" value="{{max}}" data-dtype="Number" {{#if disabled}}disabled{{/if}} />
+            </div>
+            {{#if track}}
+            <div class="ffg2-track"><div class="ffg2-track-fill" style="width:{{track.pct}}%;background:{{track.color}}"></div></div>
+            {{/if}}
+          </div>
+          <button type="button" class="ffg2-step" data-stat="{{stat}}" data-dir="1" title="+1"><i class="fas fa-plus"></i></button>
+        </div>
+        <div class="ffg2-vital-sub"><span>{{localize "SWFFG.Current"}}</span><span>{{localize "SWFFG.Threshold"}}</span></div>
+        {{#if stimEnabled}}
+        <div class="ffg2-heal" data-medical-kind="stim">
+          <span class="ffg2-heal-k">{{#if stimTitle}}{{stimTitle}}{{else}}{{localize "SWFFG.DefaultMedicalItemName"}}{{/if}}</span>
+          <i class="fas fa-minus-circle medical"></i>
+          <span class="ffg2-heal-v">{{#if stimValue}}{{stimValue}}{{else}}0{{/if}}/5</span>
+          <i class="fas fa-plus-circle medical"></i>
+        </div>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>

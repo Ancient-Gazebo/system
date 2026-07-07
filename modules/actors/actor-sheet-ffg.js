@@ -469,6 +469,28 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
         (i.flags?.starwarsffg?.config?.enableQuantity === true || Number(i.system?.quantity?.value) > 1)
     );
 
+    // Damage tracks for the wounds/strain header blocks (ffg-vital-block.html):
+    // fill percentage plus a colour that escalates green -> amber -> red as
+    // current approaches the threshold.
+    data.vitalTracks = {};
+    for (const stat of ["wounds", "strain"]) {
+      const s = data.data?.stats?.[stat];
+      if (!s || s.max === undefined) continue;
+      const ratio = (Number(s.max) || 0) > 0 ? (Number(s.value) || 0) / Number(s.max) : 0;
+      data.vitalTracks[stat] = {
+        pct: Math.max(0, Math.min(100, Math.round(ratio * 100))),
+        color: ratio >= 0.8 ? "#a51f17" : ratio >= 0.5 ? "#c8902e" : "#3f7d3a",
+      };
+    }
+
+    // Force pool visibility for the Skills-tab Force chip — same unset-means-on
+    // semantics as the header's force power pill row.
+    const forcePoolFlag = this.actor.flags?.starwarsffg?.config?.enableForcePool;
+    data.forcePoolEnabled = forcePoolFlag === undefined || forcePoolFlag === true;
+
+    // Per-actor collapsed state of the identity header (species/career/spec/force pills).
+    data.headerCollapsed = !!this.actor.getFlag("starwarsffg", "sheetHeaderCollapsed");
+
     return data;
   }
 
@@ -526,6 +548,27 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     html.find(".skill").each(async (_, elem) => {
       await DiceHelpers.addSkillDicePool(await this.getData({}), elem);
       const filters = this._filters.skills;
+    });
+
+    // Collapsible identity header (species/career/spec/force pills). Flip the
+    // class live and swap the button label/icon for instant feedback, then
+    // persist the per-actor flag WITHOUT a re-render (the class already
+    // reflects the new state, so a re-render would only cause a flash).
+    // Registered above the editable gate so viewers get a session-local toggle;
+    // their flag write fails silently.
+    html.find(".ffg2-hcollapse-btn").click(async (ev) => {
+      ev.preventDefault();
+      const form = $(ev.currentTarget).closest("form.character");
+      if (!form.length) return;
+      const collapsed = form.toggleClass("ffg2-hdr-collapsed").hasClass("ffg2-hdr-collapsed");
+      const btn = $(ev.currentTarget);
+      const label = game.i18n.localize(collapsed ? "SWFFG.HeaderExpand" : "SWFFG.HeaderCollapse");
+      btn.attr("title", label);
+      btn.find(".ffg2-hcollapse-label").text(label);
+      btn.find("i").attr("class", collapsed ? "fas fa-caret-down" : "fas fa-caret-up");
+      try {
+        await this.actor.update({ "flags.starwarsffg.sheetHeaderCollapsed": collapsed }, { render: false });
+      } catch (e) { /* non-owners keep the local toggle only */ }
     });
 
     // Everything below here is only needed if the sheet is editable
@@ -994,6 +1037,51 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
         doRest();
       } else if (action === '2') {
         doReset();
+      }
+    });
+
+    // Wounds / strain steppers (the -/+ buttons on the header vital blocks).
+    // Floored at 0 but NOT capped at the threshold — current wounds/strain may
+    // exceed the threshold (that's the incapacitated state), so the only bound
+    // is the lower one.
+    html.find(".ffg2-step").click(async (ev) => {
+      ev.preventDefault();
+      const stat = ev.currentTarget.dataset.stat;
+      const dir = Number(ev.currentTarget.dataset.dir) || 0;
+      const s = this.actor?.system?.stats?.[stat];
+      if (!s) return;
+      const val = Math.max(0, (Number(s.value) || 0) + dir);
+      await this.actor.update({ [`system.stats.${stat}.value`]: val });
+    });
+
+    // Force chip steppers: adjust the committed Force dice (forcePool.value),
+    // clamped to [0, forcePool.max]. data-path/data-max keep the handler generic.
+    html.find(".ffg2-ratio-step").click(async (ev) => {
+      ev.preventDefault();
+      const dir = Number(ev.currentTarget.dataset.dir) || 0;
+      const path = ev.currentTarget.dataset.path;
+      if (!path) return;
+      const max = Number(ev.currentTarget.dataset.max);
+      const cur = Number(foundry.utils.getProperty(this.actor, path)) || 0;
+      let val = Math.max(0, cur + dir);
+      if (Number.isFinite(max)) val = Math.min(max, val);
+      if (val === cur) return;
+      await this.actor.update({ [path]: val });
+    });
+
+    // Clicking the Force chip label rolls the actor's available (uncommitted)
+    // Force dice — the same pool a Force power roll uses, with nothing else in it.
+    html.find(".ffg2-force-roll").click(async (ev) => {
+      ev.preventDefault();
+      const pool = this.actor.system?.stats?.forcePool || {};
+      const forcedice = (Number(pool.max) || 0) - (Number(pool.value) || 0);
+      if (forcedice > 0) {
+        const sheet = await this.getData();
+        const dicePool = new DicePoolFFG({ force: forcedice });
+        const label = game.i18n.localize("SWFFG.Force");
+        await DiceHelpers.displayRollDialog(sheet, dicePool, `${game.i18n.localize("SWFFG.Rolling")} ${label}`, label);
+      } else {
+        ui.notifications.info(game.i18n.localize("SWFFG.Roll.ForcePowers.NoDice"));
       }
     });
 

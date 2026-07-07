@@ -169,8 +169,8 @@
 }
 .starwarsffg .ffg2-thresh .ffg2-vcol:last-of-type .ffg2-vlabel {
   background-color: #7da9c2;
-  color: black;
-  font-weight: bold;
+  color: white;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
 }
 
 /* Beats mandar's `.resource input { width:100%; height:1.5rem }` (which loads
@@ -382,6 +382,15 @@
   height: auto !important;
   min-height: 9rem !important;
   max-height: none !important;
+}
+/* Active (ProseMirror) editing state has its own container/content pair —
+   without these it collapses into a tiny scroller. Grows with the text. */
+.starwarsffg.sheet form.character .tab.biography .biography-editor .editor-container,
+.starwarsffg.sheet form.character .tab.biography .biography-editor .editor-content.ProseMirror {
+  height: auto !important;
+  min-height: 16rem !important;
+  max-height: none !important;
+  overflow-y: visible !important;
 }
 /* The (mostly empty on V2) values strip between the editor and the merged
    sections contributes no height of its own. */

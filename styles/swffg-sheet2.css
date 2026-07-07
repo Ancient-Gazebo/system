@@ -147,13 +147,30 @@
   align-items: center;
   gap: 2px;
 }
+/* Labels wear the classic split-block shadow colours (mandar's red / blue,
+   same pair the Defense MELEE/RANGED strip uses), as notched chips. */
 .starwarsffg .ffg2-vlabel {
   font-size: 0.55rem;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  opacity: 0.75;
   white-space: nowrap;
   line-height: 1;
+  width: 100%;
+  min-width: 3.4em;
+  text-align: center;
+  padding: 2px 5px;
+  --notchSize: 4px;
+  -webkit-clip-path: polygon(0% var(--notchSize), var(--notchSize) 0%, calc(100% - var(--notchSize)) 0%, 100% var(--notchSize), 100% calc(100% - var(--notchSize)), calc(100% - var(--notchSize)) 100%, var(--notchSize) 100%, 0% calc(100% - var(--notchSize)));
+  clip-path: polygon(0% var(--notchSize), var(--notchSize) 0%, calc(100% - var(--notchSize)) 0%, 100% var(--notchSize), 100% calc(100% - var(--notchSize)), calc(100% - var(--notchSize)) 100%, var(--notchSize) 100%, 0% calc(100% - var(--notchSize)));
+}
+.starwarsffg .ffg2-thresh .ffg2-vcol:first-of-type .ffg2-vlabel {
+  background-color: rgba(73, 12, 11, 0.85);
+  color: white;
+}
+.starwarsffg .ffg2-thresh .ffg2-vcol:last-of-type .ffg2-vlabel {
+  background-color: #7da9c2;
+  color: black;
+  font-weight: bold;
 }
 
 /* Beats mandar's `.resource input { width:100%; height:1.5rem }` (which loads

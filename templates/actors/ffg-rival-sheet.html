@@ -1,11 +1,11 @@
-<form class="{{cssClass}} character" autocomplete="off">
+<form class="{{cssClass}} character{{#if headerCollapsed}} ffg2-hdr-collapsed{{/if}}" autocomplete="off">
   {{!-- Sheet Header --}}
   <header class="sheet-header">
     <div id="actor-id" data-actor="{{actor._id}}" style="display: none;"></div>
 
     <div class="header-fields">
-      {{!-- Character Details Container --}}
-      <div class="container" style="flex-wrap: nowrap;">
+      {{!-- Character Details Container (collapsible — see ffg2-hcollapse-btn) --}}
+      <div class="container ffg2-header-id" style="flex-wrap: nowrap;">
         <div class="profile-block">
           <div>
             <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="100" width="100" />
@@ -53,6 +53,10 @@
             </table>
           </div>
         </div>
+        <button type="button" class="ffg2-hcollapse-btn" title="{{#if headerCollapsed}}{{localize "SWFFG.HeaderExpand"}}{{else}}{{localize "SWFFG.HeaderCollapse"}}{{/if}}">
+          <i class="fas fa-caret-{{#if headerCollapsed}}down{{else}}up{{/if}}"></i>
+          <span class="ffg2-hcollapse-label">{{#if headerCollapsed}}{{localize "SWFFG.HeaderExpand"}}{{else}}{{localize "SWFFG.HeaderCollapse"}}{{/if}}</span>
+        </button>
       </div>
 
       {{!-- Primary Stats Container --}}
@@ -79,13 +83,12 @@
   {{!-- Sheet Tab Navigation --}}
   {{> "systems/starwarsffg/templates/parts/shared/ffg-tabs.html" displayLimited=false limited=limited wordtabs=true items=(array
     (object tab="characteristics" label="SWFFG.Skills" icon="fas fa-user-circle" cls=classType)
+    (object tab="combat" label="SWFFG.TabCombat" icon="fas fa-fist-raised" cls=classType)
     (object tab="items" label="SWFFG.TabGearShort" icon="fas fa-toolbox" cls=classType)
     (object tab="talents" label="SWFFG.TabTalents" icon="fab fa-superpowers" cls=classType)
     (object tab="crits" label="SWFFG.TabCritsShort" icon="fa-solid fa-notes-medical" cls=classType)
     (object tab="general" label="SWFFG.TabGeneralShort" icon="fas fa-address-card" cls=classType isHidden=true)
     (object tab="description" label="SWFFG.TabBioShort" icon="fas fa-sticky-note" cls=classType)
-    (object tab="sources" label="SWFFG.TabSourcesShort" icon="fa-light fa-book-open-cover" cls=classType)
-    (object tab="tags" label="SWFFG.TabTags" icon="fa-sharp fa-regular fa-tags" cls=classType)
   )}}
   {{!-- Sheet Body --}}
   <section class="sheet-body" style="{{#if limited}}display:none;{{/if}}">
@@ -111,7 +114,12 @@
       {{> "systems/starwarsffg/templates/parts/actor/ffg-skills.html"}}
     </div>
 
-    {{!-- Owned Items Tab --}}
+    {{!-- Combat Tab (weapons + armour) --}}
+    <div class="tab combat items" data-group="primary" data-tab="combat">
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-weapons-armor.html"}}
+    </div>
+
+    {{!-- Owned Items (Gear) Tab --}}
     <div class="tab items" data-group="primary" data-tab="items">
       <div class="container flex-group-center item-values">
         {{!-- Stimpack Box --}} {{#if (or (eq actor.flags.starwarsffg.config.enableStimpacks undefined) (eq actor.flags.starwarsffg.config.enableStimpacks true) )}} {{> "systems/starwarsffg/templates/parts/actor/ffg-healingitem.html" (object kind="stim" title=actor.flags.starwarsffg.config.medicalItemName name="data.stats.medical.uses" value=data.stats.medical.uses)}} {{/if}}
@@ -121,7 +129,7 @@
         {{!-- Cybernetics Box --}} {{> "systems/starwarsffg/templates/parts/actor/ffg-cybernetics.html"}}
       </div>
 
-      {{> "systems/starwarsffg/templates/parts/actor/ffg-weapon-armor-gear.html"}}
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-gear.html"}}
     </div>
 
     {{!-- Talents Tab --}}
@@ -188,16 +196,6 @@
 
     <div class="tab xp" data-group="primary" data-tab="xp">
       {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.Actors.Sheets.Purchase.LogTitle" type="PopoutEditor" value=xpLog)}}
-    </div>
-
-    {{!-- Long Description and Sources Tab --}}
-    <div class="tab sources" data-group="primary" data-tab="sources">
-      {{> "systems/starwarsffg/templates/parts/shared/ffg-sources.html" data=data}}
-    </div>
-
-    {{!-- Tags Tab --}}
-    <div class="tab tags" data-group="primary" data-tab="tags">
-      {{> "systems/starwarsffg/templates/parts/shared/ffg-tags.html" data=data}}
     </div>
   </section>
 </form>

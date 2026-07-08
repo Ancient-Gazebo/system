@@ -562,7 +562,8 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     // their flag write fails silently.
     html.find(".ffg2-hcollapse-btn").click(async (ev) => {
       ev.preventDefault();
-      const form = $(ev.currentTarget).closest("form.character");
+      // character/nemesis/rival forms carry `.character`; minions carry `.minion`.
+      const form = $(ev.currentTarget).closest("form.character, form.minion");
       if (!form.length) return;
       const collapsed = form.toggleClass("ffg2-hdr-collapsed").hasClass("ffg2-hdr-collapsed");
       const btn = $(ev.currentTarget);

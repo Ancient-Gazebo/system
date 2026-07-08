@@ -520,17 +520,21 @@
   font-size: 9px;
 }
 
+/* character/nemesis/rival carry the species/career identity table — hide it. */
 .starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .character-details-table {
   display: none !important;
 }
 /* Codex keeps the character art visible when collapsed — shrink it instead of
-   hiding it (the themes pin the block at 130px, hence the !important). */
-.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block {
+   hiding it (the themes pin the block at 130px, hence the !important). Applies
+   to characters/nemeses/rivals (.character) and minions (.minion) alike. */
+.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block,
+.starwarsffg.sheet.actor .minion.ffg2-hdr-collapsed .ffg2-header-id .profile-block {
   height: auto !important;
   max-width: 52px !important;
   margin: 0 4px 0 0 !important;
 }
-.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block .profile-img {
+.starwarsffg.sheet.actor .character.ffg2-hdr-collapsed .ffg2-header-id .profile-block .profile-img,
+.starwarsffg.sheet.actor .minion.ffg2-hdr-collapsed .ffg2-header-id .profile-block .profile-img {
   width: 48px !important;
   height: 48px !important;
   object-fit: cover;
@@ -540,6 +544,9 @@
   min-height: 0 !important;
   overflow: visible !important;
 }
+/* Minions have no identity table and their stat grids (incl. Wounds) are all
+   needed in play, so collapse just shrinks the portrait — the mechanism still
+   persists per-actor and hands the reclaimed room to the body. */
 
 /* ---- Weapon organization tabs (Combat tab) ------------------------------ */
 /* The weapons list reuses the gear list's organization markup (.gear-org-* /

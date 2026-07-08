@@ -96,7 +96,7 @@
     <div class="tab characteristics active" data-group="primary" data-tab="characteristics">
       {{!-- Characteristics Scores --}}
 
-      <div class="grid grid-6col">
+      <div class="grid {{#if forcePoolEnabled}}grid-7col{{else}}grid-6col{{/if}}">
         {{#each data.characteristics as |characteristic id|}}
         <div class="characteristic-item flex-group-center" data-ability="{{id}}">
           <div class="characteristic">
@@ -109,6 +109,30 @@
           </div>
         </div>
         {{/each}}
+        {{#if forcePoolEnabled}}
+        {{!-- Codex-style Force chip: committed / rating with steppers; clicking
+             the label rolls the actor's available (uncommitted) Force dice. --}}
+        <div class="characteristic-item flex-group-center ffg2-force-chip">
+          <div class="characteristic">
+            <div class="characteristic-value ffg2-ratio-box">
+              <button type="button" class="ffg2-ratio-step minus" data-dir="-1" data-path="system.stats.forcePool.value" data-max="{{data.stats.forcePool.max}}" title="{{localize "SWFFG.ForcePoolCommitted"}}"><i class="fas fa-minus"></i></button>
+              <div class="ffg2-ratio-nums">
+                {{#if disabled}}
+                <span class="ffg2-ratio-c">{{data.stats.forcePool.value}}</span>
+                <span class="ffg2-ratio-t">of {{data.stats.forcePool.max}}</span>
+                {{else}}
+                <input class="ffg2-ratio-c" type="text" name="data.stats.forcePool.value" value="{{data.stats.forcePool.value}}" data-dtype="Number" />
+                <span class="ffg2-ratio-t">of <input class="ffg2-ratio-m" type="text" name="data.stats.forcePool.max" value="{{data.stats.forcePool.max}}" data-dtype="Number" /></span>
+                {{/if}}
+              </div>
+              <button type="button" class="ffg2-ratio-step plus" data-dir="1" data-path="system.stats.forcePool.value" data-max="{{data.stats.forcePool.max}}" title="{{localize "SWFFG.ForcePoolCommitted"}}"><i class="fas fa-plus"></i></button>
+            </div>
+          </div>
+          <div class="characteristic-label ffg2-force-roll" title="{{localize "SWFFG.RollForceDice"}}">
+            {{localize "SWFFG.Force"}}
+          </div>
+        </div>
+        {{/if}}
       </div>
 
       {{> "systems/starwarsffg/templates/parts/actor/ffg-skills.html"}}
@@ -135,10 +159,7 @@
     {{!-- Talents Tab --}}
 
     <div class="tab talents items" data-group="primary" data-tab="talents">
-      {{!-- Talents List --}}
-      <div class="container flex-group-center item-values">
-        {{!-- Force Box --}} {{#if (or (eq actor.flags.starwarsffg.config.enableForcePool undefined) (eq actor.flags.starwarsffg.config.enableForcePool true) )}} {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.ForcePool" fields=(array (object name="data.stats.forcePool.value" value=data.stats.forcePool.value type="Number" label="SWFFG.ForcePoolCommitted") (object name="data.stats.forcePool.max" value=data.stats.forcePool.max type="Number" label="SWFFG.ForcePoolAvailable") ))}} {{/if}}
-      </div>
+      {{!-- Talents List (the Force pool chip lives on the Skills tab now) --}}
       {{> "systems/starwarsffg/templates/parts/actor/ffg-talents.html"}}
       {{!-- Abilities List --}} {{> "systems/starwarsffg/templates/parts/actor/ffg-abilities.html"}}
       {{!-- Force Powers List --}} {{> "systems/starwarsffg/templates/parts/actor/ffg-forcepowers.html"}}

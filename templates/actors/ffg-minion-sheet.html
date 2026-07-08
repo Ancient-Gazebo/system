@@ -1,11 +1,10 @@
-<form class="{{cssClass}} minion{{#if headerCollapsed}} ffg2-hdr-collapsed{{/if}}" autocomplete="off">
+<form class="{{cssClass}} minion" autocomplete="off">
   {{!-- Sheet Header --}}
   <header class="sheet-header">
     <div id="actor-id" data-actor="{{actor._id}}" style="display: none;"></div>
 
     <div class="header-fields">
-      {{!-- Minion header (collapsible — see ffg2-hcollapse-btn) --}}
-      <div class="container ffg2-header-id" style="flex-wrap: nowrap;">
+      <div class="container" style="flex-wrap: nowrap;">
         <div class="container minion-name">
           <h1><input name="name" type="text" value="{{actor.name}}" placeholder="{{localize 'SWFFG.MinionName'}}" data-dtype="String" /></h1>
           <div class="container">
@@ -56,10 +55,6 @@
             <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="100" width="100" />
           </div>
         </div>
-        <button type="button" class="ffg2-hcollapse-btn" title="{{#if headerCollapsed}}{{localize "SWFFG.HeaderExpand"}}{{else}}{{localize "SWFFG.HeaderCollapse"}}{{/if}}">
-          <i class="fas fa-caret-{{#if headerCollapsed}}down{{else}}up{{/if}}"></i>
-          <span class="ffg2-hcollapse-label">{{#if headerCollapsed}}{{localize "SWFFG.HeaderExpand"}}{{else}}{{localize "SWFFG.HeaderCollapse"}}{{/if}}</span>
-        </button>
       </div>
     </div>
   </header>

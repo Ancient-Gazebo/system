@@ -189,7 +189,7 @@ export default class DiceHelpers {
           upgrades: skill?.upgradessource?.length ? skill.upgradessource : [],
         },
       });
-      dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
+      dicePool.upgrade(Math.min(characteristic?.value ?? 0, skill?.rank ?? 0) + dicePool.upgrades);
 
       const rollButton = elem.querySelector(".roll-button");
       dicePool.renderPreview(rollButton);

@@ -406,7 +406,12 @@
   margin-top: 2px;
 }
 /* Edit-mode inputs: outrank mandar's `.characteristic .characteristic-value
-   input` (49px circled 2rem inputs, loaded after this sheet). */
+   input` (49px circled 2rem inputs, loaded after this sheet). The `line-height`
+   + `vertical-align` matter: without them inputs render at `line-height:normal`
+   (~1.2) plus baseline descender space, so the stacked value/max grows taller
+   than the view-mode spans and the "of max" row was pushed into the bottom of
+   the circle and clipped. Pinning them to the spans' tight box keeps both lines
+   inside the 55px circle. */
 .starwarsffg .ffg2-force-chip .characteristic .ffg2-ratio-nums input.ffg2-ratio-c {
   width: 1.6em;
   height: auto;
@@ -416,6 +421,9 @@
   margin: 0;
   padding: 0;
   font-size: 1.7rem;
+  line-height: 1;
+  vertical-align: middle;
+  text-align: center;
   color: inherit;
 }
 .starwarsffg .ffg2-force-chip .characteristic .ffg2-ratio-nums input.ffg2-ratio-m {
@@ -428,6 +436,8 @@
   margin: 0;
   padding: 0;
   font-size: 0.8rem;
+  line-height: 1;
+  vertical-align: middle;
   color: inherit;
 }
 

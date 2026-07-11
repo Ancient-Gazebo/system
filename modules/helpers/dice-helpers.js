@@ -125,8 +125,14 @@ export default class DiceHelpers {
   static getDefenseDice(skill, itemData){
     let defenseDice = 0;
     if (game.settings.get("starwarsffg", "useDefense")) {
-      let isRanged = ["Ranged-Light", "Ranged-Heavy", "Gunnery"].includes(skill.value);
-      let isMelee = ["Melee", "Brawl", "Lightsaber"].includes(skill.value);
+      // Normalise the skill identifier so both skillsets resolve the same way regardless of
+      // how the ranged skills are spelled: Star Wars uses "Ranged: Light" / "Ranged: Heavy"
+      // while GOCK uses "Ranged-Light" / "Ranged-Heavy". Stripping all non-alphanumerics and
+      // lowercasing collapses those (and any spacing variant) to a single canonical key.
+      const normalize = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const key = normalize(skill?.value);
+      let isRanged = ["rangedlight", "rangedheavy", "gunnery"].includes(key);
+      let isMelee = ["melee", "brawl", "lightsaber"].includes(key);
       if (itemData?.type === "weapon" || itemData?.metaData?.tags?.includes("weapon")) {
         if (game.user.targets.size > 0) {
           for (const target of game.user.targets) {

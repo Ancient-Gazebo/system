@@ -68,6 +68,25 @@ export class ItemFFG extends ItemBaseFFG {
 
     await this._onCreateAEs(options, force);
 
+    // On drop/create onto an actor, equippable items default to unequipped, but their Active Effects
+    // can arrive enabled - the inherent soak/defence/encumbrance AE is created enabled, and a copy
+    // dragged from another item/actor keeps whatever disabled state it had at the source. That made a
+    // freshly dropped, still-unequipped item apply its modifiers immediately (armour soak/defence,
+    // weapon/gear modifiers), only correcting itself after a manual unequip + re-equip. Sync every
+    // equip-gated AE to the item's actual equipped state here, mirroring the equip-toggle branch of
+    // _onUpdate, so nothing applies until the item is equipped.
+    if (this.isEmbedded && this.actor && ["armour", "weapon", "gear"].includes(this.type)) {
+      const equipped = !!this.system?.equippable?.equipped;
+      const effects = this.getEmbeddedCollection("ActiveEffect");
+      await ItemHelpers.syncAEStatus(this, effects);
+      for (const effect of effects) {
+        if (await ItemHelpers.shouldUpdateAEStatus(this, effect)) {
+          await ItemHelpers.updateEncumbranceOnEquip(this, effect, equipped);
+          await effect.update({ disabled: !equipped });
+        }
+      }
+    }
+
     // A species dragged onto an actor copies the source item's (inherent) AE verbatim. If that source
     // AE predates threshold baking (WT = Wounds + Brawn, ST = Strain + Willpower, Enc = Brawn + 5), the
     // copy lands on the actor short by the species' own characteristic (the off-by-one). Recompute the

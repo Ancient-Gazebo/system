@@ -17,6 +17,7 @@ import EffectHelpers from "../helpers/effects.js";
 import TalentOrganization from "../helpers/talent-organization.js";
 import GearOrganization from "../helpers/gear-organization.js";
 import WeaponOrganization from "../helpers/weapon-organization.js";
+import AbilityOrganization from "../helpers/ability-organization.js";
 import {
   change_role,
   deregister_crew,
@@ -453,6 +454,9 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
     // Same for the Combat tab's weapons list
     data.weaponOrg = WeaponOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "weapon"));
+
+    // Same for the Abilities list (Talents tab)
+    data.abilityOrg = AbilityOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "ability"));
 
     // Languages known by the actor (chosen from the GM-configured master list). Stored as a flag.
     data.languages = this.actor.getFlag("starwarsffg", "languages") || [];
@@ -1483,6 +1487,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     const ORG_TYPES = {
       gear: { Org: GearOrganization, itemType: "gear" },
       weapon: { Org: WeaponOrganization, itemType: "weapon" },
+      ability: { Org: AbilityOrganization, itemType: "ability" },
     };
     // Current item list, ordered the same way getData() presents items, used when re-sorting.
     const getOrgList = (itemType) => this.actor.items.contents

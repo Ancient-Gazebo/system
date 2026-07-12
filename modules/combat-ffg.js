@@ -716,7 +716,10 @@ export class CombatFFG extends Combat {
         await this.claimSlot(round, removedCombatantReplacementId, removedCombatantReplacementId);
       }
     } else {
-      // Step 4b - Delete the actor being removed; no further steps are needed
+      // Step 4b - Delete the actor being removed; no further steps are needed.
+      // Release any claim on this slot first so we don't leave a dangling claim flag that points at
+      // a slot which no longer exists.
+      await this.unclaimSlot(round, removedCombatantId);
       await this.combatants.get(removedCombatantId).delete();
     }
     // re-enable the hooks we disabled
@@ -1403,13 +1406,30 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     const wouldDropBelowActors = slotCount - 1 < presentCount;
     const combatantName = combatant?.name || combatant?.token?.name || "this combatant";
 
+    // Identify the lowest-initiative slot on this side. When there are no spares, that is the slot we
+    // drop - NOT the clicked one. Dropping the lowest slot leaves every higher slot (including the
+    // one currently taking its turn) exactly where it is, so the active turn no longer jumps.
+    // Deleting + recreating the clicked slot gave the replacement a fresh id, which re-sorted it
+    // ahead of/behind equal-initiative combatants (all the grouped enemies share one initiative).
+    // This selection mirrors removeLastSlot()'s own, so that call takes its clean direct-delete path.
+    let lowestSlotId;
+    let lowestSlotInit;
+    for (const c of combat.combatants) {
+      if (c.disposition === disposition && (!lowestSlotInit || c.initiative < lowestSlotInit)) {
+        lowestSlotInit = c.initiative;
+        lowestSlotId = c.id;
+      }
+    }
+    const dropCombatant = combat.combatants.get(lowestSlotId);
+    const dropName = dropCombatant?.name || dropCombatant?.token?.name || "a combatant";
+
     // Confirm before deleting. Previously a slot at the actor floor was hard-refused; now we allow
     // it but make the consequence explicit so it can't happen by accident.
     let confirmContent;
     if (fakeTurn) {
       confirmContent = `<p>Remove this extra initiative slot?</p>`;
     } else if (wouldDropBelowActors) {
-      confirmContent = `<p>There are no spare slots for this side, so removing this slot will remove <strong>${combatantName}</strong> from the encounter entirely.</p><p>Continue?</p>`;
+      confirmContent = `<p>There are no spare slots for this side, so removing a slot will drop the lowest-initiative one and remove <strong>${dropName}</strong> from the encounter.</p><p>Continue?</p>`;
     } else {
       confirmContent = `<p>Remove an initiative slot for this side? ${combatantName}'s slot will be backfilled by a spare slot.</p>`;
     }
@@ -1434,10 +1454,11 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
       await combat._restoreTurnPosition(priorTurn);
     } else if (wouldDropBelowActors) {
-      // No spare slot to backfill with, so remove the actor (and its slot) from the encounter.
-      // removeLastSlot() drops the lowest-initiative slot for this side and keeps claims/order intact.
-      CONFIG.logger.debug("No spare slot available; removing the combatant from the encounter");
-      await combat.removeLastSlot(combatant.id);
+      // No spare slot to backfill with, so a real slot has to go. Drop the LOWEST-initiative slot on
+      // this side (not the clicked one). Passing that slot to removeLastSlot() makes it take the
+      // direct-delete path, so every higher slot - including the active turn - stays put.
+      CONFIG.logger.debug("No spare slot available; removing the lowest-initiative slot from the encounter");
+      await combat.removeLastSlot(lowestSlotId ?? combatant.id);
     } else {
       // this is a real slot, we need to find a replacement
       // the approach is to pick another slot, copy data from that slot to our slot, copy claims to our slot (as needed)

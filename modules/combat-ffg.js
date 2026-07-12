@@ -1386,108 +1386,56 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     const round = combat.round;
     const turn = el.getAttribute("data-slot-index");
     const combatant = combat.turns[turn];
-    const claim = combat.getSlotClaims(round, combatant.id);
-    const claimed = claim !== undefined;
-    const disposition = CONST.TOKEN_DISPOSITIONS[el.getAttribute("data-disposition").replace('Enemy', 'Hostile').toUpperCase()];
+    if (!combatant) {
+      CONFIG.logger.warn("Unable to resolve the initiative slot to remove");
+      return;
+    }
 
-    if (claimed) {
+    // Refuse if another combatant has claimed this slot - the claim must be released first so we
+    // don't silently strip someone's activation out from under them.
+    if (combat.getSlotClaims(round, combatant.id) !== undefined) {
       ui.notifications.warn("You must un-claim the slot before removing it");
       return;
     }
-    const slotCount = this._getDispositionSlotCount(combat, disposition)
-    const presentCount = combat.combatants.filter(i => i?.token?.disposition === disposition).length;
-
-    CONFIG.logger.debug(`detected ${presentCount} total combatants for disposition ${disposition}, along with ${slotCount} total slots`);
 
     const fakeTurn = combatant?.flags?.fake || false;
-    // True when there are no spare (extra) slots left for this side, so removing one would leave
-    // fewer slots than actors. In that case the only way to honor the request is to remove the
-    // underlying combatant from the encounter entirely.
-    const wouldDropBelowActors = slotCount - 1 < presentCount;
-    const combatantName = combatant?.name || combatant?.token?.name || "this combatant";
-
-    // Identify the lowest-initiative slot on this side. When there are no spares, that is the slot we
-    // drop - NOT the clicked one. Dropping the lowest slot leaves every higher slot (including the
-    // one currently taking its turn) exactly where it is, so the active turn no longer jumps.
-    // Deleting + recreating the clicked slot gave the replacement a fresh id, which re-sorted it
-    // ahead of/behind equal-initiative combatants (all the grouped enemies share one initiative).
-    // This selection mirrors removeLastSlot()'s own, so that call takes its clean direct-delete path.
-    let lowestSlotId;
-    let lowestSlotInit;
-    for (const c of combat.combatants) {
-      if (c.disposition === disposition && (!lowestSlotInit || c.initiative < lowestSlotInit)) {
-        lowestSlotInit = c.initiative;
-        lowestSlotId = c.id;
-      }
-    }
-    const dropCombatant = combat.combatants.get(lowestSlotId);
-    const dropName = dropCombatant?.name || dropCombatant?.token?.name || "a combatant";
-
-    // Confirm before deleting. Previously a slot at the actor floor was hard-refused; now we allow
-    // it but make the consequence explicit so it can't happen by accident.
-    let confirmContent;
-    if (fakeTurn) {
-      confirmContent = `<p>Remove this extra initiative slot?</p>`;
-    } else if (wouldDropBelowActors) {
-      confirmContent = `<p>There are no spare slots for this side, so removing a slot will drop the lowest-initiative one and remove <strong>${dropName}</strong> from the encounter.</p><p>Continue?</p>`;
-    } else {
-      confirmContent = `<p>Remove an initiative slot for this side? ${combatantName}'s slot will be backfilled by a spare slot.</p>`;
-    }
 
     const confirmed = await Dialog.confirm({
       title: "Remove Initiative Slot",
-      content: confirmContent,
+      content: fakeTurn
+        ? `<p>Remove this extra initiative slot?</p>`
+        : `<p>Remove this initiative slot? Its combatant will be removed from the initiative order.</p>`,
       defaultYes: false,
     });
     if (!confirmed) {
       return;
     }
 
-    // record where the turn pointer is before core's delete handling moves it (the
-    // removeLastSlot() branch handles this internally)
+    // Capture the turn pointer before the delete so it can be corrected afterwards:
+    //   - removing a slot that is NOT the active one leaves the active combatant in place
+    //     (_restoreTurnPosition follows it by id).
+    //   - removing the ACTIVE slot advances the pointer to the next slot in initiative order, exactly
+    //     as if the turn had ended normally (_restoreTurnPosition's forward neighbor snap).
     const priorTurn = combat._captureTurnPosition();
-    if (fakeTurn) {
-      // if it's a fake slot, delete it
-      CONFIG.logger.debug("This is a non-actor turn, deleting");
-      Hooks.off("preDeleteCombatant", registerHandleCombatantRemoval);
-      await combatant.delete();
-      CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
-      await combat._restoreTurnPosition(priorTurn);
-    } else if (wouldDropBelowActors) {
-      // No spare slot to backfill with, so a real slot has to go. Drop the LOWEST-initiative slot on
-      // this side (not the clicked one). Passing that slot to removeLastSlot() makes it take the
-      // direct-delete path, so every higher slot - including the active turn - stays put.
-      CONFIG.logger.debug("No spare slot available; removing the lowest-initiative slot from the encounter");
-      await combat.removeLastSlot(lowestSlotId ?? combatant.id);
-    } else {
-      // this is a real slot, we need to find a replacement
-      // the approach is to pick another slot, copy data from that slot to our slot, copy claims to our slot (as needed)
-      //   and then delete that fake slot
-      // locate a fake turn
-      CONFIG.logger.debug("This slot is owned by a real actor, doing some magic");
-      // Pick a spare (fake) slot on the same side to consume as the backfill. Prefer one that is NOT
-      // the slot currently taking its turn: deleting the acting slot would strand the turn pointer
-      // (there is no surviving combatant to follow), which previously caused the active turn to jump.
-      const currentTurnId = combat.combatant?.id;
-      const replacementTurn = combat.turns.find(i => i.flags?.fake && i.disposition === combatant.disposition && i.id !== currentTurnId)
-        ?? combat.turns.find(i => i.flags?.fake && i.disposition === combatant.disposition);
-      if (!replacementTurn) {
-        CONFIG.logger.warn("Unable to find a replacement turn, likely concurrency issues");
-        return;
-      }
-      CONFIG.logger.debug(`Replacement turn is ${replacementTurn.name} / ${replacementTurn.id}`);
-      await combatant.update({initiative: replacementTurn.initiative});
-      const replacementClaimed = combat.getSlotClaims(round, replacementTurn.id);
-      CONFIG.logger.debug(`Claims on replacement slot: ${replacementClaimed}`);
-      if (replacementClaimed) {
-        await combat.unclaimSlot(round, replacementTurn.id);
-        await combat.claimSlot(round, combatant.id, replacementClaimed);
-      }
-      Hooks.off("preDeleteCombatant", registerHandleCombatantRemoval);
-      await replacementTurn.delete();
-      CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
-      await combat._restoreTurnPosition(priorTurn);
+
+    // If this combatant had itself claimed another slot, release that claim so it doesn't dangle once
+    // the combatant is gone.
+    const claimedElsewhere = combat.findSlotClaims(round, combatant.id);
+    if (claimedElsewhere) {
+      await combat.unclaimSlot(round, claimedElsewhere);
     }
+
+    // Delete exactly this slot. Suppress the preDeleteCombatant handler so the generic-slot removal
+    // flow (which would re-create a replacement slot or open the removal prompt) doesn't fire - this
+    // is an explicit, direct removal of the one slot that was right-clicked.
+    Hooks.off("preDeleteCombatant", CONFIG.FFG.preCombatDelete);
+    CONFIG.FFG.preCombatDelete = undefined;
+    await combatant.delete();
+    if (CONFIG.FFG.preCombatDelete === undefined) {
+      CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
+    }
+
+    await combat._restoreTurnPosition(priorTurn);
 
     // refresh the tracker (locally + on other clients) so the slot change shows immediately
     combat.setupTurns();

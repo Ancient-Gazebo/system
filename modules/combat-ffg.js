@@ -960,11 +960,15 @@ export class CombatFFG extends Combat {
         };
 
         turn.hidden = hidden;
-        // trigger the turnActive marker to be refreshed
+        // record the claimant on the (in-place mutated) turn object so the post-loop marker sweep
+        // below lights the claimant's token for this slot
         turn.claimed = claimantId;
-        claimant?.token?.object?._refreshTurnMarker();
       } else {
         CONFIG.logger.debug(`slot ${index} is unclaimed`);
+        // Clear any claim recorded on a previous pass. `turn` is the live this.turns[index] object,
+        // so a stale `.claimed` left here would make _refreshTurnMarker() light the old claimant's
+        // token (a second, lingering turn marker) once this slot is unclaimed or backfilled.
+        turn.claimed = undefined;
         if (combatant) {
           turn.combatantId = combatant.id;
 
@@ -980,9 +984,6 @@ export class CombatFFG extends Combat {
             hasRolled = false;
           }
         }
-
-        // trigger the turnActive marker to be refreshed
-        turn.token?.object?._refreshTurnMarker();
       }
 
       if (combatant.css === undefined || combatant.css === null) {
@@ -1057,6 +1058,21 @@ export class CombatFFG extends Combat {
 
     // write to customTurns to avoid permanent changes
     this.customTurns = turns;
+
+    // Refresh the turn marker on EVERY token on the canvas, not just the ones referenced by the
+    // current turns list. Each token's _refreshTurnMarker() self-determines whether it should be
+    // lit from game.combat's active combatant, so sweeping all tokens guarantees a marker left on a
+    // token that has since dropped out of the acting position gets cleared. Previously the refresh
+    // only touched the current slot's own token (or its claimant); when a slot was removed and
+    // replaced by a generic slot - which carries no token - the previously-marked token was never
+    // revisited, so its marker lingered while the new one lit up, producing two turn markers that
+    // persisted for the rest of combat. Running this once after the loop (rather than mid-loop) also
+    // ensures the active combatant's `.claimed` value is finalized before any marker is computed.
+    if (canvas?.ready) {
+      for (const token of canvas.tokens?.placeables ?? []) {
+        token._refreshTurnMarker?.();
+      }
+    }
   }
 
   /**

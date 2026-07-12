@@ -1118,6 +1118,17 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
             item = game.items.get(itemId);
           }
           if (!item) {
+            // Talents granted by a specialization have no standalone Item document on the actor or
+            // in the world, so resolve them from the actor's already-prepared talentList and render
+            // the details inline. This avoids the findCompendiumEntityById/ByName scan below - which
+            // loads a document from every item pack - and previously made expanding (and re-
+            // collapsing) such a talent take seconds each on installs with many compendiums.
+            const talentData = this.actor?.talentList?.find((t) => t.itemId === itemId);
+            if (talentData) {
+              return this._talentDisplayDetails(talentData, ev);
+            }
+          }
+          if (!item) {
             item = await ImportHelpers.findCompendiumEntityById("Item", itemId);
             if (!item) {
               const talentItemData = this.actor?.talentList?.find(talent => talent.itemId === itemId);
@@ -2351,6 +2362,44 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       li.find(".hover-tooltip").on("mouseover", (event) => {
         itemPillHover(event);
       });
+    }
+    li.toggleClass("expanded");
+  }
+
+  /**
+   * Display the inline details (description + property tags) of a talent granted by a
+   * specialization. These talents have no standalone Item document, so the data comes from the
+   * actor's prepared talentList rather than a compendium lookup. Mirrors the expand/collapse
+   * behaviour of _itemDisplayDetails, but resolves instantly (no pack scan on expand or collapse).
+   * @private
+   */
+  async _talentDisplayDetails(talentData, event) {
+    event.preventDefault();
+    const li = $(event.currentTarget);
+
+    // Toggle summary
+    if (li.hasClass("expanded")) {
+      const details = li.children(".item-details");
+      details.slideUp(200, () => details.remove());
+    } else {
+      // Match getItemDetails()'s {ranks} / {ranks|word} substitution so rank-scaled talents read as
+      // a number instead of the literal placeholder.
+      const rankCount = Number(talentData?.rank);
+      const substitute = (text) => {
+        if (!Number.isFinite(rankCount)) return String(text ?? "");
+        return String(text ?? "").replace(/\{\s*ranks\s*(?:\|([^}]*))?\}/gi, (match, suffix) => {
+          const word = (suffix ?? "").trim();
+          return word ? `${rankCount} ${word}` : `${rankCount}`;
+        });
+      };
+      const description = substitute(talentData?.description);
+      const div = $(`<div class="item-details">${await PopoutEditor.renderDiceImages(description, this.actor)}</div>`);
+      const props = $(`<div class="item-properties"></div>`);
+      if (talentData?.isForceTalent) props.append(`<span class="tag">${game.i18n.localize("SWFFG.ForceTalent")}</span>`);
+      if (talentData?.isRanked) props.append(`<span class="tag">${game.i18n.localize("SWFFG.Ranked")}</span>`);
+      div.append(props);
+      li.append(div.hide());
+      div.slideDown(200);
     }
     li.toggleClass("expanded");
   }

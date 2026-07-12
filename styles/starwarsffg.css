@@ -3416,6 +3416,155 @@ img {
   outline-offset: -2px;
 }
 
+/* ---- Ability organization tabs (Talents tab) ---------------------------- */
+/* The abilities list reuses the gear list's organization markup (.gear-org-* /
+   .gear-tab-*) keyed by data-org-type="ability", but that styling is scoped
+   under `.gear-items`. Mirror the rules the abilities layout needs for the
+   `.ability-items` container (values copied from the gear block above). Placed
+   in the always-loaded base stylesheet so it applies under every theme. */
+.starwarsffg .ability-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* Push the organization toggle to the far right of the header (the abilities
+   header has no middle columns to fill the space on its own). */
+.starwarsffg .ability-items .items-header .header-name {
+  flex: 1 1 auto;
+}
+.starwarsffg .ability-items .gear-col-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  width: auto;
+}
+.starwarsffg .ability-items .gear-org-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.starwarsffg .ability-items .items-header .gear-org-controls a {
+  color: white;
+  cursor: pointer;
+}
+.starwarsffg .ability-items .items-header .gear-org-controls a.active {
+  color: #f0c419;
+}
+.starwarsffg .ability-items .gear-tab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px;
+  background-color: #6b1413;
+  color: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-collapse {
+  color: white;
+  cursor: pointer;
+  width: 12px;
+  text-align: center;
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-name {
+  font-weight: bold;
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-name-input {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: white;
+  font-weight: bold;
+  height: 20px;
+  line-height: 20px;
+  max-width: 200px;
+  flex: 0 1 200px;
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-count {
+  opacity: 0.75;
+  font-size: 11px;
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-delete,
+.starwarsffg .ability-items .gear-tab-header .gear-tab-drag-handle {
+  color: white;
+  cursor: pointer;
+}
+.starwarsffg .ability-items .gear-tab-header .gear-tab-drag-handle {
+  cursor: grab;
+  opacity: 0.6;
+  width: 12px;
+  text-align: center;
+}
+.starwarsffg .ability-items .gear-tab-header.tab-drop-target {
+  outline: 2px dashed #f0c419;
+  outline-offset: -2px;
+}
+.starwarsffg .ability-items .gear-org-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.starwarsffg .ability-items .gear-org-list.hidden {
+  display: none;
+}
+.starwarsffg .ability-items .gear-org-list .item {
+  line-height: 24px;
+  padding: 3px 0;
+  border-bottom: 1px solid #bbb;
+}
+.starwarsffg .ability-items .gear-org-list .item:hover {
+  background: rgba(25, 24, 19, 0.12);
+}
+.starwarsffg .ability-items .gear-org-list .item-name {
+  margin: 0;
+  cursor: pointer;
+  flex: 1 0 120px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+}
+.starwarsffg .ability-items .gear-org-item {
+  cursor: grab;
+}
+.starwarsffg .ability-items .gear-org-item.dragging {
+  opacity: 0.4;
+}
+.starwarsffg .ability-items .gear-org-item .gear-org-handle {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  opacity: 0.5;
+  cursor: grab;
+}
+.starwarsffg .ability-items .gear-org-item.drop-before {
+  border-top: 2px solid #f0c419;
+}
+.starwarsffg .ability-items .gear-org-item.drop-after {
+  border-bottom: 2px solid #f0c419;
+}
+.starwarsffg .ability-items .gear-org-dropzone {
+  text-align: center;
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.5;
+  padding: 4px;
+  border: 1px dashed rgba(0, 0, 0, 0.25);
+  margin: 2px 4px;
+}
+.starwarsffg .ability-items .gear-org-dropzone.empty-hidden {
+  border: 0;
+  padding: 2px;
+  margin: 0;
+  min-height: 4px;
+  list-style: none;
+}
+
 /* Cybernetics cap tracker (inventory tab) */
 /* Selectors are scoped under .resource.cybernetics-tracker so they outrank the theme's
    `.attribute .block-attribute` grid rules (notably in mandar.css) regardless of which theme is active. */

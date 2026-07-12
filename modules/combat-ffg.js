@@ -1229,7 +1229,13 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       return;
     }
     const token = ownedTokenCount === 1 ? canvas.tokens.ownedTokens[0] : canvas.tokens.controlled[0];
-    const combatant = this.viewed.combatants.find(i => i.actorId === token.actor.id);
+    // Match the combatant for THIS specific token first, only falling back to an actor-wide match.
+    // A minion group (or any actor with multiple tokens in the encounter) has several combatants
+    // sharing one actorId; the plain actor lookup returns whichever is first, so the claim - and the
+    // turn marker that follows it (Token#_refreshTurnMarker matches combatant.tokenId) - would land
+    // on the wrong token, making the marker appear to jump to a different/next token on claim.
+    const combatant = this.viewed.combatants.find(i => i.tokenId === token.document.id)
+      ?? this.viewed.combatants.find(i => i.actorId === token.actor.id);
     if (!combatant) {
       ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.Combatant"));
       return;

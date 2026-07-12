@@ -1338,14 +1338,6 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       baseEntries[0] = updateCombatantEntry;
     }
 
-    const removeCombatantEntry = baseEntries.find(i => i.name === "COMBAT.CombatantRemove");
-    if (removeCombatantEntry) {
-      removeCombatantEntry.callback = async el => {
-        await this.viewed.removeCombatant(el);
-      };
-      baseEntries[4] = removeCombatantEntry;
-    }
-
     const removeSlot = {
       name: 'SWFFG.Notifications.Combat.Claim.RemoveSlot',
       icon: '<i class="fa-regular fa-trash-alt"></i>',
@@ -1373,7 +1365,11 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     // remove reroll initiative
     baseEntries.splice(2, 1);
 
-    return [...baseEntries, removeSlot, unClaimSlot];
+    // Drop core's "Remove Participant" (COMBAT.CombatantRemove) entry - combatants leave the order
+    // via "Remove Initiative Slot", so this built-in is redundant.
+    const trimmedEntries = baseEntries.filter(i => i.name !== "COMBAT.CombatantRemove");
+
+    return [...trimmedEntries, removeSlot, unClaimSlot];
   }
 
   async _removeSlot(tracker, el) {

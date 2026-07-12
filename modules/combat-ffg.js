@@ -148,6 +148,10 @@ export class CombatFFG extends Combat {
     return {
       turn: this.turn,
       combatantId: this.combatant?.id ?? null,
+      // snapshot of the pre-surgery turn order (combatant ids). Used by _restoreTurnPosition to snap
+      // to the nearest surviving neighbor when the acting slot itself is deleted, instead of reusing
+      // a now-meaningless numeric index.
+      order: this.turns?.map((t) => t.id) ?? [],
     };
   }
 
@@ -165,11 +169,33 @@ export class CombatFFG extends Combat {
     if (!this.started || prior?.turn === null || prior?.turn === undefined) return;
     let newTurn;
     if (prior.combatantId && this.turns.some((t) => t.id === prior.combatantId)) {
+      // the acting combatant survived the surgery - follow it to its new index
       newTurn = this.turns.findIndex((t) => t.id === prior.combatantId);
     } else if (replacementId && this.turns.some((t) => t.id === replacementId)) {
+      // an explicit replacement slot was created in place of the deleted acting slot
       newTurn = this.turns.findIndex((t) => t.id === replacementId);
     } else {
-      newTurn = Math.min(prior.turn, Math.max(this.turns.length - 1, 0));
+      // The acting combatant was deleted with no replacement. Snap to the nearest surviving
+      // combatant from the pre-surgery order - walking forward from the old position first (the
+      // "next" combatant, matching how core advances a turn when the current one is removed), then
+      // backward. Reusing the raw numeric index here was the bug: after a slot is deleted and the
+      // remaining combatants are re-sorted by initiative, prior.turn can land on an unrelated slot
+      // on the other side of the tracker (e.g. a friendly claim slot), making the active turn
+      // appear to jump far down the list.
+      newTurn = -1;
+      const order = prior.order ?? [];
+      for (let i = prior.turn + 1; i < order.length; i++) {
+        const idx = this.turns.findIndex((t) => t.id === order[i]);
+        if (idx >= 0) { newTurn = idx; break; }
+      }
+      if (newTurn < 0) {
+        for (let i = prior.turn - 1; i >= 0; i--) {
+          const idx = this.turns.findIndex((t) => t.id === order[i]);
+          if (idx >= 0) { newTurn = idx; break; }
+        }
+      }
+      // nothing from the old order survived (should not happen) - clamp as a last resort
+      if (newTurn < 0) newTurn = Math.min(prior.turn, Math.max(this.turns.length - 1, 0));
     }
     if (newTurn >= 0 && newTurn !== this.turn) {
       // turnEvents: false prevents this pointer correction from firing start/end-of-turn logic
@@ -1412,7 +1438,12 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       //   and then delete that fake slot
       // locate a fake turn
       CONFIG.logger.debug("This slot is owned by a real actor, doing some magic");
-      const replacementTurn = combat.turns.find(i => i.flags?.fake && i.disposition === combatant.disposition);
+      // Pick a spare (fake) slot on the same side to consume as the backfill. Prefer one that is NOT
+      // the slot currently taking its turn: deleting the acting slot would strand the turn pointer
+      // (there is no surviving combatant to follow), which previously caused the active turn to jump.
+      const currentTurnId = combat.combatant?.id;
+      const replacementTurn = combat.turns.find(i => i.flags?.fake && i.disposition === combatant.disposition && i.id !== currentTurnId)
+        ?? combat.turns.find(i => i.flags?.fake && i.disposition === combatant.disposition);
       if (!replacementTurn) {
         CONFIG.logger.warn("Unable to find a replacement turn, likely concurrency issues");
         return;

@@ -446,6 +446,15 @@
   color: inherit;
 }
 
+/* Edit mode: raise the stacked value/"of max" block so the Force-pool total
+   (the "of N" row) lands at the circle's vertical centre. The committed-dice
+   input above it is allowed to ride up and clip past the top border — committed
+   dice can be edited outside edit mode as normal, so its framing here doesn't
+   matter. :has(input) scopes this to edit mode (view mode renders spans). */
+.starwarsffg .ffg2-force-chip .ffg2-ratio-nums:has(input) {
+  transform: translateY(-0.65rem);
+}
+
 .starwarsffg .ffg2-force-roll {
   cursor: pointer;
 }

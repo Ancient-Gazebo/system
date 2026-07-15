@@ -161,7 +161,14 @@ export class CharacterActorModel extends FFGTypeModel {
       skills: new fields.ObjectField(),
       attributes: new fields.ObjectField(),
       general: new fields.SchemaField({
+        gender: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        age: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        height: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        build: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        hair: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        eyes: new fields.StringField({ initial: "", blank: true, nullable: true }),
         features: new fields.StringField({ initial: "<p></p>", blank: true, nullable: true }),
+        notes: new fields.StringField({ initial: "<p></p>", blank: true, nullable: true }),
       }),
       currency: new fields.ObjectField(),
       metadata: new fields.SchemaField({
@@ -487,7 +494,14 @@ export class RivalActorModel extends FFGTypeModel {
       skills: new fields.ObjectField(),
       attributes: new fields.ObjectField(),
       general: new fields.SchemaField({
+        gender: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        age: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        height: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        build: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        hair: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        eyes: new fields.StringField({ initial: "", blank: true, nullable: true }),
         features: new fields.StringField({ initial: "<p></p>", blank: true, nullable: true }),
+        notes: new fields.StringField({ initial: "<p></p>", blank: true, nullable: true }),
       }),
       currency: new fields.ObjectField(),
       metadata: new fields.SchemaField({
@@ -649,7 +663,14 @@ export class NemesisActorModel extends FFGTypeModel {
       skills: new fields.ObjectField(),
       attributes: new fields.ObjectField(),
       general: new fields.SchemaField({
+        gender: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        age: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        height: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        build: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        hair: new fields.StringField({ initial: "", blank: true, nullable: true }),
+        eyes: new fields.StringField({ initial: "", blank: true, nullable: true }),
         features: new fields.StringField({ initial: "<p></p>", blank: true, nullable: true }),
+        notes: new fields.StringField({ initial: "<p></p>", blank: true, nullable: true }),
       }),
       currency: new fields.ObjectField(),
       metadata: new fields.SchemaField({

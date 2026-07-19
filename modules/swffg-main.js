@@ -1345,7 +1345,14 @@ Hooks.on("getChatMessageContextOptions", (application, options) => {
         added[key] = (added[key] ?? 0) + (result.negative ? -result.value : result.value);
       }
 
-      const reroll = new RollFFG(original.formula, original.data, added, original.flavorText);
+      // The FFG dice override `formula` with a display shorthand ("5p") that the roll
+      // parser cannot read back in; rebuild a parseable formula from the term
+      // expressions ("5dp"), which the FFG dice do not override.
+      const formula = original.terms
+        .map((t) => (t instanceof foundry.dice.terms.OperatorTerm ? t.operator : t.expression))
+        .join(" ");
+
+      const reroll = new RollFFG(formula, original.data, added, original.flavorText);
 
       // Preserve the original message's visibility instead of the user's current roll mode.
       let rollMode = "publicroll";

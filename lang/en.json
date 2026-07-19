@@ -636,6 +636,8 @@
   "SWFFG.DowngradeAbility": "Downgrade Ability",
   "SWFFG.DowngradeDifficulty": "Downgrade Difficulty",
   "SWFFG.SendToChat": "Send to Chat",
+  "SWFFG.DuplicateItem": "Duplicate Item",
+  "SWFFG.ChatReroll": "Reroll",
   "SWFFG.ChooseInitiative": "Choose your Initiative method",
   "SWFFG.ResetSkillList": "Reset Skills List",
   "SWFFG.Advantage": "Advantage",

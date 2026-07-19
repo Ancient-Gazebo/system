@@ -1314,6 +1314,59 @@ Hooks.on("renderChatMessage", async (app, html, messageData) => {
   });
 });
 
+// Reroll an FFG roll from the chat log context menu using the exact same dice pool.
+Hooks.on("getChatMessageContextOptions", (application, options) => {
+  options.push({
+    name: game.i18n.localize("SWFFG.ChatReroll"),
+    icon: '<i class="fas fa-redo"></i>',
+    condition: (li) => {
+      const element = li instanceof HTMLElement ? li : li[0];
+      const message = game.messages.get(element?.dataset?.messageId);
+      if (!message || !(game.user.isGM || message.isAuthor)) return false;
+      try {
+        return message.rolls.some((r) => r instanceof RollFFG);
+      } catch (e) {
+        // rolls that fail to deserialize (e.g. from an older system version) cannot be rerolled
+        return false;
+      }
+    },
+    callback: async (li) => {
+      const element = li instanceof HTMLElement ? li : li[0];
+      const message = game.messages.get(element?.dataset?.messageId);
+      const original = message?.rolls?.find((r) => r instanceof RollFFG);
+      if (!original) return;
+
+      // Rebuild the fixed symbols that were layered on top of the dice (talents,
+      // equipment, manual pool additions) so the reroll carries identical modifiers;
+      // the dice themselves are reproduced by reusing the original formula.
+      const added = {};
+      for (const result of original.addedResults ?? []) {
+        const key = result.type.toLowerCase();
+        added[key] = (added[key] ?? 0) + (result.negative ? -result.value : result.value);
+      }
+
+      const reroll = new RollFFG(original.formula, original.data, added, original.flavorText);
+
+      // Preserve the original message's visibility instead of the user's current roll mode.
+      let rollMode = "publicroll";
+      if (message.blind) rollMode = "blindroll";
+      else if (message.whisper?.length) {
+        rollMode = message.whisper.every((id) => game.users.get(id)?.isGM) ? "gmroll" : "selfroll";
+      }
+
+      const rerollTag = game.i18n.localize("SWFFG.ChatReroll");
+      await reroll.toMessage(
+        {
+          user: game.user.id,
+          speaker: message.speaker,
+          flavor: message.flavor ? `${message.flavor} (${rerollTag})` : rerollTag,
+        },
+        { rollMode }
+      );
+    },
+  });
+});
+
 // Handle crew registration
 Hooks.on("dropActorSheetData", (...args) => {
     register_crew(...args);

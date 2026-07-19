@@ -803,7 +803,26 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       },
     };
 
-    new foundry.applications.ux.ContextMenu(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem], {jQuery: false});
+    // Duplicate an inventory item (weapons, armour, gear only).
+    const duplicateItemContextItem = {
+      name: game.i18n.localize("SWFFG.DuplicateItem"),
+      icon: '<i class="far fa-copy"></i>',
+      condition: (el) => {
+        const item = this.actor.items.get(el.getAttribute("data-item-id"));
+        return !!item && ["weapon", "armour", "gear"].includes(item.type) && this.actor.isOwner;
+      },
+      callback: async (el) => {
+        if (!this.actor.verifyEditModeIsNotEnabled()) return;
+        const item = this.actor.items.get(el.getAttribute("data-item-id"));
+        if (!item) return;
+        const itemData = item.toObject();
+        delete itemData._id;
+        itemData.name = game.i18n.format("DOCUMENT.CopyOf", { name: item.name });
+        await this.actor.createEmbeddedDocuments("Item", [itemData]);
+      },
+    };
+
+    new foundry.applications.ux.ContextMenu(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, duplicateItemContextItem], {jQuery: false});
     new foundry.applications.ux.ContextMenu(htmlElement, "li.item.forcepower", [sendToChatContextItem, rollForceToChatContextItem], {jQuery: false});
     new foundry.applications.ux.ContextMenu(htmlElement, "div.item", [sendToChatContextItem], {jQuery: false});
 

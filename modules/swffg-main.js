@@ -1314,64 +1314,99 @@ Hooks.on("renderChatMessage", async (app, html, messageData) => {
   });
 });
 
-// Reroll an FFG roll from the chat log context menu using the exact same dice pool.
+// Reroll an FFG roll from the chat log context menu, either with the exact same
+// dice pool ("Reroll") or with the check and the difficulty each upgraded once
+// ("Escalate").
+function getMessageRollFFG(li) {
+  const element = li instanceof HTMLElement ? li : li[0];
+  const message = game.messages.get(element?.dataset?.messageId);
+  if (!message || !(game.user.isGM || message.isAuthor)) return {};
+  try {
+    return { message, original: message.rolls.find((r) => r instanceof RollFFG) };
+  } catch (e) {
+    // rolls that fail to deserialize (e.g. from an older system version) cannot be rerolled
+    return {};
+  }
+}
+
+async function rerollMessage(li, { escalate = false } = {}) {
+  const { message, original } = getMessageRollFFG(li);
+  if (!original) return;
+
+  // Rebuild the fixed symbols that were layered on top of the dice (talents,
+  // equipment, manual pool additions) so the reroll carries identical modifiers.
+  const added = {};
+  for (const result of original.addedResults ?? []) {
+    const key = result.type.toLowerCase();
+    added[key] = (added[key] ?? 0) + (result.negative ? -result.value : result.value);
+  }
+
+  // Count the FFG dice back into a DicePoolFFG so Escalate can upgrade them.
+  // Non-FFG terms (standard dice, numeric modifiers) are carried over verbatim
+  // using their `expression` ("2d20") rather than `formula`, because the FFG dice
+  // override the latter with a display shorthand ("5p") the parser cannot read.
+  const denomToPool = { p: "proficiency", a: "ability", c: "challenge", i: "difficulty", b: "boost", s: "setback", f: "force" };
+  const poolCounts = {};
+  const extraParts = [];
+  let lastOperator = "+";
+  for (const t of original.terms) {
+    if (t instanceof foundry.dice.terms.OperatorTerm) {
+      lastOperator = t.operator;
+    } else if (game.ffg.diceterms.includes(t.constructor)) {
+      const key = denomToPool[t.constructor.DENOMINATION];
+      poolCounts[key] = (poolCounts[key] ?? 0) + t.number;
+    } else {
+      extraParts.push({ op: lastOperator, expr: t.expression });
+    }
+  }
+
+  const pool = new DicePoolFFG(poolCounts);
+  if (escalate) {
+    pool.upgrade(1);
+    pool.upgradeDifficulty(1);
+  }
+
+  let formula = pool.renderDiceExpression();
+  for (const part of extraParts) {
+    formula = formula ? `${formula} ${part.op} ${part.expr}` : part.op === "-" ? `-${part.expr}` : part.expr;
+  }
+
+  const reroll = new RollFFG(formula, original.data, added, original.flavorText);
+
+  // Preserve the original message's visibility instead of the user's current roll mode.
+  let rollMode = "publicroll";
+  if (message.blind) rollMode = "blindroll";
+  else if (message.whisper?.length) {
+    rollMode = message.whisper.every((id) => game.users.get(id)?.isGM) ? "gmroll" : "selfroll";
+  }
+
+  const tag = game.i18n.localize(escalate ? "SWFFG.ChatEscalate" : "SWFFG.ChatReroll");
+  await reroll.toMessage(
+    {
+      user: game.user.id,
+      speaker: message.speaker,
+      flavor: message.flavor ? `${message.flavor} (${tag})` : tag,
+    },
+    { rollMode }
+  );
+}
+
 Hooks.on("getChatMessageContextOptions", (application, options) => {
-  options.push({
-    name: game.i18n.localize("SWFFG.ChatReroll"),
-    icon: '<i class="fas fa-redo"></i>',
-    condition: (li) => {
-      const element = li instanceof HTMLElement ? li : li[0];
-      const message = game.messages.get(element?.dataset?.messageId);
-      if (!message || !(game.user.isGM || message.isAuthor)) return false;
-      try {
-        return message.rolls.some((r) => r instanceof RollFFG);
-      } catch (e) {
-        // rolls that fail to deserialize (e.g. from an older system version) cannot be rerolled
-        return false;
-      }
+  options.push(
+    {
+      name: game.i18n.localize("SWFFG.ChatReroll"),
+      icon: '<i class="fas fa-redo"></i>',
+      condition: (li) => !!getMessageRollFFG(li).original,
+      callback: (li) => rerollMessage(li),
     },
-    callback: async (li) => {
-      const element = li instanceof HTMLElement ? li : li[0];
-      const message = game.messages.get(element?.dataset?.messageId);
-      const original = message?.rolls?.find((r) => r instanceof RollFFG);
-      if (!original) return;
-
-      // Rebuild the fixed symbols that were layered on top of the dice (talents,
-      // equipment, manual pool additions) so the reroll carries identical modifiers;
-      // the dice themselves are reproduced by reusing the original formula.
-      const added = {};
-      for (const result of original.addedResults ?? []) {
-        const key = result.type.toLowerCase();
-        added[key] = (added[key] ?? 0) + (result.negative ? -result.value : result.value);
-      }
-
-      // The FFG dice override `formula` with a display shorthand ("5p") that the roll
-      // parser cannot read back in; rebuild a parseable formula from the term
-      // expressions ("5dp"), which the FFG dice do not override.
-      const formula = original.terms
-        .map((t) => (t instanceof foundry.dice.terms.OperatorTerm ? t.operator : t.expression))
-        .join(" ");
-
-      const reroll = new RollFFG(formula, original.data, added, original.flavorText);
-
-      // Preserve the original message's visibility instead of the user's current roll mode.
-      let rollMode = "publicroll";
-      if (message.blind) rollMode = "blindroll";
-      else if (message.whisper?.length) {
-        rollMode = message.whisper.every((id) => game.users.get(id)?.isGM) ? "gmroll" : "selfroll";
-      }
-
-      const rerollTag = game.i18n.localize("SWFFG.ChatReroll");
-      await reroll.toMessage(
-        {
-          user: game.user.id,
-          speaker: message.speaker,
-          flavor: message.flavor ? `${message.flavor} (${rerollTag})` : rerollTag,
-        },
-        { rollMode }
-      );
-    },
-  });
+    {
+      name: game.i18n.localize("SWFFG.ChatEscalate"),
+      icon: '<i class="fas fa-angle-double-up"></i>',
+      // Escalating only makes sense when the roll actually contains FFG pool dice.
+      condition: (li) => !!getMessageRollFFG(li).original?.hasFFG,
+      callback: (li) => rerollMessage(li, { escalate: true }),
+    }
+  );
 });
 
 // Handle crew registration

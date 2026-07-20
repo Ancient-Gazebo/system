@@ -8,6 +8,10 @@ import { applyToTargetActor } from "./gm-bridge.js";
 const { DialogV2 } = foundry.applications.api;
 
 export class ApplyDamage {
+  /** Message ids with an Apply Damage dialog currently open, so repeated
+   * clicks on the chat button can't stack dialogs (and double-apply). */
+  static _openDialogs = new Set();
+
   /**
    * Called from the renderChatMessage hook. Enforces visibility (button is
    * removed for users who are neither GM nor the message author) and binds
@@ -37,6 +41,8 @@ export class ApplyDamage {
    * @param {ChatMessage} message
    */
   static async show(message) {
+    if (ApplyDamage._openDialogs.has(message.id)) return;
+
     // The weapon attack chat message embeds the rendered/adjusted weapon data
     // directly on the roll (see modules/dice/roll.js render() — it assigns
     // item.toObject + computed details onto roll.data). That copy already has
@@ -140,6 +146,11 @@ export class ApplyDamage {
     const weaponName = itemData.name || itemSystem.name || "weapon";
     const title = game.i18n.format("SWFFG.ApplyDamage.DialogTitle", { name: a.name });
 
+    // Guards a rapid double-click (or Enter + click) on the Apply button from
+    // running the callback -- and deducting the damage -- twice.
+    let submitted = false;
+
+    ApplyDamage._openDialogs.add(message.id);
     DialogV2.wait({
       window: { title },
       content,
@@ -150,6 +161,8 @@ export class ApplyDamage {
           label: applyLabel,
           default: true,
           callback: async (event, button, dialog) => {
+            if (submitted) return;
+            submitted = true;
             const root = dialog.element;
             const damage = Math.max(0, parseInt(root.querySelector('input[name="damage"]')?.value, 10) || 0);
             const pierce = Math.max(0, parseInt(root.querySelector('input[name="pierce"]')?.value, 10) || 0);
@@ -210,12 +223,14 @@ export class ApplyDamage {
               return;
             }
 
-            // Public line for everyone (intentionally omits soak/pierce).
+            // Public line for everyone. Reports the wounds actually applied
+            // (post soak/parry/reduction) so it matches the GM breakdown and
+            // the target's bar; the math itself stays GM-only.
             await ChatMessage.create({
               speaker,
               content: `<p>${game.i18n.format("SWFFG.ApplyDamage.PublicMessage", {
                 actorName: a.name,
-                damage,
+                damage: applied,
                 poolLabel,
                 weaponName,
               })}</p>`,
@@ -234,6 +249,6 @@ export class ApplyDamage {
         },
       ],
       rejectClose: false,
-    });
+    }).finally(() => ApplyDamage._openDialogs.delete(message.id));
   }
 }

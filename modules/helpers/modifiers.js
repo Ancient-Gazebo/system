@@ -400,6 +400,10 @@ export default class ModifierHelpers {
   static getModTypeByModPath(skillPath) {
     if (skillPath.endsWith("force")) {
       return "Force Boost";
+    } else if (skillPath.endsWith("decreaseDifficulty")) {
+      return "Skill Decrease Difficulty";
+    } else if (skillPath.endsWith("downgradeDifficulty")) {
+      return "Skill Downgrade Difficulty";
     } else if (skillPath.endsWith("advantage")) {
       return "Skill Add Advantage";
     } else if (skillPath.endsWith("dark")) {
@@ -578,6 +582,10 @@ export default class ModifierHelpers {
       return `system.skills.${mod}.upgrades`;
     } else if (modType === "Skill Boost") {
       return `system.skills.${mod}.boost`;
+    } else if (modType === "Skill Decrease Difficulty") {
+      return `system.skills.${mod}.decreaseDifficulty`;
+    } else if (modType === "Skill Downgrade Difficulty") {
+      return `system.skills.${mod}.downgradeDifficulty`;
     } else if (modType === "Skill Rank") {
       return `system.skills.${mod}.rank`;
     } else if (modType === "Skill Remove Setback") {

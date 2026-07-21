@@ -357,6 +357,10 @@ export default class DiceHelpers {
         if (!Number.isFinite(value) || value === 0) continue;
         if (attr.modtype === "Skill Add Upgrade") {
           dicePool.upgrade(value);
+        } else if (attr.modtype === "Skill Downgrade Difficulty") {
+          dicePool.upgradeDifficulty(-value);
+        } else if (attr.modtype === "Skill Decrease Difficulty") {
+          dicePool.difficulty = Math.max(0, dicePool.difficulty - value);
         } else if (Object.keys(SKILL_DELTA).includes(attr.modtype)) {
           dicePool[SKILL_DELTA[attr.modtype]] += value;
         }
@@ -420,10 +424,12 @@ export function get_dice_pool(actor_id, skill_name, incoming_roll) {
     despair: (skill.despair ?? 0) + incoming_roll.despair,
     upgrades: (skill.upgrades ?? 0) + incoming_roll.upgrades,
     remsetback: skill?.remsetback ? skill.remsetback : 0 + incoming_roll.remsetback,
-    difficulty: +incoming_roll.difficulty + (skill.difficulty ?? 0),
+    difficulty: Math.max(0, +incoming_roll.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)),
     challenge: +incoming_roll.challenge,
   });
   dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
+  // "Skill Downgrade Difficulty": downgrade challenge dice back into difficulty dice (inverse of upgrade)
+  dicePool.upgradeDifficulty(-(skill.downgradeDifficulty ?? 0));
   return dicePool;
 }
 

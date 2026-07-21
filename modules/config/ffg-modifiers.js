@@ -176,6 +176,14 @@ export const allModifiersTypes = {
     "value": "Skill Boost",
     "label": "SWFFG.ModTypeSkillBoost",
   },
+  "Skill Decrease Difficulty": {
+    "value": "Skill Decrease Difficulty",
+    "label": "SWFFG.ModTypeSkillDecreaseDifficulty",
+  },
+  "Skill Downgrade Difficulty": {
+    "value": "Skill Downgrade Difficulty",
+    "label": "SWFFG.ModTypeSkillDowngradeDifficulty",
+  },
   "Skill Rank": {
     "value": "Skill Rank",
     "label": "SWFFG.ModTypeSkillRank",
@@ -226,6 +234,8 @@ export const allModifiersMap = {
   "Skill Add Triumph": foundry.utils.duplicate(skills),
   "Skill Add Upgrade": foundry.utils.duplicate(skills),
   "Skill Boost": foundry.utils.duplicate(skills),
+  "Skill Decrease Difficulty": foundry.utils.duplicate(skills),
+  "Skill Downgrade Difficulty": foundry.utils.duplicate(skills),
   "Skill Rank": foundry.utils.duplicate(skills),
   "Skill Remove Setback": foundry.utils.duplicate(skills),
   "Skill Setback": foundry.utils.duplicate(skills),
@@ -236,5 +246,6 @@ export const skillModifierTypes = [
   "Career Skill", "Force Boost", "Skill Add Advantage", "Skill Add Dark",
   "Skill Add Despair", "Skill Add Failure", "Skill Add Light", "Skill Add Success",
   "Skill Add Threat", "Skill Add Triumph", "Skill Add Upgrade", "Skill Boost",
+  "Skill Decrease Difficulty", "Skill Downgrade Difficulty",
   "Skill Rank", "Skill Remove Setback", "Skill Setback",
 ];

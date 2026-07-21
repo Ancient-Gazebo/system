@@ -366,7 +366,6 @@
   "SWFFG.ModTypeSkillRank": "Skill Rank",
   "SWFFG.ModTypeSkillBoost": "Skill Boost",
   "SWFFG.ModTypeSkillDecreaseDifficulty": "Skill Decrease Difficulty",
-  "SWFFG.ModTypeSkillDowngradeDifficulty": "Skill Downgrade Difficulty",
   "SWFFG.ModTypeStat": "Stat",
   "SWFFG.ModTypeStatWeapon": "Weapon Stat",
   "SWFFG.ModifierType": "Modifier Type",

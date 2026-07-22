@@ -5,7 +5,7 @@ export class ItemSheetFFGV2 extends ItemSheetFFG {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       classes: ["starwarsffg", "sheet", "item", "v2"],
-      tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "attributes" }],
+      tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "description" }],
       scrollY: [".sheet-body", ".tab"],
     });
   }

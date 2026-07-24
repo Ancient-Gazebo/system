@@ -64,6 +64,7 @@ import { registerGlitchSmithIntegration } from "./integrations/glitchsmith.js";
 import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-details.js";
 import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
+import TalentTree from "./helpers/talent-tree.js";
 
 /* -------------------------------------------- */
 /*  Foundry VTT Initialization                  */
@@ -1748,6 +1749,33 @@ Hooks.once("ready", async () => {
       }
     }
   });
+  // FFG rule: an unranked talent already owned in another tree is gained for free once it is
+  // reached in a new tree. The purchase button resolves this itself, but a talent can also become
+  // learned by ticking its checkbox on the specialization sheet, by an import, or by any other
+  // direct write - and in those cases nothing re-checked the *other* trees, so a talent that was
+  // already connected in tree A stayed unlearned until an adjacent node in tree A was bought.
+  // Watching updates covers every one of those paths.
+  Hooks.on("updateItem", async (item, changed, options, userId) => {
+    if (userId != game.user.id) return;
+    if (item.type !== "specialization") return;
+    if (!item.isEmbedded || item.parent?.documentName !== "Actor") return;
+    const actor = item.actor;
+    if (actor?.type !== "character") return;
+    // Only react when a node actually became learned. Refunds also rewrite the talent grid, and
+    // cascading over one would immediately re-grant the node that was just given up. (The cascade
+    // writes back to specialization items and so re-enters this hook; it guards its own
+    // re-entrancy.)
+    const changedTalents = changed?.system?.talents ?? changed?.data?.talents;
+    if (!changedTalents) return;
+    const anyLearned = Object.values(changedTalents).some((t) => TalentTree._bool(t?.islearned));
+    if (!anyLearned) return;
+    try {
+      await ActorHelpers.autoPurchaseConnectedTalents(actor);
+    } catch (e) {
+      CONFIG.logger.warn("Failed to auto-purchase connected cross-tree talents on tree update", e);
+    }
+  });
+
   // data for _onDropItemCreate has system.encumbrance.adjusted = 0, despite it being proper in the item itself
   Hooks.on("deleteItem", async (item, options, userId) => {
     if (userId != game.user.id) return

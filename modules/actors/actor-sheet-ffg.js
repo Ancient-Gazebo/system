@@ -97,20 +97,27 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
       if (this.actor.type === "character" && itemData.type === "species") {
         // add starting XP from species
-        const curAvailable = parseInt(this.actor.system?.experience?.available);
-        const curTotal = parseInt(this.actor.system?.experience?.total);
         const startingXP = parseInt(itemData.system?.startingXP);
+        // Effective (sheet-visible) values, used for the XP-log entry.
+        const effectiveAvailable = parseInt(this.actor.system?.experience?.available);
+        const effectiveTotal = parseInt(this.actor.system?.experience?.total);
+        const AEState = await ActorHelpers.beginEditMode(this.actor, true);
+        // Grant against the BASE values (purchase active effects suspended) so those deductions
+        // are not double-counted when the effects are restored (see the purchase flow below).
+        const baseAvailable = parseInt(this.actor.system.experience.available);
+        const baseTotal = parseInt(this.actor.system.experience.total);
         await this.actor.update(
           {
             system: {
               experience: {
-                available: curAvailable + startingXP,
-                total: curTotal + startingXP,
+                available: baseAvailable + startingXP,
+                total: baseTotal + startingXP,
               }
             }
           }
         );
-        await xpLogEarn(this.actor, startingXP, curAvailable + startingXP, curTotal + startingXP, game.i18n.format("SWFFG.GrantXPSpecies", {species: itemData.name}) );
+        await xpLogEarn(this.actor, startingXP, effectiveAvailable + startingXP, effectiveTotal + startingXP, game.i18n.format("SWFFG.GrantXPSpecies", {species: itemData.name}) );
+        await ActorHelpers.endEditMode(this.actor, AEState, true);
       }
 
       if (this.actor.type === "character" && ["talent", "specialization", "signatureability", "forcepower"].includes(itemData.type)) {
@@ -124,17 +131,26 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
           const performPurchase = async (effectiveCost, noteSuffix = "") => {
             if (!this.actor.verifyEditModeIsNotEnabled()) return false;
             if (effectiveCost <= 0) return;
-            const updatedAvailableXP = this.actor.system.experience.available;
-            if (effectiveCost > updatedAvailableXP) {
+            // The value shown on the sheet is the EFFECTIVE available XP: the stored base minus the
+            // "purchased-*" active effects created by skill/characteristic purchases. Use it for the
+            // affordability check and the XP-log entry.
+            const effectiveAvailableXP = this.actor.system.experience.available;
+            if (effectiveCost > effectiveAvailableXP) {
               // Can't afford it: warn and leave XP untouched rather than going negative.
               ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
               return;
             }
+            const totalXP = this.actor.system.experience.total;
             const AEState = await ActorHelpers.beginEditMode(this.actor, true);
+            // With the purchase effects suspended, this reads the stored BASE available. Subtract the
+            // cost from the base - NOT from the effective value read above - otherwise, once the
+            // effects are restored, their deductions are applied a second time on top of a base that
+            // was already lowered by them, driving available XP hundreds below where it should be.
+            const baseAvailableXP = this.actor.system.experience.available;
             await this.object.update({
               system: {
                 experience: {
-                  available: updatedAvailableXP - effectiveCost,
+                  available: baseAvailableXP - effectiveCost,
                 }
               }
             });
@@ -152,8 +168,9 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
             await xpLogSpend(
                 this.actor, `${game.i18n.localize("SWFFG.DragDrop.XPLog")} ${itemData.type} ${itemData.name}${noteSuffix}`,
                 effectiveCost,
-                this.actor.system.experience.available,
-                this.actor.system.experience.total,
+                // Log the effective available after the purchase (base read above is suspended-effects).
+                effectiveAvailableXP - effectiveCost,
+                totalXP,
                 undefined,
                 refundMeta
             );

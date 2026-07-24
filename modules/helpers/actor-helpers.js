@@ -1,6 +1,15 @@
 import ModifierHelpers from "./modifiers.js";
 import ItemHelpers from "./item-helpers.js";
+import TalentTree from "./talent-tree.js";
 import {migrateDataToSystem} from "./migration.js";
+
+/**
+ * Actor ids with a cross-tree auto-purchase cascade currently running. The cascade writes back to
+ * specialization items, which re-enters it via the `updateItem` hook; since one run already
+ * resolves every tree to a fixed point, re-entrant runs are pure overhead (and would recurse).
+ * @type {Set<string>}
+ */
+const autoPurchaseInFlight = new Set();
 
 export default class ActorHelpers {
   static async updateActor(event, formData) {
@@ -223,12 +232,31 @@ export default class ActorHelpers {
    *   - the talent directly to the right is x+1, linked when this talent has `links-right`
    * Links are treated as undirected for reachability.
    *
+   * Callers do not need to co-ordinate: the cascade is idempotent, resolves every tree in one
+   * pass, and re-entrant calls for the same actor (its own writes re-enter via `updateItem`) are
+   * dropped rather than recursing.
+   *
    * @param {Actor} actor                  The owning character actor.
    * @returns {Promise<boolean>}           Whether any talent was auto-learned.
    */
   static async autoPurchaseConnectedTalents(actor) {
     if (!actor || actor.type !== "character") return false;
+    if (autoPurchaseInFlight.has(actor.id)) return false;
+    autoPurchaseInFlight.add(actor.id);
+    try {
+      return await ActorHelpers._autoPurchaseConnectedTalents(actor);
+    } finally {
+      autoPurchaseInFlight.delete(actor.id);
+    }
+  }
 
+  /**
+   * Cascade implementation for {@link ActorHelpers.autoPurchaseConnectedTalents}. Do not call
+   * directly - the public method holds the re-entrancy guard.
+   * @param {Actor} actor
+   * @returns {Promise<boolean>}
+   */
+  static async _autoPurchaseConnectedTalents(actor) {
     const specializations = actor.items.filter((i) => i.type === "specialization");
     // Sharing an unranked talent requires at least two trees.
     if (specializations.length < 2) return false;
@@ -247,6 +275,12 @@ export default class ActorHelpers {
       };
     }
 
+    // Tree node flags are not schema-typed (system.talents is an ObjectField), so imported and
+    // legacy worlds can hold the strings "true"/"false" instead of booleans. Read every flag
+    // through the same coercion the refund path uses - a raw truthiness test would read
+    // isRanked:"false" as ranked and skip the talent forever.
+    const bool = (value) => TalentTree._bool(value);
+
     // Is the talent at index x reachable within its own tree given the current learned state?
     const isReachable = (talents, x) => {
       // Top (entry) tier is always reachable once the tree is owned.
@@ -254,19 +288,19 @@ export default class ActorHelpers {
       const self = talents[`talent${x}`];
       // Connected upward to a learned talent (our top link -> the talent above).
       const above = talents[`talent${x - GRID_WIDTH}`];
-      if (self?.["links-top-1"] && above?.islearned) return true;
+      if (bool(self?.["links-top-1"]) && bool(above?.islearned)) return true;
       // Connected downward to a learned talent (their top link -> us).
       const below = talents[`talent${x + GRID_WIDTH}`];
-      if (below?.["links-top-1"] && below?.islearned) return true;
+      if (bool(below?.["links-top-1"]) && bool(below?.islearned)) return true;
       // Connected to the right (our right link -> the talent to our right).
       if ((x + 1) % GRID_WIDTH !== 0) {
         const right = talents[`talent${x + 1}`];
-        if (self?.["links-right"] && right?.islearned) return true;
+        if (bool(self?.["links-right"]) && bool(right?.islearned)) return true;
       }
       // Connected from the left (their right link -> us).
       if (x % GRID_WIDTH !== 0) {
         const left = talents[`talent${x - 1}`];
-        if (left?.["links-right"] && left?.islearned) return true;
+        if (bool(left?.["links-right"]) && bool(left?.islearned)) return true;
       }
       return false;
     };
@@ -278,7 +312,7 @@ export default class ActorHelpers {
         const talents = working[id].talents;
         for (let x = 0; x < GRID_SIZE; x++) {
           const t = talents[`talent${x}`];
-          if (t && t.islearned && !t.isRanked && t.name) names.add(t.name);
+          if (t && bool(t.islearned) && !bool(t.isRanked) && t.name) names.add(t.name);
         }
       }
       return names;
@@ -296,7 +330,7 @@ export default class ActorHelpers {
         const talents = working[id].talents;
         for (let x = 0; x < GRID_SIZE; x++) {
           const t = talents[`talent${x}`];
-          if (!t || t.islearned || t.isRanked || !t.name) continue;
+          if (!t || bool(t.islearned) || bool(t.isRanked) || !t.name) continue;
           // Only auto-complete talents we already own from a different tree.
           if (!owned.has(t.name)) continue;
           // ...and only once they are actually reached in this tree.

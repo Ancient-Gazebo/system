@@ -1,4 +1,5 @@
 import ModifierHelpers from "./modifiers.js";
+import TalentTree from "./talent-tree.js";
 
 export default class ItemHelpers {
   static async itemUpdate(event, formData) {
@@ -234,7 +235,10 @@ export default class ItemHelpers {
     const actor = item?.actor;
     if (!actor || item.type !== "specialization") return false;
     const talent = item.system?.talents?.[talentKey];
-    if (!talent?.islearned || talent?.isRanked || !talent?.name) return false;
+    // Tree node flags are not schema-typed, so legacy/imported worlds can hold "true"/"false"
+    // strings; coerce the same way the cascade and the refund path do, or a copy carrying
+    // isRanked:"false" is never flagged as a duplicate and applies its modifiers twice.
+    if (!TalentTree._bool(talent?.islearned) || TalentTree._bool(talent?.isRanked) || !talent?.name) return false;
     // Canonical selection is at SPECIALIZATION granularity: within a single tree, every node of
     // the same talent shares the same attribute keys (copied verbatim from the source talent) and
     // therefore the same single Active Effect - so two learned copies inside one tree already
@@ -245,7 +249,7 @@ export default class ItemHelpers {
       .sort((a, b) => a.id.localeCompare(b.id));
     for (const spec of specs) {
       const hasLearnedCopy = Object.values(spec.system?.talents ?? {}).some(
-        (t) => t?.islearned && !t?.isRanked && t?.name === talent.name
+        (t) => TalentTree._bool(t?.islearned) && !TalentTree._bool(t?.isRanked) && t?.name === talent.name
       );
       if (!hasLearnedCopy) continue;
       // the first specialization (in stable id order) holding a learned copy is canonical
@@ -287,7 +291,7 @@ export default class ItemHelpers {
             try {
               const locatedMod = talent.attributes[activeEffect.name]; // this can throw an exception; best to handle it
               if (locatedMod) {
-                if (talent.islearned) {
+                if (TalentTree._bool(talent.islearned)) {
                   // an unranked talent learned in more than one tree (the cross-tree rule gives
                   // the later copies for free) must only apply its passive modifiers once; keep
                   // every copy but the canonical one suspended
@@ -318,7 +322,7 @@ export default class ItemHelpers {
             try {
               const locatedMod = upgrade.attributes[activeEffect.name]; // this can throw an exception; best to handle it
               if (locatedMod) {
-                if (upgrade.islearned) {
+                if (TalentTree._bool(upgrade.islearned)) {
                   CONFIG.logger.debug(`located attribute granting AE (${activeEffect.name}) AND the upgrade (${upgrade.name}) is learned, unsuspending`);
                   await activeEffect.update({disabled: false});
                 } else {

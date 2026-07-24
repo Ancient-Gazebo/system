@@ -344,15 +344,21 @@ export class GroupManager extends FormApplication {
           icon: '<i class="fas fa-check"></i>',
           label: game.i18n.localize("SWFFG.GrantXP"),
           callback: async () => {
-            const state = await ActorHelpers.beginEditMode(character, true);
             const container = document.getElementById(id);
             const amount = container.querySelector('input[name="amount"]');
             const note = container.querySelector('input[name="note"]').value;
-            const available = +character.system.experience.available + +amount.value;
-            const total = +character.system.experience.total + +amount.value;
-            character.update({ ["system.experience.total"]: +character.system.experience.total + +amount.value });
-            character.update({ ["system.experience.available"]: +character.system.experience.available + +amount.value });
-            await xpLogEarn(character, amount.value, available, total, note);
+            // Effective (sheet-visible) values for the log, read before edit mode suspends the
+            // purchase active effects that reduce available XP.
+            const loggedAvailable = +character.system.experience.available + +amount.value;
+            const loggedTotal = +character.system.experience.total + +amount.value;
+            const state = await ActorHelpers.beginEditMode(character, true);
+            // Add to the BASE values (effects suspended) so the grant survives the effects being
+            // restored without them being double-counted.
+            await character.update({
+              ["system.experience.total"]: +character.system.experience.total + +amount.value,
+              ["system.experience.available"]: +character.system.experience.available + +amount.value,
+            });
+            await xpLogEarn(character, amount.value, loggedAvailable, loggedTotal, note);
             await ActorHelpers.endEditMode(character, state, true);
             ui.notifications.info(`Granted ${amount.value} XP to ${character.name}.`);
           },
@@ -385,12 +391,18 @@ export class GroupManager extends FormApplication {
             const note = container.querySelector('input[name="note"]').value;
             for (const c of characters) {
               const character = game.actors.get(c);
+              // Effective (sheet-visible) values for the log, read before edit mode suspends the
+              // purchase active effects that reduce available XP.
+              const loggedAvailable = +character.system.experience.available + +amount.value;
+              const loggedTotal = +character.system.experience.total + +amount.value;
               const state = await ActorHelpers.beginEditMode(character, true);
-              const available = +character.system.experience.available + +amount.value;
-              const total = +character.system.experience.total + +amount.value;
-              character.update({ ["system.experience.total"]: +character.system.experience.total + +amount.value });
-              character.update({ ["system.experience.available"]: +character.system.experience.available + +amount.value });
-              await xpLogEarn(character, amount.value, available, total, note);
+              // Add to the BASE values (effects suspended) so the grant survives the effects being
+              // restored without them being double-counted.
+              await character.update({
+                ["system.experience.total"]: +character.system.experience.total + +amount.value,
+                ["system.experience.available"]: +character.system.experience.available + +amount.value,
+              });
+              await xpLogEarn(character, amount.value, loggedAvailable, loggedTotal, note);
               await ActorHelpers.endEditMode(character, state, true);
               ui.notifications.info(`Granted ${amount.value} XP to ${character.name}.`);
             }

@@ -471,6 +471,10 @@ export class ShipweaponItemModel extends FFGTypeModel {
         label: new fields.StringField({ initial: "Skill", blank: true, nullable: true }),
         useBrawn: new fields.BooleanField({ initial: false }),
       }),
+      // Item damage condition (None/Minor/Moderate/Major). Read by DiceHelpers
+      // (item.system.status !== "None") to add Setback dice / block too-damaged gear.
+      // Undeclared, a strict SchemaField pruned it on save and the rule silently no-op'd.
+      status: new fields.StringField({ initial: "None", blank: true, nullable: true }),
     };
   }
 }
@@ -663,6 +667,11 @@ export class WeaponItemModel extends FFGTypeModel {
         max: new SafeNumberField({ initial: 0, nullable: true }),
         value: new SafeNumberField({ initial: 0, nullable: true }),
       }),
+      // Item damage condition (None/Minor/Moderate/Major). Bound on the weapon sheet
+      // (data.status) and read by DiceHelpers (item.system.status !== "None") to add
+      // Setback dice / block too-damaged gear. Undeclared, a strict SchemaField pruned
+      // it on every save, so the selected condition never persisted and the rule no-op'd.
+      status: new fields.StringField({ initial: "None", blank: true, nullable: true }),
     };
   }
 }

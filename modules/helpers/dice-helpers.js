@@ -86,6 +86,9 @@ export default class DiceHelpers {
 
     const itemData = item || { name: game.i18n.localize(skill.label), type: "skill" };
     const status = this.getWeaponStatus(itemData);
+    // getWeaponStatus returns null when the item is too damaged to use (Major); abort the
+    // roll (the notification was already shown) rather than dereferencing undefined.
+    if (!status) return;
     let defenseDice = this.getDefenseDice(skill, itemData);
 
     // TODO: Get weapon specific modifiers from itemmodifiers and itemattachments
@@ -211,6 +214,9 @@ export default class DiceHelpers {
     await item.setFlag("starwarsffg", "uuid", item.uuid);
 
     const status = this.getWeaponStatus(item);
+    // getWeaponStatus returns null when the item is too damaged to use (Major); abort the
+    // roll (the notification was already shown) rather than dereferencing undefined.
+    if (!status) return;
 
     const skill = actor.system.skills[itemData.skill.value];
     const characteristic = actor.system.characteristics[skill.characteristic];
@@ -282,7 +288,9 @@ export default class DiceHelpers {
         }
       } else {
         ui.notifications.error(`${item.name} ${game.i18n.localize("SWFFG.ItemTooDamagedToUse")} (${game.i18n.localize(CONFIG.FFG.itemstatus[item.system.status].label)}).`);
-        return;
+        // Signal "too damaged to use" to callers, which must abort the roll. Returning
+        // null (rather than a status object) is what blocks the roll; callers guard on it.
+        return null;
       }
     }
 

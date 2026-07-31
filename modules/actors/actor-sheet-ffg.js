@@ -2327,6 +2327,12 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
    * @returns {Promise<void>}
    */
   async vehicleCrewGunneryRoll(weapon, weaponSkill, selectedGunner) {
+    // Weapon damage condition (status): a too-damaged weapon (Major) blocks the roll, while
+    // Minor/Moderate add Setback/Difficulty. Mirrors the personal-weapon path in
+    // DiceHelpers.rollSkill/rollItem; the gunner's pool is assembled separately below, so the
+    // status dice have to be applied here rather than inheriting from that shared path.
+    const weaponStatus = DiceHelpers.getWeaponStatus(weapon);
+    if (!weaponStatus) return; // too damaged to use; notification already shown
     const starting_pool = {'difficulty': 2};
     const ship = this.actor;
     const crewSheet = game.actors.get(selectedGunner.actor_id)?.sheet;
@@ -2364,6 +2370,9 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       // skill-targeted modifiers (recurses into the attachment's own mods/sub-attachments)
       pool = DiceHelpers.applySkillModifiers(pool, weaponSkill, shipAttachment);
     }
+    // apply the weapon's damage-condition dice (Minor -> +1 Setback, Moderate -> +1 Difficulty)
+    pool.setback += weaponStatus.setback;
+    pool.difficulty += weaponStatus.difficulty;
     // display the roll dialog
     await DiceHelpers.displayRollDialog(
       crewSheet,

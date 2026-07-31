@@ -84,6 +84,10 @@ export class ArmourItemModel extends FFGTypeModel {
         label: new fields.StringField({ initial: "Soak", blank: true, nullable: true }),
         adjusted: new SafeNumberField({ initial: 0, nullable: true }),
       }),
+      // Item damage condition (None/Minor/Moderate/Major). Display-only for armour: it
+      // records how damaged the piece is but, unlike weapons/ship weapons, carries no
+      // mechanical effect (DiceHelpers does not read armour status).
+      status: new fields.StringField({ initial: "None", blank: true, nullable: true }),
     };
   }
 }

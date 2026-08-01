@@ -1896,7 +1896,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       const content = `<div class="starwarsffg language-chat"><h3>${game.i18n.localize("SWFFG.Languages.Title")}</h3>${body}</div>`;
       await ChatMessage.create({
         user: game.user.id,
-        type: CONST.CHAT_MESSAGE_STYLES.OTHER,
+        style: CONST.CHAT_MESSAGE_STYLES.OTHER,
         content,
         speaker: {
           actor: this.actor.id,
@@ -2617,7 +2617,7 @@ export class ActorSheetFFG extends FFGActorSheet {
 
     const messageData = {
       user: game.user.id,
-      type: CONST.CHAT_MESSAGE_STYLES.OTHER,
+      style: CONST.CHAT_MESSAGE_STYLES.OTHER,
       content: html,
       speaker: {
         actor: this.actor.id,

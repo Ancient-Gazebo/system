@@ -17,7 +17,11 @@ export default class ActorHelpers {
     const ownedItems = this.actor.items;
 
     // as of Foundry v10, saving an editor only submits the single entry for that editor
-    if (Object.keys(formData).length > 1) {
+    // Sheets that are not built from the standard actor template submit no `data.*` fields at
+    // all -- the enhancements Vendor sheet is one -- so `formData.data` is undefined here and
+    // every normalisation below would throw on it. Nothing in this block applies to such a
+    // submission anyway.
+    if (Object.keys(formData).length > 1 && formData.data) {
       if (this.object.type === "minion") {
         Object.keys(formData?.data?.skills).forEach((skill) => {
           if (!formData.data.skills[skill].groupskill && this.object.system.skills[skill].groupskill) {
@@ -70,8 +74,8 @@ export default class ActorHelpers {
       }
     }
 
-    // recombine attributes to formData
-    formData.data.attributes = attributes;
+    // recombine attributes to formData (only meaningful for template-shaped submissions; see above)
+    if (formData.data) formData.data.attributes = attributes;
 
     // Update the Actor
     foundry.utils.setProperty(formData, `flags.starwarsffg.loaded`, false);

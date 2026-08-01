@@ -65,7 +65,15 @@ export class ActiveEffectFFG extends ActiveEffect {
    */
   static migrateData(source) {
     if (source?.duration && !Number.isInteger(source.duration.value)) {
-      delete source.duration;
+      // `delete` throws in strict mode when the property is non-configurable, which is the case
+      // whenever the source object has been sealed or frozen -- effect data reached from a
+      // compendium/template object during a bulk item create (the shop generator does this) comes
+      // through that way. A sealed object is still writable, so overwrite in place instead; only a
+      // fully frozen source has no route, and there we leave the value be rather than throw out of
+      // migrateData (Foundry catches it, but every effect then logs a "Failed data migration").
+      const descriptor = Object.getOwnPropertyDescriptor(source, "duration");
+      if (descriptor?.configurable !== false) delete source.duration;
+      else if (descriptor.writable !== false) source.duration = {};
     }
     return super.migrateData(source);
   }

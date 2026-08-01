@@ -5,10 +5,19 @@ before editing.
 
 ## What this is
 
-`starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT V13**
-(`system.json`: id `starwarsffg`, version `2.0.3`, compatibility minimum/verified/
-maximum = 13). This is a maintained fork descended from Jaxxa's implementation;
-upstream lives at `StarWarsFoundryVTT/StarWarsFFG`.
+`starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
+(`system.json`: id `starwarsffg`, version `2.1.0`, compatibility minimum 13 /
+verified 14 — it runs on **both V13 and V14**). This is a maintained fork
+descended from Jaxxa's implementation; upstream lives at
+`StarWarsFoundryVTT/StarWarsFFG`.
+
+**Version-dependent behaviour is feature-detected at runtime**
+(`game.release.generation >= 14`), never branched at build time, so one build
+serves both generations. Follow that pattern for anything V14 renamed or removed
+(`messageMode`/`applyMode` vs `rollMode`/`applyRollMode`, `applyOperators` vs
+`performDeletions`, ActiveEffect change `type` vs `mode`, ...). Reading a
+deprecated accessor logs a warning even when you do not use the value, so prefer
+`_source` / short-circuits (`c.type ?? c.mode`) over touching it.
 
 The whole tree ships to end users as the installed system, so runtime assets
 (`lib/`, `images/`, `fonts/`, compiled `styles/*.css`) are all version-controlled
@@ -20,7 +29,14 @@ on purpose — they are not build output to be regenerated.
   - `swffg-main.js` — **primary entry point**; the `init` hook registers config,
     sheets, and DataModels. `dice-pool-ffg.js` is also loaded directly.
   - `actors/`, `items/` — Actor/Item documents and their sheets.
-  - `datamodels/` — V13 DataModels for every actor/item subtype. **Auto-generated
+  - `apps/` — the ApplicationV2 bases every window is built on:
+    `ffg-document-sheet.js` (actor/item sheets; bridges the legacy `getData` /
+    `activateListeners` style onto `_prepareContext` / `_onRender`, and owns the
+    submit pipeline, inline ProseMirror editors, tabs and drag/drop),
+    `ffg-actor-sheet.js` (actor layer: drops, token controls) and
+    `ffg-form-application.js` (settings/importer/editor windows, plus
+    `executeInlineScripts`).
+  - `datamodels/` — DataModels for every actor/item subtype. **Auto-generated
     from `template.json`; do not hand-edit** (see that folder's README.md).
   - `active-effects/active-effect-ffg.js` — `ActiveEffectFFG`, the customized
     Active Effects pipeline (suppression + apply overrides feed the dice pool).
@@ -42,6 +58,10 @@ on purpose — they are not build output to be regenerated.
 ```bash
 npx acorn --ecma2022 --module <file.js> > /dev/null
 ```
+Parsing is necessary but **not sufficient**: an import accidentally placed inside
+a header comment still parses, while the class below it extends an undefined
+identifier and aborts system init. After structural edits, also confirm every
+`class X extends Y` resolves to an import or a local declaration.
 A silent exit means it parses. This is the required syntax gate — a single bad
 `str_replace` (e.g. deleting a JSDoc comment boundary) has previously produced a
 blank character sheet at runtime, which acorn would have caught immediately.
@@ -75,9 +95,26 @@ npx eslint modules
   (e.g. characteristic-based weapon damage, suppression of gear effects). Changes
   to `ActiveEffectFFG` ripple into damage, dice pools, and derived stats — test
   those paths together.
-- **Dual sheet architecture.** Both AppV1 and ApplicationV2 sheet paths exist.
-  DOM/hook work that assumes one architecture often needs a parallel path for the
-  other; check both when touching sheet rendering or listeners.
+- **ApplicationV2 everywhere.** There is no V1 path left: sheets extend the
+  `apps/` bases, dialogs are `DialogV2`. `ActorSheetFFGV2` / `ItemSheetFFGV2` /
+  `AdversarySheetFFGV2` are deprecated empty aliases kept only so existing
+  `flags.core.sheetClass` values resolve — do not add behaviour to them.
+- **The V2 render pipeline assigns `innerHTML`, which never runs inline
+  `<script>` in a template.** Several dialogs used to wire themselves that way;
+  wire listeners in JS (or call `executeInlineScripts`) instead.
+- **`render` intent is explicit.** V1 re-rendered on every submit; the V2
+  pipeline threads a `render` flag through `_onSubmit` → `_updateObject` →
+  `document.update`. Anything shown that is computed in `getData` goes stale
+  without it. Prefer a targeted DOM update for hot paths (see
+  `ActorSheetFFG.computeVitalTrack` / `_paintVitalTrack`, shared with `getData`
+  so the two cannot drift).
+- **Never read `game.*` at module scope.** Modules are imported before `game` is
+  populated; a module-level `game.release`/`game.settings` read throws during
+  init and takes the whole system down. Evaluate lazily inside a function.
+- **`system.experience.available` is the BASE value.** Purchases subtract from it
+  via Active Effects, so it is not what the XP box shows. Edit mode suspends
+  those effects, so reading it there is base too. XP log entries record the
+  *effective* value — derive from the newest log entry, not the field.
 - **Never edit `lib/`.** It's vendored and shipped; fixes belong in `modules/`,
   not in third-party code.
 

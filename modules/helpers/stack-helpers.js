@@ -1,3 +1,5 @@
+const { DialogV2 } = foundry.applications.api;
+
 /**
  * Item stacks: splitting and trading.
  *
@@ -372,17 +374,16 @@ export default class StackHelpers {
   static async _onSocketTradeOffer(payload) {
     if (game.user.id !== payload.recipientUserId) return;
     const qtyLabel = Number(payload.quantity) > 1 ? `${payload.quantity} × ` : "";
-    const accepted = await Dialog.confirm({
-      title: this._t("SWFFG.Stacks.OfferTitle", "Trade Offer"),
+    const accepted = await DialogV2.confirm({
+      window: { title: this._t("SWFFG.Stacks.OfferTitle", "Trade Offer") },
       content: `<p>${this._t(
         "SWFFG.Stacks.OfferBody",
         "{user} offers {qty}{item} to {target}.",
         { user: payload.requesterName, qty: qtyLabel, item: `<strong>${payload.itemName}</strong>`, target: payload.targetName }
       )}</p>`,
-      yes: () => true,
-      no: () => false,
-      defaultYes: false,
-      options: { classes: ["dialog", "starwarsffg"] },
+      no: { default: true },
+      classes: ["dialog", "starwarsffg"],
+      rejectClose: false,
     });
 
     if (!accepted) {
@@ -635,66 +636,73 @@ export default class StackHelpers {
 
   /** Resolve to a clamped integer amount, or null on cancel. */
   static async _numberDialog({ title, content, confirmLabel }) {
-    const result = await Dialog.wait(
-      {
-        title,
-        content,
-        buttons: {
-          confirm: {
-            icon: '<i class="fas fa-check"></i>',
-            label: confirmLabel,
-            callback: (html) => {
-              const root = html instanceof HTMLElement ? html : html?.[0];
-              const amount = root?.querySelector('input[name="amount"]')?.value;
-              return Math.trunc(Number(amount));
-            },
-          },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
-            label: this._t("SWFFG.Cancel", "Cancel"),
-            callback: () => null,
+    const result = await DialogV2.wait({
+      window: { title },
+      classes: ["dialog", "starwarsffg"],
+      content,
+      buttons: [
+        {
+          action: "confirm",
+          icon: "fas fa-check",
+          label: confirmLabel,
+          default: true,
+          callback: (event, button, dialog) => {
+            // V1 passed the dialog's content here; the body already normalizes
+            // an HTMLElement, so bind the V2 element directly.
+            const html = dialog.element;
+            const root = html instanceof HTMLElement ? html : html?.[0];
+            const amount = root?.querySelector('input[name="amount"]')?.value;
+            return Math.trunc(Number(amount));
           },
         },
-        default: "confirm",
-        close: () => null,
-        render: (html) => this._wireRangeSync(html),
-      },
-      { classes: ["dialog", "starwarsffg"] }
-    );
+        {
+          action: "cancel",
+          icon: "fas fa-times",
+          label: this._t("SWFFG.Cancel", "Cancel"),
+          callback: () => null,
+        },
+      ],
+      // V2 render receives (event, dialog); rejectClose:false resolves to null on close.
+      render: (event, dialog) => this._wireRangeSync(dialog.element),
+      rejectClose: false,
+    });
     if (result == null || !Number.isFinite(result) || result < 1) return null;
     return result;
   }
 
   /** Resolve to {target, amount}, or null on cancel. */
   static async _formDialog({ title, content, confirmLabel }) {
-    const result = await Dialog.wait(
-      {
-        title,
-        content,
-        buttons: {
-          confirm: {
-            icon: '<i class="fas fa-check"></i>',
-            label: confirmLabel,
-            callback: (html) => {
-              const root = html instanceof HTMLElement ? html : html?.[0];
-              return {
-                target: root?.querySelector('select[name="target"]')?.value,
-                amount: Math.max(1, Math.trunc(Number(root?.querySelector('input[name="amount"]')?.value)) || 1),
-              };
-            },
-          },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
-            label: this._t("SWFFG.Cancel", "Cancel"),
-            callback: () => null,
+    const result = await DialogV2.wait({
+      window: { title },
+      classes: ["dialog", "starwarsffg"],
+      content,
+      buttons: [
+        {
+          action: "confirm",
+          icon: "fas fa-check",
+          label: confirmLabel,
+          default: true,
+          callback: (event, button, dialog) => {
+            // V1 passed the dialog's content here; the body already normalizes
+            // an HTMLElement, so bind the V2 element directly.
+            const html = dialog.element;
+            const root = html instanceof HTMLElement ? html : html?.[0];
+            return {
+              target: root?.querySelector('select[name="target"]')?.value,
+              amount: Math.max(1, Math.trunc(Number(root?.querySelector('input[name="amount"]')?.value)) || 1),
+            };
           },
         },
-        default: "confirm",
-        close: () => null,
-        render: (html) => this._wireRangeSync(html),
-      },
-      { classes: ["dialog", "starwarsffg"] }
-    );
+        {
+          action: "cancel",
+          icon: "fas fa-times",
+          label: this._t("SWFFG.Cancel", "Cancel"),
+          callback: () => null,
+        },
+      ],
+      render: (event, dialog) => this._wireRangeSync(dialog.element),
+      rejectClose: false,
+    });
     if (result == null || !result.target) return null;
     return result;
   }

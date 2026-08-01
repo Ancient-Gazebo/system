@@ -858,7 +858,12 @@ export class ActorFFG extends Actor {
   }
 
   /** @override **/
-  applyActiveEffects() {
+  applyActiveEffects(...args) {
+    // V14 made Actor#applyActiveEffects phase-based: core calls it with a string phase
+    // identifier and warns (removal in V16) when super is called without it. Forward
+    // whatever core passed (V13 passes nothing, V14 passes the phase). The pre-super
+    // mutations below are idempotent - they re-derive from live values each call - so
+    // V14 invoking this once per phase is safe.
     // collect force pool modifications since it appears the stat value is without AEs active
     // Only count effects that will actually be applied. allApplicableEffects() also yields
     // inactive (disabled/suppressed) effects, and core applyActiveEffects() skips those. If we
@@ -884,6 +889,6 @@ export class ActorFFG extends Actor {
         }
       }
     }
-    return super.applyActiveEffects();
+    return super.applyActiveEffects(...args);
   }
 }

@@ -12,20 +12,25 @@ export class AdversarySheetFFG extends ActorSheetFFG {
     return `${path}/ffg-adversary-sheet.html`;
   }
 
-  /** @override */
-  static get defaultOptions() {
-    return mergeObject(super.defaultOptions, {
-      classes: ["starwarsffg", "sheet", "actor", "adversary"],
-      template: "systems/starwarsffg/templates/actors/ffg-adversary-sheet.html",
-      width: 710,
-      height: 650,
-      tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "characteristics" }],
-      scrollY: [".tableWithHeader", ".tab", ".skillsGrid", ".skillsTablesGrid"],
-    });
-  }
+  // Only the adversary-specific delta from ActorSheetFFG. `position`, `tabs`,
+  // and `scrollY` are inherited and intentionally NOT re-declared: DEFAULT_OPTIONS
+  // arrays concatenate across the inheritance chain, so re-declaring `tabs` would
+  // bind two Tabs instances. The per-type template comes from get template().
+  static DEFAULT_OPTIONS = {
+    classes: ["starwarsffg", "sheet", "actor", "adversary", "v2"],
+  };
 
-  getData() {
-    const data = super.getData();
+  /**
+   * @override
+   * NOTE: `getData` MUST be async and MUST await `super.getData()` - the parent
+   * `ActorSheetFFG.getData` is async (returns a Promise). A sync `super.getData()`
+   * here hands back a Promise: `_updateSpecialization(data)` rejects with
+   * "Cannot read properties of undefined (reading 'slice')" (data.talentList),
+   * and the `data.limited` / `data.items` tweaks land on the Promise wrapper
+   * and are silently lost.
+   */
+  async getData() {
+    const data = await super.getData();
     switch (this.actor.type) {
       case "character":
         this.position.width = 595;

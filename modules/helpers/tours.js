@@ -1,3 +1,4 @@
+import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 class CharacterTour extends foundry.nue.Tour {
   #originalDeactivate = null;
 
@@ -137,7 +138,7 @@ class EditModeTour extends foundry.nue.Tour {
     const AEData = {
       changes: [{
         key: "system.characteristics.Brawn.value",
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: 3,
       }],
       name: "example",

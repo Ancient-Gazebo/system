@@ -1,58 +1,60 @@
 import {xpLogEarn} from "./helpers/actor-helpers.js";
 import ActorHelpers from "./helpers/actor-helpers.js";
+import { FFGFormApplication } from "./apps/ffg-form-application.js";
 
-const CanvasLayerClass = foundry?.canvas?.layers?.CanvasLayer || CanvasLayer;
-export class GroupManagerLayer extends CanvasLayerClass {
-  constructor() {
-    super();
-  }
+const { DialogV2 } = foundry.applications.api;
 
-  static get layerOptions() {
-    return mergeObject(super.layerOptions, {
-      canDragCreate: false,
-    });
-  }
-  /* -------------------------------------------- */
-  /*  Methods
-  /* -------------------------------------------- */
-
-  activate() {
-    super.activate();
-  }
-
-  deactivate() {
-    super.deactivate();
-  }
-
-  async draw() {
-    super.draw();
-  }
-
-  /* -------------------------------------------- */
-}
-
-export class GroupManager extends FormApplication {
-  constructor(options) {
-    super();
+export class GroupManager extends FFGFormApplication {
+  constructor(object = {}, options = {}) {
+    super(object, options);
     this.obligations = [];
     this.duties = [];
   }
 
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      classes: ["starwarsffg", "form", "group-manager"],
-      closeOnSubmit: false,
-      submitOnChange: true,
-      submitOnClose: true,
-      popOut: true,
-      editable: game.user.isGM,
-      resizable: true,
-      width: 330,
-      height: 900,
-      template: "systems/starwarsffg/templates/group-manager.html",
-      id: "group-manager",
+  static DEFAULT_OPTIONS = {
+    id: "group-manager",
+    classes: ["starwarsffg", "form", "group-manager"],
+    window: {
       title: "Group Manager",
-    });
+      resizable: true,
+    },
+    position: {
+      width: 500,
+      height: 900,
+    },
+    form: {
+      submitOnChange: true,
+      closeOnSubmit: false,
+    },
+    submitOnClose: true,
+  };
+
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/group-manager.html",
+    },
+  };
+
+  /**
+   * GM-only editable. Computed live -- it cannot live in the static
+   * DEFAULT_OPTIONS field, which is evaluated at class-definition time (module
+   * load), before `game.user` exists.
+   * @override
+   */
+  get isEditable() {
+    return game.user.isGM;
+  }
+
+  /**
+   * Lower bound for interactive resize. The Player Characters table needs
+   * ~500px to show all columns (Name / Wounds / Strain / Soak / Combat / XP)
+   * without clipping; don't let the user drag the window narrower than that.
+   * Enforced by the base setPosition.
+   * @override
+   */
+  _minDimensions() {
+    return { width: 500, height: 200 };
   }
 
   /* -------------------------------------------- */
@@ -61,17 +63,22 @@ export class GroupManager extends FormApplication {
    * Obtain module metadata and merge it with game settings which track current module visibility
    * @return {Object}   The data provided to the template when rendering the form
    */
-  getData() {
-    const players = game.users.contents.filter((u) => (!u.isGM || game.settings.get("starwarsffg", "GMCharactersInGroupManager")) && u.active);
+  async _prepareContext(_options) {
+    const pcListMode = game.settings.get("starwarsffg", "pcListMode");
+    const players = game.users.contents.filter((u) => {
+      const isValidUser = !u.isGM || game.settings.get("starwarsffg", "GMCharactersInGroupManager");
+      // if active mode is selected, only return users actively playing a character, otherwise return all valid users
+      if (pcListMode === "active") {
+        return isValidUser && u.active;
+      }
+      return isValidUser;
+    });
     if (players.length > 0) {
       players.connected = true;
     }
-
-    const pcListMode = game.settings.get("starwarsffg", "pcListMode");
     const characters = [];
     let obligationRangeStart = 0;
     let dutyRangeStart = 0;
-
     if (pcListMode === "active") {
       players.forEach((player) => {
         if (player.character) {
@@ -88,14 +95,18 @@ export class GroupManager extends FormApplication {
       });
     } else if (pcListMode === "owned") {
       game.actors.filter((actor) => {
-        for (let player of players) {
-          if (actor.testUserPermission(player, "OWNER")) {
-            // use actor if any active player has ownership
-            return true;
-          }
-        }
-        return false;
-      })
+      // filter to characters only
+  if (actor.type !== "character") {
+    return false;
+  }
+  for (let player of players) {
+    if (actor.testUserPermission(player, "OWNER")) {
+      // use actor if any player has ownership
+      return true;
+    }
+  }
+  return false;
+})
       .forEach((c) => {
         try {
           obligationRangeStart = this._addCharacterObligationDuty(c, obligationRangeStart, c.system.obligationlist, "obligations");
@@ -117,7 +128,6 @@ export class GroupManager extends FormApplication {
     let obligations = this.obligations;
     players.hasDuty = this.duties?.length;
     let duties = this.duties;
-    if (!isGM) this.position.height = 470;
 
     const labels = {
       light: game.settings.get("starwarsffg", "destiny-pool-light"),
@@ -130,11 +140,15 @@ export class GroupManager extends FormApplication {
   /* -------------------------------------------- */
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.element);
+
+    // The PC table is shorter for non-GMs (no editable destiny/XP controls).
+    if (!game.user.isGM) this.setPosition({ height: 470 });
 
     // Everything below here is only needed if the sheet is editable
-    if (!this.options.editable) return;
+    if (!this.isEditable) return;
 
     // Flip destiny pool DARK to LIGHT
     html.find(".destiny-flip-dtl").click((ev) => {
@@ -330,19 +344,24 @@ export class GroupManager extends FormApplication {
   }
 
   async _grantXP(character) {
+    if (character?.type !== "character") {
+      return;
+    }
     const id = foundry.utils.randomID();
     const description = game.i18n.localize("SWFFG.GrantXPTo") + ` ${character.name}...`;
     const content = await foundry.applications.handlebars.renderTemplate("systems/starwarsffg/templates/grant-xp.html", {
       id,
     });
 
-    new Dialog({
-      title: description,
+    DialogV2.wait({
+      window: { title: description },
       content,
-      buttons: {
-        one: {
-          icon: '<i class="fas fa-check"></i>',
+      buttons: [
+        {
+          action: "one",
+          icon: "fas fa-check",
           label: game.i18n.localize("SWFFG.GrantXP"),
+          default: true,
           callback: async () => {
             const container = document.getElementById(id);
             const amount = container.querySelector('input[name="amount"]');
@@ -363,12 +382,14 @@ export class GroupManager extends FormApplication {
             ui.notifications.info(`Granted ${amount.value} XP to ${character.name}.`);
           },
         },
-        two: {
-          icon: '<i class="fas fa-times"></i>',
+        {
+          action: "two",
+          icon: "fas fa-times",
           label: game.i18n.localize("SWFFG.Cancel"),
         },
-      },
-    }).render(true);
+      ],
+      rejectClose: false,
+    });
   }
 
   async _bulkXP(characters) {
@@ -378,19 +399,24 @@ export class GroupManager extends FormApplication {
       id,
     });
 
-    new Dialog({
-      title: description,
+    DialogV2.wait({
+      window: { title: description },
       content,
-      buttons: {
-        one: {
-          icon: '<i class="fas fa-check"></i>',
+      buttons: [
+        {
+          action: "one",
+          icon: "fas fa-check",
           label: game.i18n.localize("SWFFG.GrantXP"),
+          default: true,
           callback: async () => {
             const container = document.getElementById(id);
             const amount = container.querySelector('input[name="amount"]');
             const note = container.querySelector('input[name="note"]').value;
             for (const c of characters) {
               const character = game.actors.get(c);
+              if (character?.type !== "character") {
+                continue;
+              }
               // Effective (sheet-visible) values for the log, read before edit mode suspends the
               // purchase active effects that reduce available XP.
               const loggedAvailable = +character.system.experience.available + +amount.value;
@@ -408,12 +434,14 @@ export class GroupManager extends FormApplication {
             }
           },
         },
-        two: {
-          icon: '<i class="fas fa-times"></i>',
+        {
+          action: "two",
+          icon: "fas fa-times",
           label: game.i18n.localize("SWFFG.Cancel"),
         },
-      },
-    }).render(true);
+      ],
+      rejectClose: false,
+    });
   }
 }
 

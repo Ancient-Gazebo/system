@@ -1,3 +1,37 @@
+`2.1.x` - Foundry V14 migration
+* This build runs on **Foundry V14** (`compatibility.verified: 14`) while remaining
+  compatible with V13 (`minimum: 13`). Version-dependent behaviour is feature-detected
+  at runtime rather than branched at build time, so one build serves both.
+* Application framework: every window is now native ApplicationV2. The actor, item and
+  adversary sheets run on shared `FFGDocumentSheet` / `FFGActorSheet` bases (which bridge
+  the existing `getData` / `activateListeners` code), the ~13 settings, importer, editor
+  and roller windows on `FFGFormApplication`, and all 36 dialogs on DialogV2. The V1/V2
+  sheet split was collapsed - `ActorSheetFFGV2` / `ItemSheetFFGV2` / `AdversarySheetFFGV2`
+  remain as deprecated aliases so existing `flags.core.sheetClass` assignments keep working.
+* V14 removals and renames handled: ActiveEffect `duration` schema (a malformed core
+  duration previously aborted every effect-bearing item create), `TokenDocument#effects`
+  and `#overlayEffect`, `ActiveEffect#icon`, numeric change `#mode`, `CHAT_MESSAGE_TYPES`,
+  the `renderChatMessage` hook, `rollMode`/`applyRollMode` (now `messageMode`/`applyMode`),
+  `mergeObject`'s `performDeletions` option, and bare `randomID` / `mergeObject` /
+  `AudioHelper` / `FilePicker` globals.
+* Fixes surfaced by the migration:
+  * Dice-status durations (Boost/Setback Next Check, per-combat statuses) moved from
+    `system.duration` to flags - V14's strict effect model silently stripped the former,
+    which would have stopped those statuses being consumed.
+  * `ActiveEffectFFG.getStackCount` no longer throws on worlds without the Status Icon
+    Counters module (this also affected V13).
+  * Templates that wired themselves with an inline `<script>` (crew, currency and language
+    settings, initiative) work again - the V2 pipeline assigns innerHTML, which never runs
+    inline scripts; the initiative dice-pool inputs are now wired in JS.
+  * XP refunds record the effective (sheet-visible) available XP in the log across all five
+    refund paths, instead of the base value that Active Effects modify.
+  * Manually typed values refresh whatever derives from them (damage track, minion alive
+    counts and group-skill ranks); the damage track repaints locally so frequent edits do
+    not pay for a full sheet render.
+  * Roll-simulation setback dice were being dropped (`setBackDice` vs `setbackDice`).
+* Installing as a separate system id offers a one-time import of a duplicated world's
+  flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
+
 `Unreleased`
 * Enhancements:
   * Item stacks can now be split. A divide button appears on any weapon, armour, gear, or cargo/storage row holding more than one, opening a dialog to peel off part of the stack (e.g. 7 stimpacks into 4 + 3) as a new sibling stack in the same inventory.

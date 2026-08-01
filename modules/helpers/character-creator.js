@@ -1,8 +1,9 @@
+import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 import ActorHelpers, {xpLogEarn, xpLogSpend} from "./actor-helpers.js";
 import DiceHelpers from "./dice-helpers.js";
 import {sortDataBy, addIfNotExist} from "../actors/actor-sheet-ffg.js";
 
-const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
+const { ApplicationV2, HandlebarsApplicationMixin, DialogV2 } = foundry.applications.api
 
 export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) {
   // https://foundryvtt.wiki/en/development/api/applicationv2
@@ -667,7 +668,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
           // do not include items disallowed by the GM
           continue;
         }
-        item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+        item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
         preparedItems.push(item);
       }
     }
@@ -692,7 +693,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
       }
       const items = await pack.getDocuments();
       for (const item of items) {
-        item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+        item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
         if (item.system.type === "culture") {
           cultures.push(item);
         } else if (item.system.type === "hook") {
@@ -704,7 +705,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
     }
 
     for (const item of game.items.filter(i => i.type === "background")) {
-      item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+      item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
       if (item.system.type === "culture") {
         cultures.push(item);
       } else if (item.system.type === "hook") {
@@ -736,13 +737,13 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
       }
       const items = await pack.getDocuments();
       for (const item of items) {
-        item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+        item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
         obligations.push(item);
       }
     }
 
     for (const item of game.items.filter(i => i.type === "obligation")) {
-      item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+      item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
       obligations.push(item);
     }
 
@@ -764,13 +765,13 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
       }
       const items = await pack.getDocuments();
       for (const item of items) {
-        item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+        item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
         species.push(item);
       }
     }
 
     for (const item of game.items.filter(i => i.type === "species")) {
-      item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+      item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
       species.push(item);
     }
 
@@ -792,13 +793,13 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
       }
       const items = await pack.getDocuments();
       for (const item of items) {
-        item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+        item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
         careers.push(item);
       }
     }
 
     for (const item of game.items.filter(i => i.type === "careers")) {
-      item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+      item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
       careers.push(item);
     }
 
@@ -820,13 +821,13 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
       }
       const items = await pack.getDocuments();
       for (const item of items) {
-        item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+        item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
         motivations.push(item);
       }
     }
 
     for (const item of game.items.filter(i => i.type === "motivation")) {
-      item.pill = await foundry.applications.ux.TextEditor.enrichHTML(item?.link);
+      item.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(item?.link);
       motivations.push(item);
     }
 
@@ -982,7 +983,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
     for (const specData of Object.values(selectedCareer.system.specializations)) {
       const specItem = await fromUuid(specData.source);
       if (specItem) {
-        specItem.pill = await foundry.applications.ux.TextEditor.enrichHTML(specItem?.link);
+        specItem.pill = await foundry.applications.ux.TextEditor.implementation.enrichHTML(specItem?.link);
         this.data.available.specializations.push(specItem);
       } else {
         CONFIG.logger.debug(`Unable to find specialization with UUID ${specData.source}`);
@@ -1159,7 +1160,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
           name: `attr${nk}`,
           changes: [{
             key: `system.skills.${skillPurchase}.rank`,
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: 1,
           }],
         };
@@ -1184,7 +1185,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
           name: `attr${nk}`,
           changes: [{
             key: `system.skills.${skillPurchase}.rank`,
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: 1,
           }],
         };
@@ -1309,14 +1310,17 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
       outCareer = sortDataBy(outCareer, "name");
       universal = sortDataBy(universal, "name");
       const baseCost = (this.data.purchases.xp.specializations.length + 1) * 10;
+      const increasedCost = baseCost + 10;
       if (baseCost > availableXP) {
         return ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
+      } else if (increasedCost > availableXP) {
+        outCareer = [];
       }
       const itemType =  game.i18n.localize("TYPES.Item.specialization");
       groups.push("Universal");
       groups.push("In Career");
       groups.push("Out of Career");
-      const content = await foundry.applications.handlebars.renderTemplate(template, { inCareer, outCareer, universal, baseCost, increasedCost: baseCost, itemType: itemType, itemCategory: "specialization", groups: groups });
+      const content = await foundry.applications.handlebars.renderTemplate(template, { inCareer, outCareer, universal, baseCost, increasedCost, itemType: itemType, itemCategory: "specialization", groups: groups });
       // actually show the purchase menu
       await this.showPurchaseConfirmation("specializations", content)
   }
@@ -1476,44 +1480,44 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
   }
 
   async showPurchaseConfirmation(itemType, content) {
-    const dialog = new Dialog(
-      {
-        title: game.i18n.format("SWFFG.Actors.Sheets.Purchase.DialogTitle", {itemType: itemType}),
-        content: content,
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
-            label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (purchaseWindow) => {
-              CONFIG.logger.debug(purchaseWindow);
-              const cost = $("#ffgPurchase option:selected", purchaseWindow).data("cost");
-              const selectedUuid = $("#ffgPurchase option:selected", purchaseWindow).data("source");
+    DialogV2.wait({
+      window: { title: game.i18n.format("SWFFG.Actors.Sheets.Purchase.DialogTitle", {itemType: itemType}) },
+      classes: ["dialog", "starwarsffg"],
+      content: content,
+      buttons: [
+        {
+          action: "done",
+          icon: "fa-regular fa-circle-up",
+          label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
+          default: true,
+          callback: async (event, button, dialog) => {
+            const selected = dialog.element.querySelector("#ffgPurchase")?.selectedOptions?.[0];
+            const cost = Number(selected?.dataset.cost);
+            const selectedUuid = selected?.dataset.source;
 
-              CONFIG.logger.debug(cost, selectedUuid);
+            CONFIG.logger.debug(cost, selectedUuid);
 
-              const selectedItem = await fromUuid(selectedUuid);
-              if (!selectedItem) {
-                ui.notifications.warn("Unable to locate purchased specialization, sorry!");
-                return;
-              }
-              this.data.purchases.xp[itemType].push({
-                item: selectedItem,
-                cost: cost,
-              });
-              // rebuild the actor to apply the changes
-              await this.showCharacterStatusShim();
-            },
-          },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
-            label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
+            const selectedItem = await fromUuid(selectedUuid);
+            if (!selectedItem) {
+              ui.notifications.warn("Unable to locate purchased specialization, sorry!");
+              return;
+            }
+            this.data.purchases.xp[itemType].push({
+              item: selectedItem,
+              cost: cost,
+            });
+            // rebuild the actor to apply the changes
+            await this.showCharacterStatusShim();
           },
         },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        {
+          action: "cancel",
+          icon: "fas fa-cancel",
+          label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
+        },
+      ],
+      rejectClose: false,
+    });
   }
 
   calcXp() {
@@ -1795,7 +1799,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
           name: `attr${nk}`,
           changes: [{
             key: `system.skills.${skillPurchase}.rank`,
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: 1,
           }],
         };
@@ -1820,7 +1824,7 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
           name: `attr${nk}`,
           changes: [{
             key: `system.skills.${skillPurchase}.rank`,
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: 1,
           }],
         };

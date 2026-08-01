@@ -1,10 +1,21 @@
 import ModifierHelpers from "./helpers/modifiers.js";
+import { AE_MODES } from "./config/ffg-active-effect-modes.js";
+
+const { DialogV2 } = foundry.applications.api;
 
 /**
  * Handles all logic related to migrating the system to a new version, including sending notifications
  * @returns {Promise<void>}
  */
 export async function handleUpdate() {
+  // World migrations and the world-scoped `systemMigrationVersion` write below
+  // are GM-only. A non-GM client calling game.settings.set() on a world setting
+  // throws ("may not modify world-level setting"); because this is awaited at the
+  // top of the "ready" hook, that rejection would abort the entire hook - and
+  // silently drop the Destiny Tracker and other ready-time UI for every player.
+  // The shared world setting is persisted once by the GM, so players never need
+  // to run this.
+  if (!game.user.isGM) return;
   const registeredVersion = game.settings.get("starwarsffg", "systemMigrationVersion");
   const runningVersion = game.system.version;
   if (registeredVersion !== runningVersion) {
@@ -58,7 +69,7 @@ async function sendChanges(newVersion) {
   const html = await foundry.applications.handlebars.renderTemplate(template, { version: newVersion });
   const messageData = {
     user: game.user.id,
-    type: CONST.CHAT_MESSAGE_TYPES.OTHER,
+    style: CONST.CHAT_MESSAGE_STYLES.OTHER,
     content: html,
   };
   ChatMessage.create(messageData);
@@ -72,7 +83,7 @@ async function warnTheme() {
   if (game.settings.get("starwarsffg", "ui-uitheme") === "default") {
     const messageData = {
       user: game.user.id,
-      type: CONST.CHAT_MESSAGE_TYPES.OTHER,
+      style: CONST.CHAT_MESSAGE_STYLES.OTHER,
       content: "You are using an unsupported theme. Expected issues, or swap to the Mandar theme.<br>(This message will only show once.)",
     };
     ChatMessage.create(messageData);
@@ -296,7 +307,7 @@ async function migrateTo1907() {
                   for (const curMod of explodedMods) {
                     changes.push({
                       key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-                      mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+                      mode: AE_MODES.ADD,
                       value: item.system.talents[`talent${i}`].attributes[nk].value,
                     });
                   }
@@ -337,7 +348,7 @@ async function migrateTo1907() {
                   for (const curMod of explodedMods) {
                     changes.push({
                       key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-                      mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+                      mode: AE_MODES.ADD,
                       value: item.system.upgrades[`upgrade${i}`].attributes[nk].value,
                     });
                   }
@@ -380,7 +391,7 @@ async function migrateTo1907() {
                   for (const curMod of explodedMods) {
                     changes.push({
                       key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-                      mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+                      mode: AE_MODES.ADD,
                       value: item.system.upgrades[`upgrade${i}`].attributes[nk].value,
                     });
                   }
@@ -491,7 +502,7 @@ export async function migrateSpeciesInherentEffects() {
         if (idx >= 0) {
           changes[idx].value = attr.value;
         } else {
-          changes.push({ key, mode: CONST.ACTIVE_EFFECT_MODES.ADD, value: attr.value });
+          changes.push({ key, mode: AE_MODES.ADD, value: attr.value });
         }
       }
     }
@@ -512,8 +523,11 @@ export async function migrateSpeciesInherentEffects() {
   // Effect changes are stored as strings), avoiding needless updates that would re-render sheets.
   const changesEqual = (a, b) => {
     if (a.length !== b.length) return false;
+    // `c.type ?? c.mode`: V14 stores the change kind as the string `type` and keeps
+    // `mode` only as a deprecated getter (removed in V16). Short-circuiting means
+    // `mode` is never read when `type` exists, so this warns on neither generation.
     const norm = (list) => [...list]
-      .map(c => `${c.key}\u0000${c.mode}\u0000${c.value}`)
+      .map(c => `${c.key}\u0000${c.type ?? c.mode}\u0000${c.value}`)
       .sort();
     const na = norm(a);
     const nb = norm(b);
@@ -650,19 +664,18 @@ export async function cleanupSpeciesTalentEffects() {
 
 async function warnUnsupportedWorld() {
   const content = game.i18n.localize("SWFFG.Migrate.Unsupported.Text");
-  new Dialog(
-    {
-      title: game.i18n.localize("SWFFG.Migrate.Unsupported.Title"),
-      content: content,
-      buttons: {
-        ok: {
-          icon: '<i class="fas fa-exclamation"></i>',
-          label: game.i18n.localize("SWFFG.Migrate.Unsupported.Button"),
-        },
-      },
-    },
-    {
-      classes: ["dialog", "starwarsffg"],
-    }
-  ).render(true);
+  DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Migrate.Unsupported.Title") },
+        classes: ["dialog", "starwarsffg"],
+        content: content,
+        buttons: [
+          {
+            action: "ok",
+            icon: "fas fa-exclamation",
+            label: game.i18n.localize("SWFFG.Migrate.Unsupported.Button"),
+            default: true,
+          },
+        ],
+        rejectClose: false,
+      });
 }

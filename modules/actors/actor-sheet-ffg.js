@@ -28,9 +28,13 @@ import {
 } from "../helpers/crew.js";
 import {DicePoolFFG} from "../dice/pool.js";
 import {get_dice_pool} from "../helpers/dice-helpers.js";
+import { FFGActorSheet } from "../apps/ffg-actor-sheet.js";
 import {itemPillHover} from "../swffg-main.js";
+import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 
-export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
+const { DialogV2 } = foundry.applications.api;
+
+export class ActorSheetFFG extends FFGActorSheet {
   constructor(...args) {
     super(...args);
     /**
@@ -46,17 +50,17 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
   pools = new Map();
 
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      classes: ["starwarsffg", "sheet", "actor"],
-      template: "systems/starwarsffg/templates/actors/ffg-character-sheet.html",
-      width: 710,
-      height: 650,
-      tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "characteristics" }],
-      scrollY: [".tableWithHeader", ".tab", ".skillsGrid", ".skillsTablesGrid"],
-    });
-  }
+  static DEFAULT_OPTIONS = {
+    // `v2` is required, not cosmetic: the stylesheets key actor-sheet layout
+    // off `.starwarsffg.sheet.actor.v2`. The V2-styled variant was the
+    // makeDefault sheet pre-migration, so the collapsed sheet keeps the class.
+    // Submit flags / dragDrop / secrets / resizable are inherited from
+    // FFGActorSheet; the per-type template comes from get template().
+    classes: ["starwarsffg", "sheet", "actor", "v2"],
+    position: { width: 710, height: 650 },
+    tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "characteristics" }],
+    scrollY: [".tableWithHeader", ".tab", ".skillsGrid", ".skillsTablesGrid"],
+  };
 
   /** @override */
   get template() {
@@ -177,13 +181,15 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
             await ActorHelpers.endEditMode(this.actor, AEState, true);
           };
 
-          const buttons = {
-            purchase: {
-              icon: '<i class="fas fa-hourglass"></i>',
+          const buttons = [
+            {
+              action: "purchase",
+              icon: "fas fa-hourglass",
               label: game.i18n.localize("SWFFG.DragDrop.PurchaseItem"),
+              default: true,
               callback: async () => await performPurchase(cost),
             },
-          };
+          ];
 
           // Force and Destiny mentor rule: the basic form of a Force power can be learned for a
           // 5 XP discount (to a minimum cost of 5 XP) when the character has a mentor. Offer it as
@@ -191,28 +197,30 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
           if (itemData.type === "forcepower") {
             const mentorCost = Math.max(cost - 5, 5);
             if (mentorCost < cost) {
-              buttons.mentor = {
-                icon: '<i class="fas fa-user-graduate"></i>',
+              buttons.push({
+                action: "mentor",
+                icon: "fas fa-user-graduate",
                 label: game.i18n.format("SWFFG.DragDrop.PurchaseItemMentor", { cost: mentorCost }),
                 callback: async () => await performPurchase(mentorCost, ` (${game.i18n.localize("SWFFG.DragDrop.MentorDiscountLog")})`),
-              };
+              });
             }
           }
 
-          buttons.grant = {
-            icon: '<i class="fas fa-recycle"></i>',
+          buttons.push({
+            action: "grant",
+            icon: "fas fa-recycle",
             label: game.i18n.localize("SWFFG.DragDrop.GrantItem"),
-          };
+          });
 
-          new Dialog(
-          {
-            title: game.i18n.localize("SWFFG.DragDrop.Title"),
-            buttons: buttons,
-          },
-          {
+          // Awaited so the XP spend resolves before the item is created below
+          // (V1 rendered without awaiting and relied on the callback landing later).
+          await DialogV2.wait({
+            window: { title: game.i18n.localize("SWFFG.DragDrop.Title") },
             classes: ["dialog", "starwarsffg"],
-          }
-        ).render(true);
+            content: "",
+            buttons,
+            rejectClose: false,
+          });
         }
       }
 
@@ -267,7 +275,12 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
   /** @override */
   async getData(options) {
     const data = await super.getData();
-    data.classType = this.constructor.name;
+    // The sheet templates branch on `contains classType "V2"` to render the V2
+    // layout (icon tab strip, refined panels, shown-by-default tabs). After the
+    // V2-full collapse the real classes are `ActorSheetFFG`/`AdversarySheetFFG`
+    // (no "V2" suffix), so carry the V2 marker explicitly - these ARE the V2
+    // sheets. Without it the templates fall back to the retired V1 layout.
+    data.classType = this.constructor.name.includes("V2") ? this.constructor.name : `${this.constructor.name}V2`;
 
     // Compatibility for Foundry 0.8.x with backwards compatibility (hopefully) for 0.7.x
     const actorData = this.actor.toObject(false);
@@ -501,11 +514,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     for (const stat of ["wounds", "strain", "hullTrauma", "systemStrain"]) {
       const s = data.data?.stats?.[stat];
       if (!s || s.max === undefined) continue;
-      const ratio = (Number(s.max) || 0) > 0 ? (Number(s.value) || 0) / Number(s.max) : 0;
-      data.vitalTracks[stat] = {
-        pct: Math.max(0, Math.min(100, Math.round(ratio * 100))),
-        color: ratio >= 0.8 ? "#a51f17" : ratio >= 0.5 ? "#c8902e" : "#3f7d3a",
-      };
+      data.vitalTracks[stat] = ActorSheetFFG.computeVitalTrack(s.value, s.max);
     }
 
     // Force pool visibility for the Skills-tab Force chip — same unset-means-on
@@ -538,14 +547,52 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     // convert jquery element to HTMLElement for usage with Foundry calls
     const htmlElement = html.get(0);
 
-    // Activate tabs
-    let tabs = html.find(".tabs");
-    let initial = this._sheetTab;
-    new foundry.applications.ux.Tabs(tabs, {
-      initial: initial,
-      callback: (clicked) => {
-        this._sheetTab = clicked.data("tab");
-      },
+    // Tabs are bound by FFGDocumentSheet._activateCoreListeners using the
+    // DEFAULT_OPTIONS.tabs config and the per-document _activeTabCache. Do not
+    // re-bind here - a second Tabs controller on the same nav would race and
+    // immediately activate the default tab, defeating the cache.
+
+    // Wounds / strain / hull trauma / system strain: repaint the damage track
+    // immediately and skip the full re-render.
+    //
+    // These are the most frequently edited fields on the sheet, and a full
+    // render rebuilds everything getData produces (talent lists, dice pools,
+    // inventory organisation, ...), which is heavy enough to feel laggy on every
+    // keystroke-commit. The only thing on screen that derives from these values
+    // is the track itself, so paint it here and submit with render:false.
+    //
+    // Minions are the exception: their alive count and every group-skill rank
+    // are derived from wounds in prepareDerivedData, so they still need the
+    // render to stay correct.
+    html.find('input[name^="data.stats."]').on("change", async (event) => {
+      const input = event.currentTarget;
+      const name = input.getAttribute("name") || "";
+      if (!/\.(value|max)$/.test(name)) return;
+      event.stopPropagation();
+      this._paintVitalTrack(input);
+      await this._onSubmit(event, { render: this.actor?.type === "minion" });
+    });
+
+    // Skill/characteristic edits drive values that are only rebuilt during
+    // render: a minion's group-skill rank is derived in prepareDerivedData from
+    // the group's quantity, and every skill and characteristic feeds the dice
+    // pools shown on the sheet. These bind directly on the inputs and
+    // stopPropagation so the form-level change handler does not submit a second
+    // time for the same edit. `change` fires on commit (blur / click), so the
+    // value is stored before the re-render.
+    html.find("input.careerskill-toggle").on("change", async (event) => {
+      event.stopPropagation();
+      await this._onSubmit(event, { render: true });
+    });
+
+    html.find("input.careerskill-rank").on("change", async (event) => {
+      event.stopPropagation();
+      await this._onSubmit(event, { render: true });
+    });
+
+    html.find('input[name^="data.characteristics."][name$=".value"]').on("change", async (event) => {
+      event.stopPropagation();
+      await this._onSubmit(event, { render: true });
     });
 
     html.find(".alt-tab").click((ev) => {
@@ -1057,26 +1104,26 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       const action = game.settings.get("starwarsffg", "HealingItemAction");
       if (action === '0') {
           // prompt: ask the user whether to rest or reset
-          new Dialog(
-              {
-                  title: game.i18n.localize("SWFFG.MedicalItemNameUseTitle"),
-                  buttons: {
-                      done: {
-                          icon: '<i class="fas fa-hourglass"></i>',
-                          label: game.i18n.localize("SWFFG.MedicalItemNameUseRest"),
-                          callback: () => doRest(),
-                      },
-                      cancel: {
-                          icon: '<i class="fas fa-recycle"></i>',
-                          label: game.i18n.localize("SWFFG.MedicalItemNameUseReset"),
-                          callback: () => doReset(),
-                      },
-                  },
-              },
-              {
-                  classes: ["dialog", "starwarsffg"],
-              }
-          ).render(true);
+          DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.MedicalItemNameUseTitle") },
+        classes: ["dialog", "starwarsffg"],
+        buttons: [
+          {
+            action: "done",
+            icon: "fas fa-hourglass",
+            label: game.i18n.localize("SWFFG.MedicalItemNameUseRest"),
+            default: true,
+            callback: (event, button, dialog) => { return doRest(); },
+          },
+          {
+            action: "cancel",
+            icon: "fas fa-recycle",
+            label: game.i18n.localize("SWFFG.MedicalItemNameUseReset"),
+            callback: (event, button, dialog) => { return doReset(); },
+          },
+        ],
+        rejectClose: false,
+      });
       } else if (action === '1') {
         doRest();
       } else if (action === '2') {
@@ -1095,7 +1142,19 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       const s = this.actor?.system?.stats?.[stat];
       if (!s) return;
       const val = Math.max(0, (Number(s.value) || 0) + dir);
-      await this.actor.update({ [`system.stats.${stat}.value`]: val });
+      // Mirror the typed-edit fast path: write the new value into the input and
+      // repaint the track locally, then suppress the automatic re-render for
+      // everything except minions (whose alive count and group-skill ranks are
+      // derived from wounds). Without this every click rebuilt the whole sheet.
+      const input = ev.currentTarget
+        .closest(".ffg2-vital-body")
+        ?.querySelector(`[name="data.stats.${stat}.value"]`);
+      const needsRender = this.actor?.type === "minion";
+      if (input && !needsRender) {
+        input.value = String(val);
+        this._paintVitalTrack(input);
+      }
+      await this.actor.update({ [`system.stats.${stat}.value`]: val }, { render: needsRender });
     });
 
     // Force chip steppers: adjust the committed Force dice (forcePool.value),
@@ -1295,14 +1354,13 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
       // Optional confirmation so an accidental click doesn't instantly destroy an inventory item.
       if (game.settings.get("starwarsffg", "confirmItemDelete")) {
-        const confirmed = await Dialog.confirm({
-          title: game.i18n.localize("SWFFG.DeleteItem.Title"),
+        const confirmed = await DialogV2.confirm({
+          window: { title: game.i18n.localize("SWFFG.DeleteItem.Title") },
           content: `<p>${game.i18n.format("SWFFG.DeleteItem.Content", { name: Handlebars.escapeExpression(item.name) })}</p>`,
-          yes: () => true,
-          no: () => false,
-          defaultYes: false,
-          options: { classes: ["dialog", "starwarsffg"] },
-        });
+          no: { default: true },
+          classes: ["dialog", "starwarsffg"],
+      rejectClose: false,
+    });
         if (!confirmed) return;
       }
 
@@ -1400,24 +1458,27 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
         }
       );
 
-      new Dialog(
-        {
-          title: game.i18n.localize("SWFFG.Crew.Title"),
-          content: content,
-          buttons: {
-            confirm: {
-              label: game.i18n.localize("SWFFG.Crew.Role.Update"),
-              callback: async (html) => {
+      DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Crew.Title") },
+        content: content,
+        buttons: [
+          {
+            action: "confirm",
+            label: game.i18n.localize("SWFFG.Crew.Role.Update"),
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const html = $(dialog.element);
                 if(!this.actor.verifyEditModeIsNotEnabled()) {
                   return;
                 }
                 const newRoles = html.find('[name="select-many-things"]').val();
                 await updateRoles(actor, crew_member_id, newRoles);
-              }
-            }
-          }
-        },
-      ).render(true);
+              },
+          },
+        ],
+        rejectClose: false,
+      });
     });
 
     // === Talent organization: manual sort + custom collapsible tabs ===
@@ -1443,11 +1504,12 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       ev.preventDefault();
       ev.stopPropagation();
       const tabId = $(ev.currentTarget).data("tabId");
-      const confirmed = await Dialog.confirm({
-        title: game.i18n.localize("SWFFG.TalentOrganization.DeleteTabConfirmTitle"),
+      const confirmed = await DialogV2.confirm({
+        window: { title: game.i18n.localize("SWFFG.TalentOrganization.DeleteTabConfirmTitle") },
         content: `<p>${game.i18n.localize("SWFFG.TalentOrganization.DeleteTabConfirm")}</p>`,
-        defaultYes: false,
-      });
+        no: { default: true },
+      rejectClose: false,
+    });
       if (!confirmed) return;
       await TalentOrganization.deleteTab(this.actor, tabId);
     });
@@ -1569,11 +1631,12 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       ev.stopPropagation();
       const tabId = $(ev.currentTarget).data("tabId");
       const { Org } = orgOf(ev.currentTarget);
-      const confirmed = await Dialog.confirm({
-        title: game.i18n.localize(`${Org.LOC}.DeleteTabConfirmTitle`),
+      const confirmed = await DialogV2.confirm({
+        window: { title: game.i18n.localize(`${Org.LOC}.DeleteTabConfirmTitle`) },
         content: `<p>${game.i18n.localize(`${Org.LOC}.DeleteTabConfirm`)}</p>`,
-        defaultYes: false,
-      });
+        no: { default: true },
+      rejectClose: false,
+    });
       if (!confirmed) return;
       await Org.deleteTab(this.actor, tabId);
     });
@@ -1689,7 +1752,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       await Org.moveGear(this.actor, getOrgList(itemType), data.gearKey, targetTabId, beforeKey);
     });
 
-    html.find(".item-info").click((ev) => {
+    html.find(".item-info").click(async (ev) => {
       if(!this.actor.verifyEditModeIsNotEnabled()) {
         return;
       }
@@ -1704,18 +1767,26 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       });
 
       const title = `${game.i18n.localize("SWFFG.TalentSource")} ${item.name}`;
+      // V1 Dialog accepted a `template` option and rendered `content` through it;
+      // DialogV2 takes an HTML string, so pre-render the same template here.
+      const talentSourceContent = await foundry.applications.handlebars.renderTemplate(
+        "systems/starwarsffg/templates/actors/dialogs/ffg-talent-selector.html",
+        { title, content: { source: item.source } }
+      );
 
-      new Dialog(
-        {
-          title: title,
-          content: {
-            source: item.source,
-          },
-          buttons: {
-            done: {
-              icon: '<i class="fas fa-check"></i>',
-              label: game.i18n.localize("SWFFG.ButtonAccept"),
-              callback: (html) => {
+      DialogV2.wait({
+        window: { title: title },
+        classes: ["dialog", "starwarsffg"],
+        content: talentSourceContent,
+        buttons: [
+          {
+            action: "done",
+            icon: "fas fa-check",
+            label: game.i18n.localize("SWFFG.ButtonAccept"),
+            default: true,
+            callback: (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const html = $(dialog.element);
                 if(!this.actor.verifyEditModeIsNotEnabled()) {
                   return;
                 }
@@ -1727,18 +1798,15 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
                   this.actor.items.get(id)?.delete();
                 }
               },
-            },
-            cancel: {
-              icon: '<i class="fas fa-times"></i>',
-              label: game.i18n.localize("SWFFG.Cancel"),
-            },
           },
-        },
-        {
-          classes: ["dialog", "starwarsffg"],
-          template: "systems/starwarsffg/templates/actors/dialogs/ffg-talent-selector.html",
-        }
-      ).render(true);
+          {
+            action: "cancel",
+            icon: "fas fa-times",
+            label: game.i18n.localize("SWFFG.Cancel"),
+          },
+        ],
+        rejectClose: false,
+      });
     });
 
     // Edit Gear Quantities
@@ -1858,14 +1926,18 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
           <input type="text" name="custom" style="width: 100%;" />
         </div>
       </form>`;
-      new Dialog({
-        title: game.i18n.localize("SWFFG.Languages.Add"),
+      DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Languages.Add") },
         content,
-        buttons: {
-          add: {
-            icon: '<i class="fas fa-check"></i>',
+        buttons: [
+          {
+            action: "add",
+            icon: "fas fa-check",
             label: game.i18n.localize("SWFFG.Languages.Add"),
-            callback: async (dlg) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+              // V1 passed the dialog's jQuery content as this parameter; rebind it.
+              const dlg = $(dialog.element);
               const selected = dlg.find('select[name="language"]').val();
               let value = selected;
               if (selected === OTHER) {
@@ -1879,13 +1951,15 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               await this.actor.setFlag("starwarsffg", "languages", updated);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-times"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-times",
             label: game.i18n.localize("SWFFG.Cancel"),
           },
-        },
-        default: "add",
-        render: (dlg) => {
+        ],
+        // V2 render receives (event, dialog); V1 received the jQuery content.
+        render: (event, dialog) => {
+          const dlg = $(dialog.element);
           const select = dlg.find('select[name="language"]');
           const customGroup = dlg.find(".language-custom-group");
           const toggle = () => {
@@ -1901,7 +1975,8 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
           if (select.find("option").length === 1) select.val(OTHER);
           toggle();
         },
-      }).render(true);
+        rejectClose: false,
+      });
     });
 
     html.find(".language-remove").on("click", async (ev) => {
@@ -2077,13 +2152,21 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
         }
 
         // actually show the dialog
-        await new Dialog(
-          {
-            title: game.i18n.localize("SWFFG.Crew.Roles.Gunner.Title"),
-            content: `<p>${game.i18n.localize("SWFFG.Crew.Roles.Gunner.Description")}</p>`,
-            buttons: weapons,
-          },
-        ).render(true);
+        await DialogV2.wait({
+          window: { title: game.i18n.localize("SWFFG.Crew.Roles.Gunner.Title") },
+          classes: ["dialog"],
+          content: `<p>${game.i18n.localize("SWFFG.Crew.Roles.Gunner.Description")}</p>`,
+          // Map the keyed `weapons` object to the native button array. The `<img>`
+          // thumbnail icon is dropped: DialogV2's `icon` is a CSS class, not markup.
+          // Callbacks pass through unchanged - none of them read the (former jQuery)
+          // first parameter, so the V2 (event, button, dialog) signature is harmless.
+          buttons: Object.entries(weapons).map(([action, button]) => ({
+            action: action.replace(/\s+/g, "-"),
+            label: button.label,
+            callback: button.callback,
+          })),
+          rejectClose: false,
+        });
       } else {
         // update the pool with actor information
         pool = get_dice_pool(crew_id, role_info[0].role_skill, pool);
@@ -2140,13 +2223,19 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
           }
         }
         // actually show the dialog
-        await new Dialog(
-          {
-            title: game.i18n.localize("SWFFG.Crew.Roles.Weapon.Title"),
-            content: `<p>${game.i18n.localize("SWFFG.Crew.Roles.Weapon.Description")}</p>`,
-            buttons: crewMembers,
-          },
-        ).render(true);
+        await DialogV2.wait({
+          window: { title: game.i18n.localize("SWFFG.Crew.Roles.Weapon.Title") },
+          classes: ["dialog"],
+          content: `<p>${game.i18n.localize("SWFFG.Crew.Roles.Weapon.Description")}</p>`,
+          // See the gunner dialog above: map the keyed `crewMembers` object to the
+          // native button array and drop the non-functional `<img>` icon.
+          buttons: Object.entries(crewMembers).map(([action, button]) => ({
+            action: action.replace(/\s+/g, "-"),
+            label: button.label,
+            callback: button.callback,
+          })),
+          rejectClose: false,
+        });
       } else {
         await this.vehicleCrewGunneryRoll(weapon, weaponSkill, crewGunners[0]);
       }
@@ -2279,11 +2368,11 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       const a = event.currentTarget;
       const form = this.form;
 
-      const nk = randomID();
+      const nk = foundry.utils.randomID();
       let newKey = document.createElement("div");
       newKey.innerHTML = `<input type="text" name="data.dutylist.${nk}.type" value="" style="display:none;"/><input class="attribute-value" type="text" name="data.dutylist.${nk}.magnitude" value="0" data-dtype="Number" placeholder="0"/>`;
       form.appendChild(newKey);
-      await this._onSubmit(event);
+      await this._onSubmit(event, { render: true });
     });
 
     html.find(".remove-duty").on("click", async (event) => {
@@ -2558,7 +2647,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
     const messageData = {
       user: game.user.id,
-      type: CONST.CHAT_MESSAGE_TYPES.OTHER,
+      style: CONST.CHAT_MESSAGE_STYLES.OTHER,
       content: html,
       speaker: {
         actor: this.actor.id,
@@ -2573,7 +2662,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
    * Change skill characteristic
    * @param  {object} a - Event object
    */
-  _onChangeSkillCharacteristic(a) {
+  async _onChangeSkillCharacteristic(a) {
     //const a = event.currentTarget;
     const characteristic = $(a).data("characteristic");
     const ability = $(a).data("ability");
@@ -2582,59 +2671,75 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       label = CONFIG.FFG.skills[ability].label;
     }
 
-    new Dialog(
-      {
-        title: `${game.i18n.localize("SWFFG.SkillCharacteristicDialogTitle")} ${game.i18n.localize(label)}`,
-        content: {
-          options: CONFIG.FFG.characteristics,
-          char: characteristic,
-        },
-        buttons: {
-          one: {
-            icon: '<i class="fas fa-check"></i>',
+    // V1 Dialog accepted a `template` option and rendered `content` through it;
+    // DialogV2 takes an HTML string, so pre-render the same template here.
+    const skillCharTitle = `${game.i18n.localize("SWFFG.SkillCharacteristicDialogTitle")} ${game.i18n.localize(label)}`;
+    const skillCharContent = await foundry.applications.handlebars.renderTemplate(
+      "systems/starwarsffg/templates/actors/dialogs/ffg-skill-characteristic-selector.html",
+      { title: skillCharTitle, content: { options: CONFIG.FFG.characteristics, char: characteristic } }
+    );
+
+    DialogV2.wait({
+        window: { title: skillCharTitle },
+        classes: ["dialog", "starwarsffg"],
+        content: skillCharContent,
+        buttons: [
+          {
+            action: "one",
+            icon: "fas fa-check",
             label: game.i18n.localize("SWFFG.ButtonAccept"),
-            callback: (html) => {
+            default: true,
+            callback: (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const html = $(dialog.element);
               let newCharacteristic = $(html).find("input[type='radio']:checked").val();
 
               CONFIG.logger.debug(`Updating ${ability} Characteristic from ${characteristic} to ${newCharacteristic}`);
 
               let updateData = {};
-              setProperty(updateData, `system.skills.${ability}.characteristic`, newCharacteristic);
+              foundry.utils.setProperty(updateData, `system.skills.${ability}.characteristic`, newCharacteristic);
 
               this.object.update(updateData);
             },
           },
-          two: {
-            icon: '<i class="fas fa-times"></i>',
+          {
+            action: "two",
+            icon: "fas fa-times",
             label: game.i18n.localize("SWFFG.Cancel"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-        template: "systems/starwarsffg/templates/actors/dialogs/ffg-skill-characteristic-selector.html",
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
    * Create new one-off skill for this actor
    * @param  {object} a - Event object
    */
-  _onCreateSkill(a) {
+  async _onCreateSkill(a) {
     const group = $(a).parent().data("type");
 
-    new Dialog(
-      {
-        title: `${game.i18n.localize("SWFFG.SkillAddDialogTitle")}`,
-        content: {
-          options: CONFIG.FFG.characteristics,
-        },
-        buttons: {
-          one: {
-            icon: '<i class="fas fa-check"></i>',
+    // V1 Dialog accepted a `template` option and rendered `content` through it;
+    // DialogV2 takes an HTML string, so pre-render the same template here.
+    const newSkillTitle = `${game.i18n.localize("SWFFG.SkillAddDialogTitle")}`;
+    const newSkillContent = await foundry.applications.handlebars.renderTemplate(
+      "systems/starwarsffg/templates/actors/dialogs/ffg-skill-new.html",
+      { title: newSkillTitle, content: { options: CONFIG.FFG.characteristics } }
+    );
+
+    DialogV2.wait({
+        window: { title: newSkillTitle },
+        classes: ["dialog", "starwarsffg"],
+        content: newSkillContent,
+        buttons: [
+          {
+            action: "one",
+            icon: "fas fa-check",
             label: game.i18n.localize("SWFFG.ButtonAccept"),
-            callback: (html) => {
+            default: true,
+            callback: (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const html = $(dialog.element);
               const name = $(html).find("input[name='name']").val();
               const characteristic = $(html).find("select[name='characteristic']").val();
 
@@ -2660,17 +2765,14 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               }
             },
           },
-          two: {
-            icon: '<i class="fas fa-times"></i>',
+          {
+            action: "two",
+            icon: "fas fa-times",
             label: game.i18n.localize("SWFFG.Cancel"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-        template: "systems/starwarsffg/templates/actors/dialogs/ffg-skill-new.html",
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
@@ -2691,31 +2793,33 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
       return;
     }
-    const dialog = new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.SkillRank.ConfirmTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Purchase.SkillRank.Text", {cost: cost, skill: skill, old: curRank, new: curRank + 1}),
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.SkillRank.ConfirmTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.SkillRank.Text", {cost: cost, skill: skill, old: curRank, new: curRank + 1})}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
               if(!this.actor.verifyEditModeIsNotEnabled()) return;
 
               const id = await this._spendXp(`system.skills.${skill}.rank`, 1, cost);
               await xpLogSpend(game.actors.get(this.object.id), `skill rank ${skill} ${curRank} --> ${curRank + 1}`, cost, availableXP - cost, totalXP, id);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
@@ -2733,12 +2837,12 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       changes: [
         {
           key: boughtPath,
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          mode: AE_MODES.ADD,
           value: boughtValue,
         },
         {
           key: "system.experience.available",
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          mode: AE_MODES.ADD,
           value: spentXP * -1,
         }
       ],
@@ -2749,17 +2853,17 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     if (boughtPath === "system.characteristics.Brawn.value") {
       effects.changes.push({
         key: "system.stats.soak.value",
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: boughtValue,
       });
       effects.changes.push({
         key: "system.stats.wounds.max",
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: boughtValue,
       });
       effects.changes.push({
         key: "system.stats.encumbrance.max",
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: boughtValue,
       });
     }
@@ -2768,7 +2872,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     if (boughtPath === "system.characteristics.Willpower.value") {
       effects.changes.push({
         key: "system.stats.strain.max",
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: boughtValue,
       });
     }
@@ -2792,19 +2896,26 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     CONFIG.logger.debug(`refunding ${mode} for ${purchaseId}`);
     const purchasedEffect = this.object.getEmbeddedCollection("ActiveEffect").find(ae => ae.name.includes(purchaseId));
     if (purchasedEffect) {
-      const dialog = new Dialog(
-        {
-          title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle"),
-          content: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Text"),
-          buttons: {
-            done: {
-              icon: '<i class="fa-solid fa-check"></i>',
-              label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
-              callback: async (that) => {
+      const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.localize("SWFFG.Actors.Sheets.Refund.Text")}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-solid fa-check",
+            label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
                 if(!this.actor.verifyEditModeIsNotEnabled()) return;
 
-                await this.object.deleteEmbeddedDocuments("ActiveEffect", [purchasedEffect.id]);
-                CONFIG.logger.debug("deleted AE, updating log");
+                // Read the effective (sheet-visible) XP BEFORE the purchase's Active
+                // Effect is deleted. Reading it afterwards returned the actor's base
+                // value rather than the AE-adjusted one - the effect had been removed
+                // but the derived data the sheet shows had not settled - so the log
+                // recorded a number that did not match the XP box.
                 let logEntries = this.object.getFlag("starwarsffg", "xpLog") || [];
                 let cost = 0;
                 let description = 'unknown';
@@ -2815,14 +2926,34 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
                     entry.id = undefined;  // denotes that there is no an AE for the purchase
                   }
                 }
+                // Effective (sheet-visible) XP before the refund. The stored
+                // experience.available is the BASE value whenever purchases are
+                // represented by Active Effects, so it does not match the XP box.
+                // The newest log entry always records the effective available after
+                // its own operation, making it the reliable current value; the
+                // stored field is only a fallback for an empty/malformed log.
+                const newestEntry = logEntries?.[0]?.xp;
+                const availableBefore = Number.isFinite(Number(newestEntry?.available))
+                  ? Number(newestEntry.available)
+                  : Number(this.object.system.experience.available) || 0;
+                const totalBefore = Number.isFinite(Number(newestEntry?.total))
+                  ? Number(newestEntry.total)
+                  : Number(this.object.system.experience.total) || 0;
+
+                await this.object.deleteEmbeddedDocuments("ActiveEffect", [purchasedEffect.id]);
+                CONFIG.logger.debug("deleted AE, updating log");
+
                 const date = new Date().toISOString().slice(0, 10);
                 logEntries.unshift({
                   action: 'refunded',
                   id: undefined,
                   xp: {
+                    // Refunding returns the spent XP, so the post-refund figures are
+                    // derived arithmetically. This always matches what the sheet shows
+                    // once the deletion has re-derived, unlike re-reading mid-update.
                     cost: cost,
-                    available: this.object.system.experience.available,
-                    total: this.object.system.experience.total,
+                    available: availableBefore + (Number(cost) || 0),
+                    total: totalBefore,
                   },
                   date: date,
                   description: description,
@@ -2830,17 +2961,15 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
                 await this.object.setFlag("starwarsffg", "xpLog", logEntries);
                 CONFIG.logger.debug(`completed refund for ${purchaseId}!`);
               },
-            },
-            cancel: {
-              icon: '<i class="fas fa-cancel"></i>',
-              label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
-            },
           },
-        },
-        {
-          classes: ["dialog", "starwarsffg"],
-        }
-      ).render(true);
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
+            label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
+          },
+        ],
+        rejectClose: false,
+      });
     } else {
       CONFIG.logger.warn(`Could not locate purchase with ID ${purchaseId}`);
     }
@@ -2887,37 +3016,69 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     );
     const refundAmount = match ? (parseInt(match.xp.cost, 10) || 0) : 0;
 
-    new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: node.name, cost: refundAmount }),
-        buttons: {
-          done: {
-            icon: '<i class="fa-solid fa-check"></i>',
+    DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: node.name, cost: refundAmount })}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-solid fa-check",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
-            callback: async () => {
+            default: true,
+            callback: async (event, button, dialog) => {
               if (!this.actor.verifyEditModeIsNotEnabled()) return;
+
+              // Effective (sheet-visible) XP before the refund.
+              //
+              // Do NOT read system.experience.available here. When a node carries a
+              // modifier its purchase is represented by an Active Effect, so the
+              // stored field holds the BASE value while the XP box shows the
+              // AE-applied one - reading it logged numbers hundreds of XP off, and
+              // only for modifier-bearing nodes, which is exactly what testing
+              // showed. Reading it after edit mode does not help either, since edit
+              // mode suspends those very effects.
+              //
+              // Every log entry already records the effective available AFTER its
+              // operation (purchases capture it before edit mode, in
+              // ItemSheetFFG._buyHandleClick), so the newest entry IS the current
+              // effective value. Fall back to the stored field only for an empty or
+              // malformed log.
+              const newestEntry = log?.[0]?.xp;
+              const effectiveAvailableBefore = Number.isFinite(Number(newestEntry?.available))
+                ? Number(newestEntry.available)
+                : Number(this.actor.system.experience.available) || 0;
+              const effectiveTotal = Number.isFinite(Number(newestEntry?.total))
+                ? Number(newestEntry.total)
+                : Number(this.actor.system.experience.total) || 0;
 
               const AEState = await ActorHelpers.beginEditMode(this.actor, true);
               await item.update({ system: { [collection]: { [nodeId]: { islearned: false } } } });
               if (refundAmount > 0) {
+                // Add to the BASE available (edit mode has the purchase effects
+                // suspended) so the refund survives them being restored.
                 const newAvailable = this.actor.system.experience.available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
                 if (match) match.refunded = true;
+              }
+              await ActorHelpers.endEditMode(this.actor, AEState, true);
+              if (refundAmount > 0) {
+                // Log AFTER edit mode ends: while it is active the purchase Active
+                // Effects are disabled, so experience.available reads the base value
+                // instead of the effective one the XP box shows.
                 log.unshift({
                   action: "refunded",
                   id: undefined,
                   xp: {
                     cost: refundAmount,
-                    available: this.actor.system.experience.available,
-                    total: this.actor.system.experience.total,
+                    available: effectiveAvailableBefore + refundAmount,
+                    total: effectiveTotal,
                   },
                   date: new Date().toISOString().slice(0, 10),
                   description: match ? match.description : node.name,
                 });
                 await this.actor.setFlag("starwarsffg", "xpLog", log);
               }
-              await ActorHelpers.endEditMode(this.actor, AEState, true);
               // Re-sync the modifier AEs to the node's now-unlearned state. endEditMode restores every
               // AE to its pre-refund (enabled) state, so a stat-granting talent/upgrade (e.g. Toughened,
               // Grit) would otherwise keep applying after the node is unlearned. This mirrors the learn
@@ -2932,16 +3093,14 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               this.render(false);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
@@ -2982,51 +3141,81 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     );
     const refundAmount = match ? (parseInt(match.xp.cost, 10) || 0) : 0;
 
-    new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: item.name, cost: refundAmount }),
-        buttons: {
-          done: {
-            icon: '<i class="fa-solid fa-check"></i>',
+    DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: item.name, cost: refundAmount })}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-solid fa-check",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
-            callback: async () => {
+            default: true,
+            callback: async (event, button, dialog) => {
               if (!this.actor.verifyEditModeIsNotEnabled()) return;
+
+              // Effective (sheet-visible) XP before the refund.
+              //
+              // Do NOT read system.experience.available here. When a node carries a
+              // modifier its purchase is represented by an Active Effect, so the
+              // stored field holds the BASE value while the XP box shows the
+              // AE-applied one - reading it logged numbers hundreds of XP off, and
+              // only for modifier-bearing nodes, which is exactly what testing
+              // showed. Reading it after edit mode does not help either, since edit
+              // mode suspends those very effects.
+              //
+              // Every log entry already records the effective available AFTER its
+              // operation (purchases capture it before edit mode, in
+              // ItemSheetFFG._buyHandleClick), so the newest entry IS the current
+              // effective value. Fall back to the stored field only for an empty or
+              // malformed log.
+              const newestEntry = log?.[0]?.xp;
+              const effectiveAvailableBefore = Number.isFinite(Number(newestEntry?.available))
+                ? Number(newestEntry.available)
+                : Number(this.actor.system.experience.available) || 0;
+              const effectiveTotal = Number.isFinite(Number(newestEntry?.total))
+                ? Number(newestEntry.total)
+                : Number(this.actor.system.experience.total) || 0;
 
               const AEState = await ActorHelpers.beginEditMode(this.actor, true);
               if (refundAmount > 0) {
+                // Add to the BASE available (edit mode has the purchase effects
+                // suspended) so the refund survives them being restored.
                 const newAvailable = this.actor.system.experience.available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
                 if (match) match.refunded = true;
+              }
+              await ActorHelpers.endEditMode(this.actor, AEState, true);
+              if (refundAmount > 0) {
+                // Log AFTER edit mode ends: while it is active the purchase Active
+                // Effects are disabled, so experience.available reads the base value
+                // instead of the effective one the XP box shows.
                 log.unshift({
                   action: "refunded",
                   id: undefined,
                   xp: {
                     cost: refundAmount,
-                    available: this.actor.system.experience.available,
-                    total: this.actor.system.experience.total,
+                    available: effectiveAvailableBefore + refundAmount,
+                    total: effectiveTotal,
                   },
                   date: new Date().toISOString().slice(0, 10),
                   description: match ? match.description : `forcepower ${item.name}`,
                 });
                 await this.actor.setFlag("starwarsffg", "xpLog", log);
               }
-              await ActorHelpers.endEditMode(this.actor, AEState, true);
               // Removing the base power removes the power entirely (it is the root of the tree).
               await this.actor.deleteEmbeddedDocuments("Item", [itemId]);
               this.render(false);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
@@ -3067,16 +3256,41 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     );
     const refundAmount = match ? (parseInt(match.xp.cost, 10) || 0) : 0;
 
-    new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: item.name, cost: refundAmount }),
-        buttons: {
-          done: {
-            icon: '<i class="fa-solid fa-check"></i>',
+    DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: item.name, cost: refundAmount })}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-solid fa-check",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
-            callback: async () => {
+            default: true,
+            callback: async (event, button, dialog) => {
               if (!this.actor.verifyEditModeIsNotEnabled()) return;
+
+              // Effective (sheet-visible) XP before the refund.
+              //
+              // Do NOT read system.experience.available here. When a node carries a
+              // modifier its purchase is represented by an Active Effect, so the
+              // stored field holds the BASE value while the XP box shows the
+              // AE-applied one - reading it logged numbers hundreds of XP off, and
+              // only for modifier-bearing nodes, which is exactly what testing
+              // showed. Reading it after edit mode does not help either, since edit
+              // mode suspends those very effects.
+              //
+              // Every log entry already records the effective available AFTER its
+              // operation (purchases capture it before edit mode, in
+              // ItemSheetFFG._buyHandleClick), so the newest entry IS the current
+              // effective value. Fall back to the stored field only for an empty or
+              // malformed log.
+              const newestEntry = log?.[0]?.xp;
+              const effectiveAvailableBefore = Number.isFinite(Number(newestEntry?.available))
+                ? Number(newestEntry.available)
+                : Number(this.actor.system.experience.available) || 0;
+              const effectiveTotal = Number.isFinite(Number(newestEntry?.total))
+                ? Number(newestEntry.total)
+                : Number(this.actor.system.experience.total) || 0;
 
               const AEState = await ActorHelpers.beginEditMode(this.actor, true);
               if (refundAmount > 0) {
@@ -3088,8 +3302,8 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
                   id: undefined,
                   xp: {
                     cost: refundAmount,
-                    available: this.actor.system.experience.available,
-                    total: this.actor.system.experience.total,
+                    available: effectiveAvailableBefore + refundAmount,
+                    total: effectiveTotal,
                   },
                   date: new Date().toISOString().slice(0, 10),
                   description: match ? match.description : `signatureability ${item.name}`,
@@ -3102,16 +3316,14 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               this.render(false);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
@@ -3157,18 +3369,18 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     var filter = a.id;
     $(a).prop("checked", true);
     filters.filter = filter;
-    await this._onSubmit(event);
+    await this._onSubmit(event, { render: true });
   }
   /* -------------------------------------------- */
 
   /** @override */
-  async _updateObject(event, formData) {
+  async _updateObject(event, formData, { render = false } = {}) {
     const actorUpdate = ActorHelpers.updateActor.bind(this);
     // Save persistent sheet height and width for future use.
     this.sheetWidth = this.position.width;
     this.sheetHeight = this.position.height;
 
-    await actorUpdate(event, formData);
+    await actorUpdate(event, formData, { render });
   }
 
   /**
@@ -3545,7 +3757,7 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     // that would end up with no changes is skipped entirely).
     const hasStrain = !!this.actor.system?.stats?.strain;
     const hasWounds = !!this.actor.system?.stats?.wounds;
-    const ADD = CONST.ACTIVE_EFFECT_MODES.ADD;
+    const ADD = AE_MODES.ADD;
 
     const darkChanges = [];
     if (hasStrain) darkChanges.push({ key: "system.stats.strain.max", mode: ADD, value: -2 });
@@ -3882,15 +4094,19 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       return;
     }
 
-    const dialog = new Dialog(
-    {
-        title: game.i18n.format("SWFFG.Actors.Sheets.Purchase.DialogTitle", {itemType: itemType}),
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.format("SWFFG.Actors.Sheets.Purchase.DialogTitle", {itemType: itemType}) },
+        classes: ["dialog", "starwarsffg"],
         content: content,
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
               if(!this.actor.verifyEditModeIsNotEnabled()) return;
 
               const cost = $("#ffgPurchase option:selected", that).data("cost");
@@ -3927,16 +4143,14 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               await ActorHelpers.endEditMode(this.actor, AEState, true);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   async _buyCharacteristicRank(characteristic) {
@@ -3956,15 +4170,19 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
       ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
       return;
     }
-    const dialog = new Dialog(
-      {
-        title: game.i18n.format("SWFFG.Actors.Sheets.Purchase.Characteristic.ConfirmTitle", {characteristic: characteristic}),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Purchase.Characteristic.ConfirmText", {cost: cost, level: characteristicValue + 1, characteristic: characteristic}),
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.format("SWFFG.Actors.Sheets.Purchase.Characteristic.ConfirmTitle", {characteristic: characteristic}) },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.Characteristic.ConfirmText", {cost: cost, level: characteristicValue + 1, characteristic: characteristic})}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
               if(!this.actor.verifyEditModeIsNotEnabled()) return;
 
               const statusId = await this._spendXp(`system.characteristics.${characteristic}.value`, 1, cost);
@@ -3972,16 +4190,14 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               await this.render(true);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /**
@@ -4020,14 +4236,16 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     </select>
     `;
 
-    let d = new Dialog({
-      title: game.i18n.localize("SWFFG.XP.Adjust.Window.Title"),
-      content: content,
-      buttons: {
-        one: {
-          icon: '<i class="fas fa-check"></i>',
-          label: game.i18n.localize("SWFFG.XP.Adjust.Confirm"),
-          callback: async () => {
+    let d = new DialogV2({
+        window: { title: game.i18n.localize("SWFFG.XP.Adjust.Window.Title") },
+        content: content,
+        buttons: [
+          {
+            action: "one",
+            icon: "fas fa-check",
+            label: game.i18n.localize("SWFFG.XP.Adjust.Confirm"),
+            default: true,
+            callback: async (event, button, dialog) => {
             const availableXPToLog = foundry.utils.deepClone(parseInt(this.actor.system.experience.available));
             const adjustAmount = parseInt($("#adjustAmount").val());
             const adjustReason = foundry.utils.deepClone($("#adjustReason").val());
@@ -4053,14 +4271,15 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
             );
             await ActorHelpers.endEditMode(this.actor, AEState, true);
           },
-        },
-        two: {
-          icon: '<i class="fas fa-times"></i>',
-          label: "Cancel",
-        },
-      },
-      default: "one",
-    });
+          },
+          {
+            action: "two",
+            icon: "fas fa-times",
+            label: "Cancel",
+          },
+        ],
+        rejectClose: false,
+      });
     d.render(true);
   }
 
@@ -4095,14 +4314,16 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
     </div>
     `;
 
-    let d = new Dialog({
-      title: game.i18n.localize("SWFFG.XP.Import.Title"),
-      content: content,
-      buttons: {
-        one: {
-          icon: '<i class="fas fa-check"></i>',
-          label: game.i18n.localize("SWFFG.XP.Import.Title"),
-          callback: async () => {
+    let d = new DialogV2({
+        window: { title: game.i18n.localize("SWFFG.XP.Import.Title") },
+        content: content,
+        buttons: [
+          {
+            action: "one",
+            icon: "fas fa-check",
+            label: game.i18n.localize("SWFFG.XP.Import.Title"),
+            default: true,
+            callback: async (event, button, dialog) => {
             const fileElement = $("#xpLogFile");
             const file = fileElement[0].files?.[0];
             const reader = new FileReader();
@@ -4116,19 +4337,29 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
               ui.notifications.error("Failed to load file contents");
             }
           },
-        },
-        two: {
-          icon: '<i class="fas fa-times"></i>',
-          label: "Cancel",
-        },
-      },
-      default: "one",
-    });
+          },
+          {
+            action: "two",
+            icon: "fas fa-times",
+            label: "Cancel",
+          },
+        ],
+        rejectClose: false,
+      });
     d.render(true);
   }
 
   debounceRender = foundry.utils.debounce(
     (force, options) => {
+      // A close() that lands after a render was queued must win. Renders here
+      // are debounced (~100ms), so a trailing render scheduled by a field edit
+      // -- minion sheets force render:true on wounds/quantity edits -- fires
+      // after close() finished and reset its transient `_closing` flag, and
+      // would re-attach the sheet the user just closed (the "minion close
+      // button does nothing" bug). `_sheetClosed` is latched in close() and
+      // only cleared by a genuine (non-closing) render(), so a stray trailing
+      // render bails here.
+      if (this._sheetClosed) return;
       super.render(force, options);
     },
     100,
@@ -4140,110 +4371,69 @@ export class ActorSheetFFG extends foundry.appv1.sheets.ActorSheet {
 
   /** @override **/
   render(force, options) {
+    // A real (re)open clears the closed latch. Auto-renders fired *during*
+    // close (document.update in submit-on-close) run while `_closing` is true
+    // and must NOT clear it, or they would reschedule a reopen.
+    if (!this._closing) this._sheetClosed = false;
     this.debounceRender(force, options);
   }
 
   /** @override **/
-  async _onSubmit(event) {
+  async close(options = {}) {
+    // Latch closed so any debounced render still in flight (or one scheduled by
+    // a close-time auto-render) cannot reopen the sheet. Cleared by the next
+    // genuine render() above.
+    this._sheetClosed = true;
+    return super.close(options);
+  }
+
+  /** @override **/
+  async _onSubmit(event, options = {}) {
     const formValid = event?.target?.form?.reportValidity();
     if (formValid === false) {
       return;
     }
-    return await super._onSubmit(event);
+    return await super._onSubmit(event, options);
   }
 
   /**
-   * Handle adding a source to vehicles
-   * @param event
-   * @returns {Promise<void>}
-   * @private
+   * Fill percentage and colour for a wounds/strain style damage track.
+   * Shared by getData (initial render) and _paintVitalTrack (live updates) so
+   * the two can never drift apart.
+   * @param {number|string} value current
+   * @param {number|string} max threshold
+   * @returns {{pct: number, color: string}}
    */
-  async _handleSourceControl(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const action = $(event.currentTarget).data("action");
-    const sourceIndex = $(event.currentTarget).data("index");
-    if (action === "add") {
-      const addSource = new Dialog({
-        title: game.i18n.localize("SWFFG.Meta.Sources.AddSource.Title"),
-        content: `
-          <p>${game.i18n.localize("SWFFG.Meta.Sources.AddSource.Book")} :</p>
-          <input type="text" id="book" name="book" value="Force and Destiny Core Rulebook" autofocus>
-          <p>${game.i18n.localize("SWFFG.Meta.Sources.AddSource.Page")}:</p>
-          <input type="number" id="page" name="page" value="0">
-        `,
-        buttons: {
-          submit: {
-            icon: '<i class="fas fa-check"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Sources.AddSource.Submit"),
-            callback: async (obj, event) => {
-              const jObj = $(obj);
-              const bookName = jObj.find("#book").val();
-              const pageNum = jObj.find("#page").val();
-              await this.object.update({"system.metadata.sources": [...this.object.system.metadata.sources, `${bookName} pg. ${pageNum}`]});
-            },
-          },
-          cancel: {
-            icon: '<i class="fas fa-x"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Sources.AddSource.Cancel"),
-          },
-        },
-        default: "submit",
-      });
-      addSource.render(true, {focus: true, classes: ["app", "window-app", "dialog", "themed", "theme-light", "starwarsffg-dialog"]});
-    } else if (action === "remove") {
-      const sources = foundry.utils.deepClone(this.object.system.metadata.sources);
-      sources.splice(sourceIndex, 1);
-      await this.object.update({"system.metadata.sources": sources});
-    }
-    this.render(true);
+  static computeVitalTrack(value, max) {
+    const ratio = (Number(max) || 0) > 0 ? (Number(value) || 0) / Number(max) : 0;
+    return {
+      pct: Math.max(0, Math.min(100, Math.round(ratio * 100))),
+      color: ratio >= 0.8 ? "#a51f17" : ratio >= 0.5 ? "#c8902e" : "#3f7d3a",
+    };
   }
 
   /**
-   * Handle adding a tag to actors
-   * @param event
-   * @returns {Promise<void>}
-   * @private
+   * Repaint the damage track that belongs to a given stat input, reading the
+   * live current/threshold values straight out of the DOM. Lets an edit show up
+   * instantly without paying for a full sheet re-render.
+   * @param {HTMLElement} input the changed current/threshold input
    */
-  async _handleTagControl(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const action = $(event.currentTarget).data("action");
-    const tagIndex = $(event.currentTarget).data("index");
-    if (action === "add") {
-      const addTag = new Dialog({
-        title: game.i18n.localize("SWFFG.Meta.Tags.AddTag.Title"),
-        content: `
-          <p>${game.i18n.localize("SWFFG.Meta.Tags.AddTag.Tag")} :</p>
-          <input type="text" id="tag" name="tag" value="" autofocus>
-        `,
-        buttons: {
-          submit: {
-            icon: '<i class="fas fa-check"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Tags.AddTag.Submit"),
-            callback: async (obj, event) => {
-              const jObj = $(obj);
-              const tag = jObj.find("#tag").val();
-              const updatedTags = this.object.system.metadata.tags || [];
-              updatedTags.push(tag);
-              await this.object.update({"system.metadata.tags": updatedTags});
-            }
-          },
-          cancel: {
-            icon: '<i class="fas fa-x"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Tags.AddTag.Cancel"),
-          },
-        },
-        default: "submit",
-      });
-      addTag.render(true, {focus: true, classes: ["app", "window-app", "dialog", "themed", "theme-light", "starwarsffg-dialog"]});
-    } else if (action === "remove") {
-      const tags = foundry.utils.deepClone(this.object.system.metadata.tags);
-      tags.splice(tagIndex, 1);
-      await this.object.update({"system.metadata.tags": tags});
-    }
-    this.render(true);
+  _paintVitalTrack(input) {
+    const body = input?.closest?.(".ffg2-vital-body");
+    const fill = body?.querySelector(".ffg2-track-fill");
+    if (!fill) return;
+    const name = input.getAttribute("name") || "";
+    const base = name.replace(/\.(value|max)$/, "");
+    const read = (suffix) => body.querySelector(`[name="${base}.${suffix}"]`)?.value;
+    const { pct, color } = ActorSheetFFG.computeVitalTrack(read("value"), read("max"));
+    fill.style.width = `${pct}%`;
+    fill.style.background = color;
   }
+
+  // _handleSourceControl / _handleTagControl: the V1 Dialog overrides that used
+  // to live here were deleted in the V2 conversion; the FFGDocumentSheet base
+  // provides DialogV2 versions (same lang keys, same update shape) with a
+  // single-instance guard, shared by item and actor sheets.
 }
 
 /**

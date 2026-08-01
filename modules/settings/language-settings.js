@@ -2,21 +2,34 @@
  * Settings menu for configuring the master list of languages that can be added to actor sheets.
  * Mirrors CrewSettings: a simple editable list of names backed by the world setting "arrayLanguages".
  */
-export default class LanguageSettings extends FormApplication {
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "ffg-language-settings",
-      classes: ["starwarsffg", "data-import"],
-      title: `${game.i18n.localize("SWFFG.Languages.Settings.Title")}`,
-      height: 400,
-      width: 350,
-      resizable: true,
-      template: "systems/starwarsffg/templates/dialogs/language-settings.html",
-    });
-  }
+import { FFGFormApplication } from "../apps/ffg-form-application.js";
 
-  getData(options) {
+export default class LanguageSettings extends FFGFormApplication {
+  static DEFAULT_OPTIONS = {
+    id: "ffg-language-settings",
+    classes: ["starwarsffg", "data-import"],
+    window: {
+      title: "SWFFG.Languages.Settings.Title",
+      resizable: true,
+    },
+    position: {
+      width: 350,
+      height: 400,
+    },
+    form: {
+      // V1 FormApplication closed on submit by default; keep that behavior.
+      closeOnSubmit: true,
+    },
+  };
+
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/dialogs/language-settings.html",
+    },
+  };
+
+  async _prepareContext(_options) {
     const languages = game.settings.get("starwarsffg", "arrayLanguages") || [];
     return {
       systemTitle: game.system.title,
@@ -24,8 +37,9 @@ export default class LanguageSettings extends FormApplication {
     };
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.element);
     html.find('button[name="reset"]').click(this._onResetDefaults.bind(this));
   }
 

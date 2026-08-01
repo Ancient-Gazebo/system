@@ -2,7 +2,9 @@ import { MonteCarlo } from "../../lib/@swrpg-online/monte-carlo/dist/index.esm.j
 import { getAdversaryLevel } from "../helpers/token.js";
 import { DicePoolFFG } from "./pool.js";
 
-export default class RollBuilderFFG extends FormApplication {
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+export default class RollBuilderFFG extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(rollData, rollDicePool, rollDescription, rollSkillName, rollItem, rollAdditionalFlavor, rollSound) {
     super();
     this.roll = {
@@ -87,15 +89,24 @@ export default class RollBuilderFFG extends FormApplication {
     });
   }
 
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "roll-builder",
-      classes: ["starwarsffg", "roll-builder-dialog"],
+  static DEFAULT_OPTIONS = {
+    id: "roll-builder",
+    classes: ["starwarsffg", "roll-builder-dialog"],
+    tag: "div",
+    window: {
+      resizable: true,
+    },
+    position: {
+      width: 350,
+    },
+  };
+
+  static PARTS = {
+    content: {
+      root: true,
       template: "systems/starwarsffg/templates/dice/roll-options-ffg.html",
-      width: 350
-    });
-  }
+    },
+  };
 
   /** @override */
   get title() {
@@ -103,19 +114,19 @@ export default class RollBuilderFFG extends FormApplication {
   }
 
   /** @override */
-  async getData() {
+  async _prepareContext(_options) {
     //get all possible sounds
     let sounds = [];
     const diceSymbols = {
-      advantage: await foundry.applications.ux.TextEditor.enrichHTML("[AD]"),
-      success: await foundry.applications.ux.TextEditor.enrichHTML("[SU]"),
-      threat: await foundry.applications.ux.TextEditor.enrichHTML("[TH]"),
-      failure: await foundry.applications.ux.TextEditor.enrichHTML("[FA]"),
-      upgrade: await foundry.applications.ux.TextEditor.enrichHTML("[PR]"),
-      triumph: await foundry.applications.ux.TextEditor.enrichHTML("[TR]"),
-      despair: await foundry.applications.ux.TextEditor.enrichHTML("[DE]"),
-      light: await foundry.applications.ux.TextEditor.enrichHTML("[LI]"),
-      dark: await foundry.applications.ux.TextEditor.enrichHTML("[DA]"),
+      advantage: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[AD]"),
+      success: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[SU]"),
+      threat: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[TH]"),
+      failure: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[FA]"),
+      upgrade: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[PR]"),
+      triumph: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[TR]"),
+      despair: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[DE]"),
+      light: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[LI]"),
+      dark: await foundry.applications.ux.TextEditor.implementation.enrichHTML("[DA]"),
     };
 
     let canUserAddAudio = await game.settings.get("starwarsffg", "allowUsersAddRollAudio");
@@ -187,8 +198,9 @@ export default class RollBuilderFFG extends FormApplication {
   }
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.element);
 
     this._initializeInputs(html);
     this._activateInputs(html);
@@ -207,6 +219,12 @@ export default class RollBuilderFFG extends FormApplication {
     });
 
     html.find(".btn").click(async (event) => {
+      // The Roll button is a <button> inside the template's <form>, so it
+      // defaults to type="submit". Under the V1 FormApplication that native
+      // submit is what closed the dialog (closeOnSubmit); the native
+      // ApplicationV2 port no longer wires form submission, so stop the
+      // default submit and close the dialog explicitly once the roll is sent.
+      event.preventDefault();
       // Snapshot the pool to roll NOW, synchronously, before any of the awaits
       // below. In Adversary mode this returns a clone of the base pool upgraded by
       // the targeted Adversary's ranks; in Base mode it returns this.dicePool as-is.
@@ -257,7 +275,7 @@ export default class RollBuilderFFG extends FormApplication {
                 };
               }
             }
-            setProperty(entityData, "flags.starwarsffg.ffgsound", sound);
+            foundry.utils.setProperty(entityData, "flags.starwarsffg.ffgsound", sound);
             entity.update(entityData);
           }
         }
@@ -271,8 +289,10 @@ export default class RollBuilderFFG extends FormApplication {
       }
 
       // validate that required data is present
-      if (this.roll.item?.uuid && !this.roll.item.flags?.starwarsffg?.uuid) {
-        // uuid flag is missing, look up the item and set it, so it's fixed going forward
+      if (this.roll.item?.uuid && this.roll.item.flags?.starwarsffg?.uuid !== this.roll.item.uuid) {
+        // The cached uuid flag is missing OR stale (e.g. the actor/item was duplicated or
+        // imported from another actor, leaving the flag pointing at the source item). Repair
+        // it so getItemDetails() resolves qualities from THIS item on every render.
         const tmp_item = await fromUuid(this.roll.item.uuid);
         await tmp_item.setFlag("starwarsffg", "uuid", this.roll.item.uuid);
       }
@@ -288,7 +308,10 @@ export default class RollBuilderFFG extends FormApplication {
             if (actorEffects) {
               const toDelete = [];
               for (const activeEffect of actorEffects.contents) {
-                if (activeEffect?.system?.duration === "once") {
+                // duration marker moved to flags: V14's strict ActiveEffect system model
+                // strips unknown `system` keys. Fall back to the legacy location for safety.
+                const ffgOnceDuration = activeEffect?.flags?.starwarsffg?.duration ?? activeEffect?.system?.duration;
+                if (ffgOnceDuration === "once") {
                   toDelete.push(activeEffect._id);
                 }
               }
@@ -344,6 +367,7 @@ export default class RollBuilderFFG extends FormApplication {
         }
 
         ChatMessage.create(chatOptions);
+        await this.close();
       } else {
         if (this.roll.crew) {
           this.roll.item['crew'] = this.roll.crew
@@ -365,9 +389,10 @@ export default class RollBuilderFFG extends FormApplication {
           flavor: `${game.i18n.localize("SWFFG.Rolling")} ${game.i18n.localize(this.roll.skillName)}...`,
         });
         if (this.roll?.sound) {
-          AudioHelper.play({ src: this.roll.sound }, true);
+          foundry.audio.AudioHelper.play({ src: this.roll.sound }, true);
         }
 
+        await this.close();
         return roll;
       }
     });
@@ -544,7 +569,6 @@ export default class RollBuilderFFG extends FormApplication {
     });
   }
 
-  _updateObject() {}
 
   /** @override */
   async close(options) {
@@ -568,7 +592,7 @@ export default class RollBuilderFFG extends FormApplication {
           proficiencyDice: pool.proficiency,
           challengeDice: pool.challenge,
           boostDice: pool.boost,
-          setBackDice: pool.setback,
+          setbackDice: pool.setback,
         },
         iterations: game.settings.get("starwarsffg", "rollSimulation"),
         runSimulate: false,

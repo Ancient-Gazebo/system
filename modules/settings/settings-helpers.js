@@ -20,6 +20,18 @@ export default class SettingsHelpers {
       type: String,
     });
 
+    // Bookkeeping for the one-time legacy-scope import offered when a world
+    // duplicated from the stock `starwarsffg` system is opened under this
+    // parallel V14 build. Set once the GM has answered the prompt (either way)
+    // so it never nags; clear it to be asked again.
+    game.settings.register("starwarsffg", "legacyScopeMigrated", {
+      name: "Legacy Scope Migrated",
+      scope: "world",
+      default: false,
+      config: false,
+      type: Boolean,
+    });
+
     game.settings.registerMenu("starwarsffg", "rulesetSettings", {
       name: game.i18n.localize("SWFFG.Settings.ruleset.Name"),
       hint: game.i18n.localize("SWFFG.Settings.ruleset.Hint"),
@@ -219,6 +231,17 @@ export default class SettingsHelpers {
     });
 
     // Register settings for UI Themes
+    // Per-user remembered position of the floating Destiny Tracker widget.
+    // Client-scoped so every user keeps their own placement; updated when the
+    // widget is dragged and restored on render.
+    game.settings.register("starwarsffg", "destinyTrackerPosition", {
+      name: "Destiny Tracker Position",
+      scope: "client",
+      default: null,
+      config: false,
+      type: Object,
+    });
+
     game.settings.register("starwarsffg", "ui-uitheme", {
       module: "starwarsffg",
       name: game.i18n.localize("SWFFG.SettingsUITheme"),

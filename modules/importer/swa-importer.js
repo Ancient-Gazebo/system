@@ -1,27 +1,29 @@
 import ItemBaseFFG from "../items/itembase-ffg.js";
 import ImportHelpers from "./import-helpers.js";
 
-export default class SWAImporter extends FormApplication {
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "swa-importer",
-      classes: ["starwarsffg", "data-import"],
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+export default class SWAImporter extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    id: "swa-importer",
+    classes: ["starwarsffg", "data-import"],
+    tag: "div",
+    window: {
       title: "Adversaries Importer",
-      template: "systems/starwarsffg/templates/importer/swa-importer.html",
-    });
-  }
+      contentTag: "form",
+      contentClasses: ["data-importer-window"],
+    },
+  };
 
-  /**
-   * Return a reference to the target attribute
-   * @type {String}
-   */
-  get attribute() {
-    return this.options.name;
-  }
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/importer/swa-importer.html",
+    },
+  };
 
   /** @override */
-  async getData() {
+  async _prepareContext(_options) {
     $(".import-progress").addClass("import-hidden");
 
     if (!CONFIG?.temporary) {
@@ -38,8 +40,9 @@ export default class SWAImporter extends FormApplication {
   }
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.form);
 
     $(`<span class="debug"><label><input type="checkbox" /> Generate Log</label></span>`).insertBefore("#swa-importer header a");
 

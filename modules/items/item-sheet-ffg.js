@@ -1,4 +1,5 @@
 import PopoutEditor from "../popout-editor.js";
+import { FFGDocumentSheet } from "../apps/ffg-document-sheet.js";
 import Helpers from "../helpers/common.js";
 import { preparedSystemCopy } from "../datamodels/sheet-data.js";
 import ModifierHelpers from "../helpers/modifiers.js";
@@ -12,27 +13,113 @@ import ItemOptions from "./item-ffg-options.js";
 import {forcePowerEditor, itemEditor, talentEditor} from "./item-editor.js";
 import TalentTree from "../helpers/talent-tree.js";
 
+const { DialogV2 } = foundry.applications.api;
+
 /**
- * Extend the basic ItemSheet with some very simple modifications
- * @extends {ItemSheet}
+ * The system's Item sheet - native ApplicationV2 DocumentSheetV2 (via the
+ * shared FFGDocumentSheet base). Handles every FFG item type.
+ * @extends {FFGDocumentSheet}
  */
 
-export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      classes: ["starwarsffg", "sheet", "item"],
-      tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "description" }],
-      scrollY: [".sheet-body", ".tab"],
-      action: null,
-      data: null,
-    });
-  }
+export class ItemSheetFFG extends FFGDocumentSheet {
+  static DEFAULT_OPTIONS = {
+    // `v2` is required, not cosmetic: the stylesheets key item-sheet layout off
+    // `.starwarsffg.sheet.item.v2`. The V2-styled variant was the makeDefault
+    // sheet pre-migration, so the collapsed sheet keeps the class. The initial
+    // tab stays "description" (this fork opens item descriptions by default).
+    classes: ["starwarsffg", "sheet", "item", "v2"],
+    position: { width: 500 },
+    window: { resizable: true },
+    // V1-parity submit flags read by the manual submit pipeline in the base.
+    submitOnChange: true,
+    submitOnClose: true,
+    closeOnSubmit: false,
+    scrollY: [".sheet-body", ".tab"],
+    tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "description" }],
+    secrets: [{ parentSelector: ".editor" }],
+    baseApplication: "ItemSheet",
+    action: null,
+    data: null,
+  };
 
-  /** @override */
+  /**
+   * Per-item-type template. The root render part picks this up via the base's
+   * `_configureRenderParts` (which reads `this.template`).
+   * @override
+   */
   get template() {
     const path = "systems/starwarsffg/templates/items";
     return `${path}/ffg-${this.item.type}-sheet.html`;
+  }
+
+  /** Window title is just the item name. @override */
+  get title() {
+    return this.item.name;
+  }
+
+  /** Alias for the underlying document. */
+  get item() {
+    return this.object;
+  }
+
+  /** The owning actor, if this item is embedded. */
+  get actor() {
+    return this.item.actor;
+  }
+
+  /** @override */
+  get isEditable() {
+    return super.isEditable && !this.item.flags?.readonly;
+  }
+
+  /**
+   * Per-type CSS hook applied to the inner form (e.g. `item-sheet-weapon`).
+   * A handful of types map to a shared/legacy class name rather than the
+   * default `item-sheet-<type>`.
+   * @override
+   */
+  _getLegacyRootClasses(context = {}) {
+    const classes = super._getLegacyRootClasses(context);
+    const sheetClass = {
+      armour: "item-sheet-armor",
+      shipweapon: "item-sheet-vehicle-weapon",
+      shipattachment: "item-sheet-vehicle-attachment",
+      itemmodifier: "item-sheet-modifiers",
+      ability: "item-sheet-talent",
+      criticaldamage: "item-sheet-criticalinjury",
+    }[this.item.type] ?? `item-sheet-${this.item.type}`;
+
+    classes.push(sheetClass);
+    return classes;
+  }
+
+  /**
+   * Type-specific interactive-resize floors; tree-grid types (specialization /
+   * force power / signature ability) need a larger floor to keep the grid
+   * usable. Everything else inherits the base 300x200.
+   * @override
+   */
+  _minDimensions() {
+    switch (this.object?.type) {
+      case "specialization":
+      case "forcepower":
+      case "signatureability":
+        return { width: 700, height: 600 };
+      case "itemmodifier":
+        return { width: 300, height: 400 };
+      case "weapon":
+      case "armour":
+      case "gear":
+        return { width: 300, height: 700 };
+      case "ability":
+        return { width: 300, height: 300 };
+      case "talent":
+        return { width: 385, height: 500 };
+      case "itemattachment":
+        return { width: 300, height: 400 };
+      default:
+        return super._minDimensions();
+    }
   }
 
   /** @override */
@@ -62,6 +149,10 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
   /** @override */
   async getData(options) {
     let data = super.getData(options);
+    // FFGDocumentSheet.getData returns { document, data, ... }; the item-sheet
+    // body below and the templates read `data.item` (V1 ItemSheet used to
+    // provide it).
+    data.item = data.document;
     // this code was mostly written by Phind
     // removing a key from a dict in Foundry requires submitting it with a new key of `-=key` and a value of null
     // without explicitly replacing values, we end up duplicating entries instead of removing the one
@@ -106,7 +197,11 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
       data.item = foundry.utils.mergeObject(data.item, options.data); // some fields are read out of item, some are read out of data
     }
 
-    data.classType = this.constructor.name;
+    // The tabs partial branches on `contains cls "V2"` to render the icon tab
+    // strip. After the V2-full collapse the real class is `ItemSheetFFG` (no
+    // "V2" suffix), so carry the V2 marker explicitly - this IS the V2 sheet.
+    // Without it, weapon/armour/gear tabs fall back to the retired text style.
+    data.classType = this.constructor.name.includes("V2") ? this.constructor.name : `${this.constructor.name}V2`;
     CONFIG.logger.debug(`Getting Item Data ${this.object.name}`);
 
     data.dtypes = ["String", "Number", "Boolean"];
@@ -634,14 +729,8 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
       }
     }
 
-    // TODO: This is not needed in Foundry 0.6.0
-    // Activate tabs
-    let tabs = html.find(".tabs");
-    let initial = this._sheetTab;
-    new foundry.applications.ux.Tabs(tabs, {
-      initial: initial,
-      callback: (clicked) => (this._sheetTab = clicked.data("tab")),
-    });
+    // (Legacy manual tab activation removed: FFGDocumentSheet._activateCoreListeners
+    // binds Tabs from DEFAULT_OPTIONS.tabs and persists the active tab per document.)
 
     html.find(".items .item, .header-description-block .item, .injuries .item").click(async (ev) => {
       const li = $(ev.currentTarget);
@@ -1076,7 +1165,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
       this.object.update(formData);
     });
 
-    html.find(".item-pill .rank").on("click", (event) => {
+    html.find(".item-pill .rank").on("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const li = $(event.currentTarget).parent()[0];
@@ -1087,19 +1176,26 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
       if (item) {
         const title = `${this.object.name} ${item.name}`;
 
-        new Dialog(
+        // V1 Dialog accepted a `template` option and rendered `content` through it;
+        // DialogV2 takes an HTML string, so pre-render the per-type edit template.
+        const editContent = await foundry.applications.handlebars.renderTemplate(
+          `systems/starwarsffg/templates/items/dialogs/ffg-edit-${itemType}.html`,
+          { title, content: { item, type: itemType, parenttype: this.object.type } }
+        );
+
+        DialogV2.wait({
+        window: { title },
+        classes: ["dialog", "starwarsffg"],
+        content: editContent,
+        buttons: [
           {
-            title,
-            content: {
-              item,
-              type: itemType,
-              parenttype: this.object.type,
-            },
-            buttons: {
-              done: {
-                icon: '<i class="fas fa-check"></i>',
-                label: game.i18n.localize("SWFFG.ButtonAccept"),
-                callback: (html) => {
+            action: "done",
+            icon: "fas fa-check",
+            label: game.i18n.localize("SWFFG.ButtonAccept"),
+            default: true,
+            callback: (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const html = $(dialog.element);
                   switch (itemType) {
                     case "itemmodifier": {
                       const formData = {};
@@ -1127,18 +1223,15 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
                     }
                   }
                 },
-              },
-              cancel: {
-                icon: '<i class="fas fa-times"></i>',
-                label: game.i18n.localize("SWFFG.Cancel"),
-              },
-            },
           },
           {
-            classes: ["dialog", "starwarsffg"],
-            template: `systems/starwarsffg/templates/items/dialogs/ffg-edit-${itemType}.html`,
-          }
-        ).render(true);
+            action: "cancel",
+            icon: "fas fa-times",
+            label: game.i18n.localize("SWFFG.Cancel"),
+          },
+        ],
+        rejectClose: false,
+      });
       }
     });
 
@@ -1349,116 +1442,42 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
     }
     const baseName = $(li).data("base-item-name");
     const talent = $(".talent-name", li).data("name");
-    const dialog = new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Talent.ConfirmTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Purchase.Talent.ConfirmText", {cost: cost, talent: talent}),
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Talent.ConfirmTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.Talent.ConfirmText", {cost: cost, talent: talent})}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
               // update the form because the fields are read when an update is performed
               const talentId = $(li).attr("id");
               const input = $(`[name="data.talents.${talentId}.islearned"]`, this.element)[0];
               input.checked = true;
-              await this.object.sheet.submit();
+              await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
               owner.update({system: {experience: {available: availableXP - cost}}});
               await xpLogSpend(owner, `specialization ${baseName} talent ${talent}`, cost, availableXP - cost, totalXP);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
-  async _handleSourceControl(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const action = $(event.currentTarget).data("action");
-    const sourceIndex = $(event.currentTarget).data("index");
-    if (action === "add") {
-      const addSource = new Dialog({
-        title: game.i18n.localize("SWFFG.Meta.Sources.AddSource.Title"),
-        content: `
-          <p>${game.i18n.localize("SWFFG.Meta.Sources.AddSource.Book")} :</p>
-          <input type="text" id="book" name="book" value="Force and Destiny Core Rulebook" autofocus>
-          <p>${game.i18n.localize("SWFFG.Meta.Sources.AddSource.Page")}:</p>
-          <input type="number" id="page" name="page" value="0">
-        `,
-        buttons: {
-          submit: {
-            icon: '<i class="fas fa-check"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Sources.AddSource.Submit"),
-            callback: async (obj, event) => {
-              const jObj = $(obj);
-              const bookName = jObj.find("#book").val();
-              const pageNum = jObj.find("#page").val();
-              await this.object.update({"system.metadata.sources": [...this.object.system.metadata.sources, `${bookName} pg. ${pageNum}`]});
-            },
-          },
-          cancel: {
-            icon: '<i class="fas fa-x"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Sources.AddSource.Cancel"),
-          },
-        },
-        default: "submit",
-      });
-      addSource.render(true, {focus: true, classes: ["app", "window-app", "dialog", "themed", "theme-light", "starwarsffg-dialog"]});
-    } else if (action === "remove") {
-      const sources = foundry.utils.deepClone(this.item.system.metadata.sources);
-      sources.splice(sourceIndex, 1);
-      await this.object.update({"system.metadata.sources": sources});
-    }
-    this.render(true);
-  }
-
-  async _handleTagControl(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    const action = $(event.currentTarget).data("action");
-    const tagIndex = $(event.currentTarget).data("index");
-    if (action === "add") {
-      const addTag = new Dialog({
-        title: game.i18n.localize("SWFFG.Meta.Tags.AddTag.Title"),
-        content: `
-          <p>${game.i18n.localize("SWFFG.Meta.Tags.AddTag.Tag")} :</p>
-          <input type="text" id="tag" name="tag" value="" autofocus>
-        `,
-        buttons: {
-          submit: {
-            icon: '<i class="fas fa-check"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Tags.AddTag.Submit"),
-            callback: async (obj, event) => {
-              const jObj = $(obj);
-              const tag = jObj.find("#tag").val();
-              const updatedTags = this.item.system.metadata.tags || [];
-              updatedTags.push(tag);
-              await this.object.update({"system.metadata.tags": updatedTags});
-            }
-          },
-          cancel: {
-            icon: '<i class="fas fa-x"></i>',
-            label: game.i18n.localize("SWFFG.Meta.Tags.AddTag.Cancel"),
-          },
-        },
-        default: "submit",
-      });
-      addTag.render(true, {focus: true, classes: ["app", "window-app", "dialog", "themed", "theme-light", "starwarsffg-dialog"]});
-    } else if (action === "remove") {
-      const tags = foundry.utils.deepClone(this.item.system.metadata.tags);
-      tags.splice(tagIndex, 1);
-      await this.object.update({"system.metadata.tags": tags});
-    }
-    this.render(true);
-  }
+  // _handleSourceControl / _handleTagControl: the V1 Dialog overrides that used
+  // to live here were deleted in the V2 conversion; the FFGDocumentSheet base
+  // provides DialogV2 versions (same lang keys, same update shape) with a
+  // single-instance guard, shared by item and actor sheets.
 
   async _handleItemBuy(event) {
     event.preventDefault();
@@ -1557,15 +1576,17 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
     const logEntry = this._findPurchaseLogEntry(owner, logDescription);
     const refundAmount = logEntry ? parseInt(logEntry.xp.cost, 10) || 0 : 0;
 
-    const dialog = new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: nodeName, cost: refundAmount }),
-        buttons: {
-          done: {
-            icon: '<i class="fa-solid fa-check"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: nodeName, cost: refundAmount })}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-solid fa-check",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
-            callback: async () => {
+            default: true,
+            callback: async (event, button, dialog) => {
               if (!owner.verifyEditModeIsNotEnabled()) return;
 
               const AEState = await ActorHelpers.beginEditMode(owner, true);
@@ -1582,13 +1603,26 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
                   const match = log.find((e) => e.action === "purchased" && !e.refunded && e.description === logDescription);
                   if (match) match.refunded = true;
                 }
+                // Effective (sheet-visible) XP. system.experience.available is the
+                // BASE value - and this runs inside edit mode, which suspends the
+                // purchase effects - so it does not match the XP box. Every log entry
+                // records the effective available after its own operation, so the
+                // newest one is the current value; a refund returns exactly the
+                // recorded cost. (Mirrors the four actor-sheet refund paths.)
+                const newestEntry = log?.[0]?.xp;
+                const effectiveAvailableBefore = Number.isFinite(Number(newestEntry?.available))
+                  ? Number(newestEntry.available)
+                  : Number(owner.system.experience.available) || 0;
+                const effectiveTotal = Number.isFinite(Number(newestEntry?.total))
+                  ? Number(newestEntry.total)
+                  : Number(owner.system.experience.total) || 0;
                 log.unshift({
                   action: "refunded",
                   id: undefined,
                   xp: {
                     cost: refundAmount,
-                    available: owner.system.experience.available,
-                    total: owner.system.experience.total,
+                    available: effectiveAvailableBefore + refundAmount,
+                    total: effectiveTotal,
                   },
                   date: new Date().toISOString().slice(0, 10),
                   description: logDescription,
@@ -1609,16 +1643,14 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
               }
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   async _buyForcePowerUpgrade(event) {
@@ -1632,15 +1664,19 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
     let totalXP;
     let AEState;
     let availableXPToLog;
-    const dialog = new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.FP.ConfirmTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Purchase.FP.ConfirmText", {cost: cost, upgrade: upgradeName}),
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.FP.ConfirmTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.FP.ConfirmText", {cost: cost, upgrade: upgradeName})}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
               try {
                 // this fixes the actual math bugs but the log shows incorrect values. need to fix that.
                 const basic_data = await this._buyHandleClick(cost, "forcepower");
@@ -1655,22 +1691,20 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
               // update the form because the fields are read when an update is performed
               const input = $(`[name="data.upgrades.${upgradeId}.islearned"]`, this.element)[0];
               input.checked = true;
-              await this.object.sheet.submit({preventClose: true});
+              await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
               owner.update({system: {experience: {available: availableXP - cost}}});
               await xpLogSpend(owner, `force power ${baseName} upgrade ${upgradeName}`, cost, availableXPToLog - cost, totalXP, undefined, {kind: "tree", type: "forcepower", itemId: this.object.id, nodeId: upgradeId});
               await ActorHelpers.endEditMode(owner, AEState, true);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   async _buySignatureAbilityUpgrade(event) {
@@ -1684,15 +1718,19 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
     let totalXP;
     let AEState;
     let availableXPToLog;
-    const dialog = new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.SA.ConfirmTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Purchase.SA.ConfirmText", {cost: cost, upgrade: upgradeName}),
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.SA.ConfirmTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.SA.ConfirmText", {cost: cost, upgrade: upgradeName})}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
 
               try {
                 // this fixes the actual math bugs but the log shows incorrect values. need to fix that.
@@ -1709,22 +1747,20 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
               // update the form because the fields are read when an update is performed
               const input = $(`[name="data.upgrades.${upgradeId}.islearned"]`, this.element)[0];
               input.checked = true;
-              await this.object.sheet.submit({preventClose: true});
+              await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
               owner.update({system: {experience: {available: availableXP - cost}}});
               await xpLogSpend(owner, `signature ability ${baseName} upgrade ${upgradeName}`, cost, availableXPToLog - cost, totalXP, undefined, {kind: "tree", type: "signatureability", itemId: this.object.id, nodeId: upgradeId});
               await ActorHelpers.endEditMode(owner, AEState, true);
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   async _buySpecializationUpgrade(event) {
@@ -1738,15 +1774,19 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
     let totalXP;
     let AEState;
     let availableXPToLog;
-    const dialog = new Dialog(
-      {
-        title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Specialization.ConfirmTitle"),
-        content: game.i18n.format("SWFFG.Actors.Sheets.Purchase.Specialization.ConfirmText", {cost: cost, upgrade: upgradeName}),
-        buttons: {
-          done: {
-            icon: '<i class="fa-regular fa-circle-up"></i>',
+    const dialog = DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Specialization.ConfirmTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.Specialization.ConfirmText", {cost: cost, upgrade: upgradeName})}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-regular fa-circle-up",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            callback: async (that) => {
+            default: true,
+            callback: async (event, button, dialog) => {
+            // V1 passed the dialog's jQuery content as this parameter; rebind it.
+            const that = $(dialog.element);
 
               try {
                 const basic_data = await this._buyHandleClick(cost, "specialization");
@@ -1764,7 +1804,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
               // update the form because the fields are read when an update is performed
               const input = $(`[name="data.talents.${upgradeId}.islearned"]`, this.element)[0];
               input.checked = true;
-              await this.object.sheet.submit({preventClose: true});
+              await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
               // FFG rule: reaching an unranked talent already owned in another tree auto-purchases
               // it (for free) on this tree. Buying this talent may have connected to such a talent.
               try {
@@ -1783,30 +1823,29 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
               }
             },
           },
-          cancel: {
-            icon: '<i class="fas fa-cancel"></i>',
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
             label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
           },
-        },
-      },
-      {
-        classes: ["dialog", "starwarsffg"],
-      }
-    ).render(true);
+        ],
+        rejectClose: false,
+      });
   }
 
   /* -------------------------------------------- */
 
   /** @override */
-  _updateObject(event, formData) {
+  async _updateObject(event, formData, { render = false } = {}) {
     if(this.actor && !this.actor?.verifyEditModeIsNotEnabled()) return;
 
     const itemUpdate = ItemHelpers.itemUpdate.bind(this);
     // Return the promise so callers that `await sheet.submit()` actually wait for the document
     // write (and re-render) to finish. Without this, submit() resolves before the talent's
     // islearned change is persisted, which made cross-tree auto-purchase read stale data and
-    // only "catch up" on the following purchase.
-    return itemUpdate(event, formData);
+    // only "catch up" on the following purchase. The `render` intent comes from the base's
+    // manual submit pipeline and flows through to document.update (default: no re-render).
+    return itemUpdate(event, formData, { render });
   }
 
   /**
@@ -1896,7 +1935,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
 
       $(".talent-grid").toggleClass("talent-disable-edit");
       $(".talent-uplink-connections").toggleClass("talent-disable-edit");
-      await this._onSubmit(event);
+      await this._onSubmit(event, { render: true });
     }
 
     if (action === "combine") {
@@ -1928,7 +1967,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
         $(`input[name='data.upgrades.${nextNextKey}.visible']`).val("false");
         $(`input[name='data.upgrades.${nextNextNextKey}.visible']`).val("false");
       }
-      await this._onSubmit(event);
+      await this._onSubmit(event, { render: true });
     }
 
     if (action === "split") {
@@ -1949,7 +1988,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
         $(`input[name='data.upgrades.${nextNextKey}.visible']`).val(true);
         $(`input[name='data.upgrades.${nextNextKey}.size']`).val("double");
       }
-      await this._onSubmit(event);
+      await this._onSubmit(event, { render: true });
     }
 
     if (action === "link-top") {
@@ -1959,7 +1998,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
         const currentValue = $(`input[name='data.${itemType}.${key}.links-top-${linkid}']`).val() == "true";
         $(`input[name='data.${itemType}.${key}.links-top-${linkid}']`).val(!currentValue);
 
-        await this._onSubmit(event);
+        await this._onSubmit(event, { render: true });
       }
     }
 
@@ -1969,7 +2008,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
         const currentValue = $(`input[name='data.${itemType}.${key}.links-right']`).val() == "true";
         $(`input[name='data.${itemType}.${key}.links-right']`).val(!currentValue);
 
-        await this._onSubmit(event);
+        await this._onSubmit(event, { render: true });
       }
     }
 
@@ -1991,7 +2030,7 @@ export class ItemSheetFFG extends foundry.appv1.sheets.ItemSheet {
         const inputElement = $(`input[name='data.uplink_nodes.${linkid}']`);
         const currentValue = inputElement.val() === "true";
         inputElement.val(!currentValue);
-        await this._onSubmit(event);
+        await this._onSubmit(event, { render: true });
       }
     }
   }

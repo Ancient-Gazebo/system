@@ -1,8 +1,22 @@
+import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 import ItemHelpers from "../helpers/item-helpers.js";
 import ModifierHelpers from "../helpers/modifiers.js";
-import EmbeddedItemHelpers from "../helpers/embeddeditem-helpers.js";
+import { FFGFormApplication } from "../apps/ffg-form-application.js";
 
-export class itemEditor extends FormApplication  {
+/**
+ * mergeObject option that APPLIES `-=key` deletion markers. V12+ defaults it
+ * off, and V14 renamed the option from `performDeletions` to `applyOperators`
+ * (the old name warns, and is removed in V16).
+ *
+ * Evaluated lazily, per call: `game` is not populated while ES modules are
+ * being imported, so reading `game.release` at module scope would throw during
+ * system init.
+ */
+function mergeApplyDeletions() {
+  return game.release?.generation >= 14 ? { applyOperators: true } : { performDeletions: true };
+}
+
+export class itemEditor extends FFGFormApplication {
   /*
   Known issues:
     - The title of the editor doesn't get updated when you update the name
@@ -12,30 +26,63 @@ export class itemEditor extends FormApplication  {
   constructor(data) {
     super();
     this.data = data;
+    // Inline {{editor}} state, keyed by field name. FormDataExtended reads live
+    // ProseMirror content from these on submit (see _getSubmitData).
+    this.editors = {};
+    // appId mirrors the V1 field some handlers still reference.
+    this.appId = this.id;
+    // The header title is dynamic (current + parent item). Set it up front so
+    // it is available before the frame header renders; _prepareContext refreshes
+    // it on re-render.
+    this._title = game.i18n.format("SWFFG.Items.Popout.Title", {
+      currentItem: data.clickedObject.name,
+      parentItem: data.sourceObject.name,
+    });
+    // (Codex skin detection removed - this fork does not ship the Codex sheets.)
+    this._cdx = false;
+  }
+
+  static DEFAULT_OPTIONS = {
+    classes: ["starwarsffg", "flat_editor"],
+    tag: "div",
+    window: {
+      title: "Embedded Item Editor",
+      contentTag: "form",
+      resizable: true,
+    },
+    position: {
+      width: 520,
+      height: 600,
+    },
+    form: {
+      submitOnChange: true,
+      closeOnSubmit: false,
+    },
+    submitOnClose: true,
+  };
+
+  static PARTS = {
+    content: { root: true, template: "" },
+  };
+
+  /**
+   * Render the type-specific template (ffg-embedded-<type>.html) as the root
+   * part, preserving the modifier list's scroll position across re-renders.
+   * @override
+   */
+  _configureRenderParts(_options) {
+    return {
+      content: {
+        root: true,
+        template: this.template,
+        scrollable: [".modification_container"],
+      },
+    };
   }
 
   /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(
-      super.defaultOptions,
-      {
-        title: `Embedded Item Editor`, // should not be seen by anyone, as it is dynamically set on getData()
-        //height: 720,
-        width: 520,
-        template: "systems/starwarsffg/templates/items/dialogs/ffg-embedded-itemattachment.html",
-        closeOnSubmit: false,
-        submitOnClose: true,
-        submitOnChange: true,
-        resizable: true,
-        classes: ["starwarsffg", "flat_editor", "sheet"],
-        tabs: [{ navSelector: ".tabs", contentSelector: ".content", initial: "tab1"}],
-        // The element that actually scrolls is the active tab (CSS gives `.tab.active`
-        // `overflow-y:auto`); `.modification_container` never scrolls, so watching only it
-        // meant appv1 restored nothing and every edit-triggered re-render snapped to the top.
-        // `.tab` matches the scrollable tabs (same pattern the actor sheet uses).
-        scrollY: [".tab", ".modification_container"],
-      }
-    );
+  get title() {
+    return this._title ?? game.i18n.localize(this.options.window.title);
   }
 
   /** @override */
@@ -45,9 +92,9 @@ export class itemEditor extends FormApplication  {
   }
 
   /** @override */
-  async getData(options) {
-    // update the title since it isn't available when creating the application
-    this.options.title = game.i18n.format("SWFFG.Items.Popout.Title", {currentItem: this.data.clickedObject.name, parentItem: this.data.sourceObject.name});
+  async _prepareContext(_options) {
+    // refresh the dynamic title on (re-)render
+    this._title = game.i18n.format("SWFFG.Items.Popout.Title", {currentItem: this.data.clickedObject.name, parentItem: this.data.sourceObject.name});
     const data = await this._enrichData();
     let modifierChoices = CONFIG.FFG.allowableModifierChoices;
 
@@ -74,44 +121,162 @@ export class itemEditor extends FormApplication  {
    */
   async _enrichData() {
     let enriched = this.data;
-    // `itemmodifier`/`itemattachment`/`adjusteditemmodifer` are stored inside permissive AnyFields, so
-    // they are never cleaned/normalized by the data model. A prior write can leave them stored as an
-    // index-keyed object ({0:..}) or {} rather than an array, which makes a bare `for...of` throw
-    // "is not iterable" and prevents the editor from opening. Coerce the whole tree back to real arrays
-    // so iteration, the drag-drop `.push`, and the save diff all behave - and so the next save persists
-    // the corrected shape (self-healing). Mirrors the normalization done on the write path.
-    const clickedSystem = enriched.clickedObject.system;
-    EmbeddedItemHelpers.normalizeEmbeddedArrays(clickedSystem);
-    enriched.clickedObject.system.enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(this.data.clickedObject.system.description);
-    for (let modification of clickedSystem.itemmodifier ?? []) {
-      modification.system.enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(modification.system.description);
+    const co = enriched.clickedObject;
+    if (co?.system?.description !== undefined) {
+      co.system.enrichedDescription = await foundry.applications.ux.TextEditor.implementation.enrichHTML(co.system.description);
+      for (let modification of co.system.itemmodifier ?? []) {
+        modification.system.enrichedDescription = await foundry.applications.ux.TextEditor.implementation.enrichHTML(modification.system.description);
+      }
+    } else if (co?.description !== undefined) {
+      // Force-power / signature upgrades (and specialization talents) carry the
+      // description directly on the object, not under .system.
+      co.enrichedDescription = await foundry.applications.ux.TextEditor.implementation.enrichHTML(co.description);
     }
     return enriched;
   }
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    this._setupTabs();
+    this._activateListeners($(this.form));
+    this._activateEditors();
+  }
+
+  /* ---- Inline {{editor}} (ProseMirror) support ----
+     FFGFormApplication half-wired this (it has the `.editor.prosemirror` change
+     guard) but never activated the editors or fed them to FormDataExtended.
+     Mirrors FFGDocumentSheet, but the field source is the embedded clickedObject
+     and the save flows through the form (_onSubmit -> _updateObject -> write-back)
+     rather than a document update. */
+
+  /** @override — feed live editor content into the submitted form data. */
+  _getSubmitData(updateData = {}) {
+    if (!this.form) throw new Error("The form application has no registered form element.");
+    const fd = new foundry.applications.ux.FormDataExtended(this.form, { editors: this.editors });
+    let data = fd.object;
+    if (updateData) data = foundry.utils.mergeObject(data, updateData, { inplace: false });
+    return foundry.utils.flattenObject(data);
+  }
+
+  /** Bind each {{editor}} Edit button to mount a ProseMirror editor inline. */
+  _activateEditors() {
+    const root = this.element;
+    if (!root) return;
+    for (const content of root.querySelectorAll(".editor-content[data-edit]")) {
+      const name = content.dataset.edit;
+      if (!name) continue;
+      const containerEl = content.closest(".editor");
+      const button = containerEl?.querySelector(".editor-edit");
+      if (!button || button.dataset.editorBound) continue;
+      button.dataset.editorBound = "1";
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        this._activateEditor(name, content, containerEl, button);
+      });
+    }
+  }
+
+  async _activateEditor(name, contentEl, containerEl, buttonEl) {
+    if (this.editors[name]?.instance?.view) return;
+    if (this.editors[name]) this._destroyEditor(name);
+    const initial = foundry.utils.getProperty(this.data.clickedObject, name) ?? "";
+    const { ProseMirrorEditor } = foundry.applications.ux;
+    // Register the FormDataExtended-compatible entry BEFORE create() resolves so
+    // a submit-on-change mid-mount still serializes this editor.
+    this.editors[name] = {
+      instance: null,
+      options: { engine: "prosemirror", target: name, button: true, owner: this.isEditable },
+      active: true,
+      button: buttonEl,
+      container: containerEl,
+    };
+    const editor = await ProseMirrorEditor.create(contentEl, initial, {
+      // sourceObject (the host item) is a real Document — used for relative link
+      // resolution only; the actual save goes through the form, not this doc.
+      document: this.data.sourceObject,
+      fieldName: name,
+      relativeLinks: true,
+      plugins: {
+        menu: ProseMirror.ProseMirrorMenu.build(ProseMirror.defaultSchema, {
+          destroyOnSave: false,
+          onSave: () => this._saveEditor(name, { remove: true }),
+        }),
+        keyMaps: ProseMirror.ProseMirrorKeyMaps.build(ProseMirror.defaultSchema, {
+          onSave: () => this._saveEditor(name, { remove: true }),
+        }),
+      },
+    });
+    this.editors[name].instance = editor;
+    // `prosemirror` on the container is what FFGFormApplication's _onChangeForm
+    // guard looks for to avoid submitting on every keystroke.
+    containerEl.classList.add("editor-active", "prosemirror");
+    if (buttonEl) buttonEl.style.display = "none";
+  }
+
+  async _saveEditor(name, { remove = true } = {}) {
+    const state = this.editors[name];
+    if (!state?.instance?.view || state._saving) return;
+    state._saving = true;
+    try {
+      // _onSubmit reads the form via our _getSubmitData (which serializes the
+      // live editor) and routes through _updateObject -> embedded write-back.
+      await this._onSubmit(new Event("submit", { cancelable: true }));
+    } finally {
+      if (remove) this._destroyEditor(name);
+      this.render(true);
+    }
+  }
+
+  _destroyEditor(name) {
+    const state = this.editors[name];
+    if (!state) return;
+    try { state.instance?.destroy(); } catch (_e) { /* already torn down */ }
+    state.container?.classList.remove("editor-active", "prosemirror");
+    if (state.button) state.button.style.display = "";
+    delete this.editors[name];
+  }
+
+  /** Bind the BASICS / BASE MODS tab navigation, remembering the active tab. */
+  _setupTabs() {
+    if (!this.element) return;
+    new foundry.applications.ux.Tabs({
+      navSelector: ".tabs",
+      contentSelector: ".content",
+      initial: this._activeTab ?? "tab1",
+      callback: (_event, _tabs, active) => { this._activeTab = active; },
+    }).bind(this.element);
+  }
+
+  _activateListeners(html) {
     html.find('[name="system.type"]').on("change", this._updateType.bind(this));
     html.find(".flat_editor.dropdown").on("change", this._updateDropdown.bind(this));
     html.find(".flat_editor.add-mod").on("click", this._modControl.bind(this));
     html.find(".flat_editor.add-modification").on("click", this._modificationControl.bind(this));
 
     // allow drag-and-dropping mods if this is an attachment
-    if (["itemattachment", "shipattachment"].includes(this.data.clickedObject.type)) {
+    if (this.data.clickedObject.type === "itemattachment") {
       const dragDrop = new foundry.applications.ux.DragDrop({
         dragSelector: ".item",
         dropSelector: ".starwarsffg.flat_editor",
         permissions: { dragstart: this._canDragStart.bind(this), drop: this._canDragDrop.bind(this) },
         callbacks: { drop: this.onDropMod.bind(this) },
       });
-      dragDrop.bind($(`[data-appid="${this.appId}"]`)[0]);
+      dragDrop.bind(this.element);
     }
   }
 
+  /** DragDrop permission hooks. itemEditor extends FFGFormApplication (not the
+   *  sheet classes that define these), so without them `this._canDragStart.bind`
+   *  on the attachment DragDrop above throws a TypeError — which aborted
+   *  _onRender and left the attachment editor window un-draggable (qualities,
+   *  which skip the DragDrop, were unaffected). */
+  _canDragStart(_selector) { return true; }
+  _canDragDrop(_selector) { return true; }
+
   async onDropMod(event) {
     CONFIG.logger.debug("caught mod drag-and-drop");
-    if (!["itemattachment", "shipattachment"].includes(this.data.clickedObject.type)) {
+    if (this.data.clickedObject.type !== "itemattachment") {
       ui.notifications.info("You can only drag-and-drop mods onto attachments.");
       return;
     }
@@ -129,14 +294,6 @@ export class itemEditor extends FormApplication  {
     }
 
     const droppedObject = await fromUuid(data.uuid);
-
-    // standalone attachment: add the dropped mod directly to this attachment's modifications
-    if (this.data.standalone) {
-      this.data.clickedObject.system.itemmodifier.push(droppedObject.toObject());
-      await this.data.sourceObject.update({system: {itemmodifier: this.data.clickedObject.system.itemmodifier}});
-      this.render(true);
-      return;
-    }
 
     // if it's an attachment, locate the attachment to update
     let updateData;
@@ -158,21 +315,22 @@ export class itemEditor extends FormApplication  {
    * @param event
    */
   async _modControl(event) {
+    // The control is an <a data-action="create|delete">; stop the click here so
+    // it doesn't bubble to ApplicationV2's [data-action] dispatcher / the form,
+    // which (on delete) was closing the editor window.
+    event.preventDefault();
+    event.stopPropagation();
     let action = event.currentTarget.getAttribute('data-action');
     if (action === 'create') {
       const nk = new Date().getTime();
       const modifierTypes = CONFIG.FFG.allowableModifierTypes;
       const modifierChoices = CONFIG.FFG.allowableModifierChoices;
       const modificationId = $(event.currentTarget).data("modification-id");
-      // `direct` decides where the new modifier is filed: true => the item's own
-      // `system.attributes`; false => nested under the targeted optional modification
-      // (`system.itemmodifier[N].system.attributes`). That choice depends solely on whether a
-      // modification was targeted. The old check keyed off the clicked object's type
-      // (`!== "itemattachment"`), which wrongly returned true for `shipattachment` - whose
-      // modifications nest exactly like an itemattachment's - so a modifier added to a ship
-      // attachment's optional modification landed in the top-level attributes and vanished on the
-      // next re-render. Keying off the modification id is correct for every item type.
-      const direct = modificationId === undefined;
+      let direct = this.data.clickedObject.type !== "itemattachment";
+      if (modificationId === undefined) {
+        // we aren't adding it to a modification, so this is true
+        direct = true;
+      }
 
       CONFIG.logger.debug(`caught creating a new mod on an attachment. data: ${modificationId}, ${direct}`);
       CONFIG.logger.debug(modifierTypes);
@@ -199,7 +357,7 @@ export class itemEditor extends FormApplication  {
 
       $(event.currentTarget).parent().parent().children(".attributes-list").append(rendered);
       // update the listeners, so we catch events on these new entries
-      this.activateListeners($(event.currentTarget).parent().parent().children(".attributes-list"));
+      this._activateListeners($(event.currentTarget).parent().parent().children(".attributes-list"));
       // submit the changes so it gets saved even if the user reloads without closing the editor
       await this._updateObject(undefined, this._getSubmitData());
     } else if (action === 'delete') {
@@ -223,6 +381,10 @@ export class itemEditor extends FormApplication  {
    * @param event
    */
   async _modificationControl(event) {
+    // Stop the <a data-action="delete"> click from bubbling to ApplicationV2's
+    // [data-action] dispatcher / the form, which was closing the editor window.
+    event.preventDefault();
+    event.stopPropagation();
     if(this.actor && !this.data.sourceObject.parent?.verifyEditModeIsNotEnabled()) return;
 
     let action = event.currentTarget.getAttribute('data-action');
@@ -241,14 +403,14 @@ export class itemEditor extends FormApplication  {
               description: "Placeholder description",
               active: false,
               rank: 0,
-              attributes: {},
+              attribute: {},
             },
           },
         }
       );
       $(event.currentTarget).parent().children('.modification_container').append(rendered);
       // update the listeners, so we catch events on these new entries
-      this.activateListeners($(event.currentTarget).parent().children('.modification_container'));
+      this._activateListeners($(event.currentTarget).parent().children('.modification_container'));
       // submit the changes so it gets saved even if the user reloads without closing the editor
       await this._updateObject(undefined, this._getSubmitData());
     } else if (action === 'delete') {
@@ -324,16 +486,6 @@ export class itemEditor extends FormApplication  {
       } else if ($valueInput.attr('type') === 'checkbox') {
         $valueInput.replaceWith(`<input name="${valueName}" type="number" class="modvalue" value="0" data-attr-id="${$valueInput.data('attr-id')}">`);
       }
-
-      // The rebuilt mod dropdown defaults to its first option, but the base class's submitOnChange
-      // handler fires on this same change event *before* this handler rebuilt those options (handlers
-      // run in bind order, and super.activateListeners binds first). Left alone, that stale submit
-      // persists the previous modtype's mod (or a blank) while the UI shows the new first option - so
-      // the modifier never matches in aggregation and never applies. Set the mod select to the new
-      // first option and persist explicitly so stored data matches what is shown.
-      const $modSelect = $(event.currentTarget).parent().find(".flat_editor.dropdown.mod");
-      $modSelect.val(Object.values(chosen_config ?? {})[0]?.value ?? "");
-      await this._updateObject(undefined, this._getSubmitData());
     }
   }
 
@@ -354,44 +506,11 @@ export class itemEditor extends FormApplication  {
 
     const existingActiveEffects = this.data.sourceObject.getEmbeddedCollection("ActiveEffect");
 
-    // Standalone attachment (opened from the items tab): its base modifiers and optional
-    // modifications live directly on this item, so persist the form straight to it. No
-    // Active Effects are managed here - those are created when the attachment is later added
-    // to a weapon/armour and its modifications are installed.
-    if (this.data.standalone) {
-      const update = { name: formData.name, system: foundry.utils.deepClone(formData.system) };
-      // ensure every optional modification has a well-formed attributes object (a modification
-      // with no modifiers otherwise serializes without one, which breaks drag-onto-item)
-      if (Array.isArray(update.system.itemmodifier)) {
-        for (const mod of update.system.itemmodifier) {
-          if (!mod.system) mod.system = {};
-          if (!mod.system.attributes || typeof mod.system.attributes !== "object" || Array.isArray(mod.system.attributes)) {
-            mod.system.attributes = {};
-          }
-        }
-      }
-      // mark base modifiers that were removed in the form for deletion
-      for (const modKey of Object.keys(this.data.clickedObject.system.attributes || {})) {
-        if (!Object.keys(formData.system.attributes).includes(modKey)) {
-          update.system.attributes[`-=${modKey}`] = null;
-        }
-      }
-      await this.data.sourceObject.update(update);
-      // keep our working copy in sync so re-renders show the saved state
-      this.data.clickedObject = this.data.sourceObject.toObject();
-      this.render(true);
-      return;
-    }
-
     // if it's an attachment, locate the attachment to update
     let updateData;
     if (this.data.clickedObject.type === "itemattachment") {
       CONFIG.logger.debug("> Detected item type of itemattachment");
-      // Deep-clone the source array before mutating it. Mutating `system.itemattachment` in place and
-      // passing it back to update() leaves the new data identical to _source, so Foundry's diff finds
-      // no change - the edit isn't reliably persisted and open sheets don't re-render (the change only
-      // appeared after re-opening the sheet, and uninstalling a modification looked like it did nothing).
-      updateData = foundry.utils.deepClone(this.data.sourceObject.system.itemattachment);
+      updateData = this.data.sourceObject.system.itemattachment;
       for (let attachment of updateData) {
         if (attachment._id === this.data.clickedObject._id) {
           CONFIG.logger.debug(`>> Found relevant attachment: ${attachment.name} / ${attachment.id}, looking for removed keys`);
@@ -428,7 +547,7 @@ export class itemEditor extends FormApplication  {
               for (const curMod of explodedMods) {
                 changes.push({
                   key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-                  mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+                  mode: AE_MODES.ADD,
                   value: formData.system.attributes[modKey].value,
                 });
               }
@@ -482,7 +601,7 @@ export class itemEditor extends FormApplication  {
                 for (const curMod of explodedMods) {
                   changes.push({
                     key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-                    mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+                    mode: AE_MODES.ADD,
                     value: modifier.system.attributes[modKey].value,
                   });
                 }
@@ -517,10 +636,18 @@ export class itemEditor extends FormApplication  {
             }
           }
 
-          // merge the existing data in so we end up with all fields present
+          // merge the existing data in so we end up with all fields present.
+          // performDeletions:true APPLIES the `-=key` deletion markers (v12+
+          // defaults this to false) — otherwise they linger in the merged
+          // attributes as `{"-=attr...": null}`, and the next render iterates
+          // that null entry into ffg-mod.html, throwing "Cannot convert
+          // undefined or null to object" and closing the editor window.
           attachment = foundry.utils.mergeObject(
             attachment,
             formData,
+            // V14 renamed mergeObject's `performDeletions` to `applyOperators`;
+            // feature-detect so the `-=key` deletion markers are applied on both.
+            mergeApplyDeletions(),
           );
           // pull the updated data back into our local record of what it should look like
           this.data.clickedObject = attachment;
@@ -531,10 +658,7 @@ export class itemEditor extends FormApplication  {
 
     // if it's a mod, locate the mod to update
     if (this.data.clickedObject.type === "itemmodifier") {
-      // Deep-clone before mutating (see the itemattachment branch above): mutating the live source
-      // array in place makes update()'s diff a no-op, so changes neither persist reliably nor trigger
-      // a re-render.
-      updateData = foundry.utils.deepClone(this.data.sourceObject.system.itemmodifier);
+      updateData = this.data.sourceObject.system.itemmodifier;
       for (let modifier of updateData) {
         // select based on names instead of IDs, as IDs are not present here
         if (modifier.name === this.data.clickedObject.name) {
@@ -552,9 +676,14 @@ export class itemEditor extends FormApplication  {
             }
           }
           // merge the existing data in so we end up with all fields present
+          // (performDeletions:true applies `-=key` markers — see the attachment
+          // branch above; otherwise the lingering null entry crashes re-render).
           modifier = foundry.utils.mergeObject(
             modifier,
             formData,
+            // V14 renamed mergeObject's `performDeletions` to `applyOperators`;
+            // feature-detect so the `-=key` deletion markers are applied on both.
+            mergeApplyDeletions(),
           );
           // pull the updated data back into our local record of what it should look like
           this.data.clickedObject = modifier;
@@ -577,7 +706,7 @@ export class itemEditor extends FormApplication  {
         for (const curMod of explodedMods) {
           changes.push({
             key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: formData.system.attributes[modKey].value,
           });
         }
@@ -612,28 +741,11 @@ export class talentEditor extends itemEditor {
     Known issues:
     - The description rich text editor doesn't appear to work
   */
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(
-      super.defaultOptions,
-      {
-        title: `Embedded Talent Editor`, // should not be seen by anyone, as it is dynamically set on getData()
-        //height: 720,
-        width: 520,
-        closeOnSubmit: false,
-        submitOnClose: true,
-        submitOnChange: true,
-        resizable: true,
-        classes: ["starwarsffg", "flat_editor"],
-        tabs: [{ navSelector: ".tabs", contentSelector: ".content", initial: "tab1"}],
-        // The element that actually scrolls is the active tab (CSS gives `.tab.active`
-        // `overflow-y:auto`); `.modification_container` never scrolls, so watching only it
-        // meant appv1 restored nothing and every edit-triggered re-render snapped to the top.
-        // `.tab` matches the scrollable tabs (same pattern the actor sheet uses).
-        scrollY: [".tab", ".modification_container"],
-      }
-    );
-  }
+  static DEFAULT_OPTIONS = {
+    window: {
+      title: "Embedded Talent Editor",
+    },
+  };
 
   /** @override */
   get template() {
@@ -642,9 +754,9 @@ export class talentEditor extends itemEditor {
   }
 
     /** @override */
-  async getData(options) {
-    // update the title since it isn't available when creating the application
-    this.options.title = game.i18n.format("SWFFG.Items.Popout.Title", {currentItem: this.data.clickedObject.name, parentItem: this.data.sourceObject.name});
+  async _prepareContext(_options) {
+    // refresh the dynamic title on (re-)render
+    this._title = game.i18n.format("SWFFG.Items.Popout.Title", {currentItem: this.data.clickedObject.name, parentItem: this.data.sourceObject.name});
 
     let activations = CONFIG.FFG.activations;
     let data = await this._enrichData();
@@ -704,7 +816,7 @@ export class talentEditor extends itemEditor {
 
       $(event.currentTarget).parent().parent().children(".attributes-list").append(rendered);
       // update the listeners, so we catch events on these new entries
-      this.activateListeners($(event.currentTarget).parent().parent().children(".attributes-list"));
+      this._activateListeners($(event.currentTarget).parent().parent().children(".attributes-list"));
       // submit the changes so it gets saved even if the user reloads without closing the editor
       await this._updateObject(undefined, this._getSubmitData());
     } else if (action === 'delete') {
@@ -721,7 +833,7 @@ export class talentEditor extends itemEditor {
    */
   async _enrichData() {
     let enriched = this.data;
-    enriched.clickedObject.enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(this.data.clickedObject.description);
+    enriched.clickedObject.enrichedDescription = await foundry.applications.ux.TextEditor.implementation.enrichHTML(this.data.clickedObject.description);
     return enriched;
   }
 
@@ -782,7 +894,7 @@ export class talentEditor extends itemEditor {
         for (const curMod of explodedMods) {
           changes.push({
             key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: formData.attributes[modKey].value,
           });
         }
@@ -830,28 +942,11 @@ export class forcePowerEditor extends itemEditor {
     Known issues:
     - The description rich text editor doesn't appear to work
   */
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(
-      super.defaultOptions,
-      {
-        title: `Embedded Force Power Editor`, // should not be seen by anyone, as it is dynamically set on getData()
-        //height: 720,
-        width: 520,
-        closeOnSubmit: false,
-        submitOnClose: true,
-        submitOnChange: true,
-        resizable: true,
-        classes: ["starwarsffg", "flat_editor"],
-        tabs: [{ navSelector: ".tabs", contentSelector: ".content", initial: "tab1"}],
-        // The element that actually scrolls is the active tab (CSS gives `.tab.active`
-        // `overflow-y:auto`); `.modification_container` never scrolls, so watching only it
-        // meant appv1 restored nothing and every edit-triggered re-render snapped to the top.
-        // `.tab` matches the scrollable tabs (same pattern the actor sheet uses).
-        scrollY: [".tab", ".modification_container"],
-      }
-    );
-  }
+  static DEFAULT_OPTIONS = {
+    window: {
+      title: "Embedded Force Power Editor",
+    },
+  };
 
   /** @override */
   get template() {
@@ -860,9 +955,9 @@ export class forcePowerEditor extends itemEditor {
   }
 
     /** @override */
-  async getData(options) {
-    // update the title since it isn't available when creating the application
-    this.options.title = game.i18n.format("SWFFG.Items.Popout.Title", {currentItem: this.data.clickedObject.name, parentItem: this.data.sourceObject.name});
+  async _prepareContext(_options) {
+    // refresh the dynamic title on (re-)render
+    this._title = game.i18n.format("SWFFG.Items.Popout.Title", {currentItem: this.data.clickedObject.name, parentItem: this.data.sourceObject.name});
 
     // build out the mod type and mod choices
     let modTypeChoices = CONFIG.FFG.allowableModifierTypes;
@@ -894,6 +989,11 @@ export class forcePowerEditor extends itemEditor {
    * @param event
    */
   async _modControl(event) {
+    // The control is an <a data-action="create|delete">; stop the click here so
+    // it doesn't bubble to ApplicationV2's [data-action] dispatcher / the form,
+    // which (on delete) was closing the editor window.
+    event.preventDefault();
+    event.stopPropagation();
     let action = event.currentTarget.getAttribute('data-action');
     if (action === 'create') {
       const nk = new Date().getTime();
@@ -927,7 +1027,7 @@ export class forcePowerEditor extends itemEditor {
 
       $(event.currentTarget).parent().parent().children(".attributes-list").append(rendered);
       // update the listeners, so we catch events on these new entries
-      this.activateListeners($(event.currentTarget).parent().parent().children(".attributes-list"));
+      this._activateListeners($(event.currentTarget).parent().parent().children(".attributes-list"));
       // submit the changes so it gets saved even if the user reloads without closing the editor
       await this._updateObject(undefined, this._getSubmitData());
     } else if (action === 'delete') {
@@ -944,7 +1044,7 @@ export class forcePowerEditor extends itemEditor {
    */
   async _enrichData() {
     let enriched = this.data;
-    enriched.clickedObject.enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(this.data.clickedObject.description);
+    enriched.clickedObject.enrichedDescription = await foundry.applications.ux.TextEditor.implementation.enrichHTML(this.data.clickedObject.description);
     return enriched;
   }
 
@@ -1000,7 +1100,7 @@ export class forcePowerEditor extends itemEditor {
         for (const curMod of explodedMods) {
           changes.push({
             key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: formData.attributes[modKey].value,
           });
         }

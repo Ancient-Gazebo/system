@@ -1,36 +1,40 @@
-/**
- * A specialized form used to pop out the editor.
- * @extends {FormApplication}
- */
-
 import ModifierHelpers from "./helpers/modifiers.js";
-export default class PopoutModifiers extends FormApplication {
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "popout-modifiers",
-      classes: ["starwarsffg", "sheet"],
+import { FFGFormApplication } from "./apps/ffg-form-application.js";
+
+/**
+ * Pop-out window for editing an item / upgrade / talent's modifier (attribute)
+ * list. Live-edits: each change submits and re-renders, and closing flushes a
+ * final submit (submitOnClose).
+ * @extends {FFGFormApplication}
+ */
+export default class PopoutModifiers extends FFGFormApplication {
+  static DEFAULT_OPTIONS = {
+    id: "popout-modifiers",
+    classes: ["starwarsffg", "sheet"],
+    window: {
       title: "Pop-out Modifiers",
-      template: "systems/starwarsffg/templates/items/dialogs/ffg-popout-modifiers.html",
-      closeOnSubmit: false,
-      submitOnClose: true,
-      submitOnChange: true,
       resizable: true,
+    },
+    position: {
       width: 320,
       height: 320,
-    });
-  }
+    },
+    form: {
+      submitOnChange: true,
+      closeOnSubmit: false,
+    },
+    submitOnClose: true,
+  };
 
-  /**
-   * Return a reference to the target attribute
-   * @type {String}
-   */
-  get attribute() {
-    return this.options.name;
-  }
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/items/dialogs/ffg-popout-modifiers.html",
+    },
+  };
 
   /** @override */
-  getData() {
+  async _prepareContext(_options) {
     const data = {
       data: this.object.system,
       modTypeSelected: "all",
@@ -54,13 +58,30 @@ export default class PopoutModifiers extends FormApplication {
   /* -------------------------------------------- */
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    // window-content is the <form> (contentTag); the `root` PARTS entry strips
+    // the template's own <form>, so `.attributes` is a direct child of
+    // window-content. Constrain the (potentially long) modifier list to scroll
+    // within the window instead of overflowing the frame -- a flex column so
+    // the list takes the remaining height. Inline + !important so the mandar
+    // theme can't win the cascade and reintroduce overflow.
+    const content = this.element?.querySelector(".window-content");
+    const attributes = content?.querySelector(":scope > .attributes");
+    if (content && attributes) {
+      content.style.setProperty("display", "flex", "important");
+      content.style.setProperty("flex-direction", "column", "important");
+      attributes.style.setProperty("flex", "1 1 auto", "important");
+      attributes.style.setProperty("min-height", "0", "important");
+      attributes.style.setProperty("overflow-y", "auto", "important");
+    }
 
-    if (!this.options.editable) return;
-
-    //html.find(".attributes .attribute-control").on("click", () => { alert("here")});
-    html.find(".attributes").on("click", ".attribute-control", ModifierHelpers.onClickAttributeControl.bind(this));
+    if (this.isEditable && content) {
+      // Delegated add/remove modifier-row controls. `.attributes` is re-created
+      // on every render, so (re)bind here. onClickAttributeControl reads
+      // `this.form` and calls `this._onSubmit` -- both provided by the base.
+      $(content).find(".attributes").on("click", ".attribute-control", ModifierHelpers.onClickAttributeControl.bind(this));
+    }
   }
 
   /* -------------------------------------------- */

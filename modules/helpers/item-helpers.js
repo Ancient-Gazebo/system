@@ -1,8 +1,9 @@
 import ModifierHelpers from "./modifiers.js";
 import TalentTree from "./talent-tree.js";
+import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 
 export default class ItemHelpers {
-  static async itemUpdate(event, formData) {
+  static async itemUpdate(event, formData, { render = false } = {}) {
     formData = foundry.utils.expandObject(formData);
 
     if (this.object.isEmbedded && this.object.actor?.compendium?.metadata) {
@@ -39,7 +40,7 @@ export default class ItemHelpers {
     delete formData._id;
 
     foundry.utils.setProperty(formData, `flags.starwarsffg.loaded`, false);
-    await this.object.update(formData);
+    await this.object.update(formData, { render });
     // sync the active effect state (if applicable). needs to be after the update so we have the updated state
     await ItemHelpers.syncAEStatus(this.object, this.object.getEmbeddedCollection("ActiveEffect"));
     // Only re-render if the sheet is still open; async awaits above mean the user may have
@@ -100,7 +101,7 @@ export default class ItemHelpers {
         }
         changes.push({
           key: path,
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          mode: AE_MODES.ADD,
           value: true,
         });
       }
@@ -122,7 +123,7 @@ export default class ItemHelpers {
         }
         changes.push({
           key: path,
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          mode: AE_MODES.ADD,
           value: true,
         });
       }
@@ -347,13 +348,19 @@ export default class ItemHelpers {
             // the mod should be applied once per rank
             const newValue = modifier.system.rank_current * modifier.system.attributes[attr].value;
             CONFIG.logger.debug(`Located ${attr}, updating with new value of ${newValue}`);
-            await matchingEffect.update({
-              "changes": [{
-                key: matchingEffect.changes[0].key,
-                mode: matchingEffect.changes[0].mode,
-                value: newValue,
-              }],
-            });
+            // Only the value changes. Deep-clone the effect's stored `_source`
+            // changes and edit that in place, rather than rebuilding the change
+            // from its fields: V14 replaced the numeric `mode` with the string
+            // `type` and kept `mode` as a deprecated getter (removed in V16), and
+            // that getter is present on the live change AND on toObject()'s copy,
+            // so any read of it warns. `_source` is the raw stored data with no
+            // getters, so this touches nothing deprecated and preserves whichever
+            // shape the effect actually has (plus key, priority, and any siblings).
+            const changes = foundry.utils.deepClone(matchingEffect._source.changes ?? []);
+            if (changes.length) {
+              changes[0].value = newValue;
+              await matchingEffect.update({ changes });
+            }
           }
         }
       }

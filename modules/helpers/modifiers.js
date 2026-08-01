@@ -1,4 +1,5 @@
 import PopoutModifiers from "../popout-modifiers.js";
+import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 
 export default class ModifierHelpers {
   /**
@@ -674,7 +675,7 @@ export default class ModifierHelpers {
             // throw and wipe the in-progress edits). Mirrors the create path in item-ffg.js.
             inherentEffect.changes.push({
               key: modPath,
-              mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+              mode: AE_MODES.ADD,
               value: formData.data.attributes[k].value,
             });
           }
@@ -783,7 +784,7 @@ export default class ModifierHelpers {
         for (const curMod of explodedMods) {
           changes.push({
             key: ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']),
-            mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+            mode: AE_MODES.ADD,
             value: formData.data.attributes[k].value,
           });
         }

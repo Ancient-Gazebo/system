@@ -1,28 +1,32 @@
 import Helpers from "../helpers/common.js";
 import { defaultSkillList } from "../config/ffg-skillslist.js";
 
-export default class SkillListImporter extends FormApplication {
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "swffg-skilllist-importer",
-      classes: ["starwarsffg", "data-import"],
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+export default class SkillListImporter extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    id: "swffg-skilllist-importer",
+    classes: ["starwarsffg", "data-import"],
+    tag: "div",
+    window: {
       title: "Skill List Importer",
+      contentTag: "form",
+      contentClasses: ["data-importer-window"],
+    },
+    position: {
       width: 385,
-      template: "systems/starwarsffg/templates/importer/skill-list-importer.html",
-    });
-  }
+    },
+  };
 
-  /**
-   * Return a reference to the target attribute
-   * @type {String}
-   */
-  get attribute() {
-    return this.options.name;
-  }
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/importer/skill-list-importer.html",
+    },
+  };
 
   /** @override */
-  async getData() {
+  async _prepareContext(_options) {
     $(".import-progress").addClass("import-hidden");
 
     if (!CONFIG?.temporary) {
@@ -46,8 +50,9 @@ export default class SkillListImporter extends FormApplication {
   }
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.form);
 
     html.find(".reset-button").on("click", async (event) => {
       event.preventDefault();

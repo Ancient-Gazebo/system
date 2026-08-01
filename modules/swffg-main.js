@@ -59,12 +59,16 @@ import CurrencySettings from "./settings/currency-settings.js";
 import { ApplyDamage } from "./helpers/apply-damage.js";
 import { ApplyCrit } from "./helpers/apply-crit.js";
 import { registerGMBridge } from "./helpers/gm-bridge.js";
+import { migrateLegacyScope, promptLegacyScopeMigration } from "./helpers/legacy-scope-migration.js";
 import { setupCriticalTables } from "./helpers/crit-tables.js";
 import { registerGlitchSmithIntegration } from "./integrations/glitchsmith.js";
 import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-details.js";
 import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
 import TalentTree from "./helpers/talent-tree.js";
+import { AE_MODES } from "./config/ffg-active-effect-modes.js";
+
+const { DialogV2 } = foundry.applications.api;
 
 /* -------------------------------------------- */
 /*  Foundry VTT Initialization                  */
@@ -119,6 +123,7 @@ Hooks.once("init", async function () {
     migrateSpeciesInherentEffects,
     cleanupSpeciesTalentEffects,
     setupCriticalTables,
+    migrateLegacyScope,
   };
 
   // Define custom log prefix and logger
@@ -731,47 +736,47 @@ Hooks.once("init", async function () {
     for (const skill of Object.keys(CONFIG.FFG.skills)) {
       allSkillChanges['boost'].push({
         key: `system.skills.${skill}.boost`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['setback'].push({
         key: `system.skills.${skill}.setback`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['upgrade'].push({
         key: `system.skills.${skill}.upgrades`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['upgradeDifficulty'].push({
         key: `system.skills.${skill}.upgradeDifficulty`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['success'].push({
         key: `system.skills.${skill}.success`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['advantage'].push({
         key: `system.skills.${skill}.advantage`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['difficulty'].push({
         key: `system.skills.${skill}.difficulty`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['light'].push({
         key: `system.skills.${skill}.light`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
       allSkillChanges['dark'].push({
         key: `system.skills.${skill}.dark`,
-        mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+        mode: AE_MODES.ADD,
         value: "1",
       });
     }
@@ -789,8 +794,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/blue.png`,
       name: "SWFFG.Status.Boost.Next",
       changes: allSkillChanges['boost'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -798,8 +807,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/black.png`,
       name: "SWFFG.Status.Setback.Next",
       changes: allSkillChanges['setback'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -807,8 +820,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/yellow.png`,
       name: "SWFFG.Status.Upgrade.Next",
       changes: allSkillChanges['upgrade'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -816,8 +833,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/red.png`,
       name: "SWFFG.Status.UpgradeDifficulty.Next",
       changes: allSkillChanges['upgradeDifficulty'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -825,8 +846,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/success.png`,
       name: "SWFFG.Status.Success.Next",
       changes: allSkillChanges['success'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -834,8 +859,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/advantage.png`,
       name: "SWFFG.Status.Advantage.Next",
       changes: allSkillChanges['advantage'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -843,8 +872,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/purple.png`,
       name: "SWFFG.Status.Difficulty.Next",
       changes: allSkillChanges['difficulty'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     // Pull of the Force: add a Light/Dark pip to the next check (consumed after the next roll,
@@ -855,8 +888,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/darkside.png`,
       name: "SWFFG.Status.PullOfTheForce.Dark",
       changes: allSkillChanges['dark'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -864,8 +901,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/lightside.png`,
       name: "SWFFG.Status.PullOfTheForce.Light",
       changes: allSkillChanges['light'],
-      system: {
-        duration: "once",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
       }
     });
 
@@ -875,8 +916,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/blue.png`,
       name: "SWFFG.Status.Boost.Combat",
       changes: allSkillChanges['boost'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -884,8 +929,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/black.png`,
       name: "SWFFG.Status.Setback.Combat",
       changes: allSkillChanges['setback'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -893,8 +942,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/yellow.png`,
       name: "SWFFG.Status.Upgrade.Combat",
       changes: allSkillChanges['upgrade'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -902,8 +955,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/red.png`,
       name: "SWFFG.Status.UpgradeDifficulty.Combat",
       changes: allSkillChanges['upgradeDifficulty'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -911,8 +968,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/success.png`,
       name: "SWFFG.Status.Success.Combat",
       changes: allSkillChanges['success'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -920,8 +981,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/advantage.png`,
       name: "SWFFG.Status.Advantage.Combat",
       changes: allSkillChanges['advantage'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
     CONFIG.statusEffects.push({
@@ -929,8 +994,12 @@ Hooks.once("init", async function () {
       img: `systems/starwarsffg/images/status/purple.png`,
       name: "SWFFG.Status.Difficulty.Combat",
       changes: allSkillChanges['difficulty'],
-      system: {
-        duration: "combat",
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
       }
     });
 
@@ -961,12 +1030,12 @@ Hooks.once("init", async function () {
       changes: [
         {
           key: "system.stats.defence.melee",
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          mode: AE_MODES.ADD,
           value: "2",
         },
         {
           key: "system.stats.defence.ranged",
-          mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+          mode: AE_MODES.ADD,
           value: "2",
         },
       ],
@@ -1034,13 +1103,23 @@ Hooks.once("init", async function () {
 
   // Register sheet application classes
   foundry.documents.collections.Actors.unregisterSheet("core", foundry.appv1.sheets.ActorSheet);
-  foundry.documents.collections.Actors.registerSheet("ffg", ActorSheetFFG, { label: "Actor Sheet v1" });
-  foundry.documents.collections.Actors.registerSheet("ffg", ActorSheetFFGV2, { makeDefault: true, label: "Actor Sheet v2" });
-  foundry.documents.collections.Actors.registerSheet("ffg", AdversarySheetFFG, { types: ["character"], label: "Adversary Sheet v1" });
-  foundry.documents.collections.Actors.registerSheet("ffg", AdversarySheetFFGV2, { types: ["character"], label: "Adversary Sheet v2" });
+  // V2-full migration: the V1/V2 actor + adversary sheets now resolve to the
+  // same native ApplicationV2 sheet. ActorSheetFFG / AdversarySheetFFG are the
+  // real classes (ActorSheetFFG takes makeDefault); the V2 names stay registered
+  // without makeDefault only as deprecated aliases so worlds with
+  // `flags.core.sheetClass === "ffg.ActorSheetFFGV2"` / `"ffg.AdversarySheetFFGV2"`
+  // keep resolving.
+  foundry.documents.collections.Actors.registerSheet("ffg", ActorSheetFFG, { makeDefault: true, label: "Actor Sheet" });
+  foundry.documents.collections.Actors.registerSheet("ffg", ActorSheetFFGV2, { label: "Actor Sheet v2 (deprecated, use Actor Sheet)" });
+  foundry.documents.collections.Actors.registerSheet("ffg", AdversarySheetFFG, { types: ["character"], label: "Adversary Sheet" });
+  foundry.documents.collections.Actors.registerSheet("ffg", AdversarySheetFFGV2, { types: ["character"], label: "Adversary Sheet v2 (deprecated, use Adversary Sheet)" });
   foundry.documents.collections.Items.unregisterSheet("core", foundry.appv1.sheets.ItemSheet);
-  foundry.documents.collections.Items.registerSheet("ffg", ItemSheetFFG, { label: "Item Sheet v1" });
-  foundry.documents.collections.Items.registerSheet("ffg", ItemSheetFFGV2, { makeDefault: true, label: "Item Sheet v2" });
+  // V2-full migration: ItemSheetFFG and ItemSheetFFGV2 now resolve to the same
+  // native ApplicationV2 sheet. ItemSheetFFG is the real, default class;
+  // ItemSheetFFGV2 stays registered (no makeDefault) only as a deprecated alias
+  // so worlds with `flags.core.sheetClass === "ffg.ItemSheetFFGV2"` keep resolving.
+  foundry.documents.collections.Items.registerSheet("ffg", ItemSheetFFG, { makeDefault: true, label: "Item Sheet" });
+  foundry.documents.collections.Items.registerSheet("ffg", ItemSheetFFGV2, { label: "Item Sheet v2 (deprecated, use Item Sheet)" });
 
   // Add utilities to the global scope, this can be useful for macro makers
   window.DicePoolFFG = DicePoolFFG;
@@ -1203,8 +1282,19 @@ Hooks.on("renderChatInput", (app, html, data) => {
       rollButton.type = "button";
       rollButton.classList.add("ui-control", "icon", "fa-light", "fa-dice-d20");
 
-      const rollPrivacyElement = document.querySelector("#roll-privacy");
-      rollPrivacyElement.appendChild(rollButton);
+      // V14 renamed/relocated the chat roll-mode controls (formerly "#roll-privacy"),
+      // so a global querySelector returns null and appendChild throws - which aborts
+      // the renderChatInput hook and drops the button. Scope the lookup to the
+      // chat-input element the hook hands us and fall back gracefully so a further
+      // DOM change can never throw here again.
+      const root = html instanceof HTMLElement ? html : (html?.[0] ?? document);
+      const anchor =
+        root.querySelector("#roll-privacy") ||
+        document.querySelector("#roll-privacy") ||
+        root.querySelector(".control-buttons") ||
+        root.querySelector(".chat-controls") ||
+        root;
+      anchor.appendChild(rollButton);
 
       rollButton.onclick = async function () {
         const dicePool = new DicePoolFFG();
@@ -1274,7 +1364,10 @@ Hooks.on("renderCompendiumDirectory", (app, html, data) => {
 });
 
 // Update chat messages with dice images
-Hooks.on("renderChatMessage", async (app, html, messageData) => {
+// (renderChatMessage was deprecated in V13 and no longer fires reliably on V14;
+// renderChatMessageHTML passes a raw HTMLElement, so wrap it for the jQuery code below.)
+Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
+  html = html instanceof jQuery ? html : $(html);
   const content = html.find(".message-content");
   content[0].innerHTML = await PopoutEditor.renderDiceImages(content[0].innerHTML);
 
@@ -1433,24 +1526,36 @@ Hooks.once("ready", async () => {
   // this is intended to encourage migrating code to this file to clean up the main file
   await handleUpdate();
 
+  // This build ships under its own system id so it can be installed beside the
+  // stable system, which means a world duplicated from that system keeps all of
+  // its flags and settings under the old id. Offer to copy them across once.
+  try {
+    await promptLegacyScopeMigration();
+  } catch (err) {
+    CONFIG.logger?.warn?.("Legacy-scope migration prompt failed", err);
+  }
+
   const currentVersion = game.settings.get("starwarsffg", "systemMigrationVersion");
 
   const version = game.system.version;
   const isAlpha = game.system.version.includes("alpha");
 
   if (isAlpha && game.user.isGM) {
-    let d = new Dialog({
-      title: "Warning",
-      content: "<p>This is an alpha release of the system.  It is not recommended for regular gameplay. <b>There will be bugs.</b> <br><br>Check Discord or the GitHub repo for the latest stable version.</p>",
-      buttons: {
-        one: {
-          icon: '<i class="fas fa-check"></i>',
-          label: "I understand",
-          callback: () => console.log("Chose One") // leaving in case I get feedback to update a game setting to not show this on every load
-        }
-      },
-      default: "one",
-    });
+    let d = new DialogV2({
+        window: { title: "Warning" },
+        content: "<p>This is an alpha release of the system.  It is not recommended for regular gameplay. <b>There will be bugs.</b> <br><br>Check Discord or the GitHub repo for the latest stable version.</p>",
+        buttons: [
+          {
+            action: "one",
+            icon: "fas fa-check",
+            label: "I understand",
+            default: true,
+            // leaving in case I get feedback to update a game setting to not show this on every load
+            callback: (event, button, dialog) => { return console.log("Chose One"); },
+          },
+        ],
+        rejectClose: false,
+      });
     d.render(true);
   }
 

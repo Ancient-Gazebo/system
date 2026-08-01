@@ -23,6 +23,7 @@
  *
  * @extends {FormApplication}
  */
+import { FFGFormApplication } from "../apps/ffg-form-application.js";
 import { applyToTargetActor } from "./gm-bridge.js";
 
 const CRIT_TYPES = {
@@ -47,7 +48,7 @@ const MODIFIERS = [
   { key: "critrating", sign: 1, labelKey: "SWFFG.CriticalRoller.Mod.CritRating", hintKey: "SWFFG.CriticalRoller.Mod.CritRatingHint" },
 ];
 
-export default class CriticalRollerFFG extends FormApplication {
+export default class CriticalRollerFFG extends FFGFormApplication {
   constructor(options = {}) {
     super({}, options);
     // Apply mode: launched from an attack's Apply Crit button. The type is
@@ -78,19 +79,27 @@ export default class CriticalRollerFFG extends FormApplication {
     };
   }
 
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "ffg-critical-roller",
-      classes: ["starwarsffg", "ffg-critical-roller"],
-      template: "systems/starwarsffg/templates/dialogs/ffg-critical-roller.html",
-      width: 420,
-      height: "auto",
+  static DEFAULT_OPTIONS = {
+    id: "ffg-critical-roller",
+    classes: ["starwarsffg", "ffg-critical-roller"],
+    window: {
       resizable: true,
+    },
+    position: {
+      width: 420,
+    },
+    form: {
       submitOnChange: false,
       closeOnSubmit: false,
-    });
-  }
+    },
+  };
+
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/dialogs/ffg-critical-roller.html",
+    },
+  };
 
   /** @override */
   get title() {
@@ -185,7 +194,7 @@ export default class CriticalRollerFFG extends FormApplication {
   /* -------------------------------------------- */
 
   /** @override */
-  async getData() {
+  async _prepareContext(_options) {
     const mods = MODIFIERS.map((m) => ({
       key: m.key,
       label: game.i18n.localize(m.labelKey),
@@ -263,8 +272,9 @@ export default class CriticalRollerFFG extends FormApplication {
   /* -------------------------------------------- */
 
   /** @override */
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.element);
     const root = html[0];
 
     // Switching the critical type re-renders so the source list (folders/packs) refreshes.
@@ -523,7 +533,11 @@ export default class CriticalRollerFFG extends FormApplication {
         ${body}
       </div>`;
 
-    const rollMode = game.settings.get("core", "rollMode");
+    // V14 replaced core.rollMode / ChatMessage.applyRollMode with core.messageMode
+    // and ChatMessage#applyMode; feature-detect so crit cards respect the user's
+    // chosen visibility on both generations.
+    const isV14 = game.release.generation >= 14;
+    const rollMode = game.settings.get("core", isV14 ? "messageMode" : "rollMode");
     // Resolve rollMode into whisper/blind targets for both the dice animation and the card.
     let whisper = null;
     let blind = false;
@@ -567,8 +581,14 @@ export default class CriticalRollerFFG extends FormApplication {
         },
       },
     };
-    ChatMessage.applyRollMode(messageData, rollMode);
-    await ChatMessage.create(messageData);
+    if (isV14) {
+      const msg = new ChatMessage(messageData);
+      if (rollMode) msg.applyMode(rollMode);
+      await ChatMessage.create(msg);
+    } else {
+      ChatMessage.applyRollMode(messageData, rollMode);
+      await ChatMessage.create(messageData);
+    }
   }
 
   /* -------------------------------------------- */
@@ -576,7 +596,7 @@ export default class CriticalRollerFFG extends FormApplication {
   /* -------------------------------------------- */
 
   static registerChatListeners() {
-    Hooks.on("renderChatMessage", (message, html) => {
+    Hooks.on("renderChatMessageHTML", (message, html) => {
       const data = message.flags?.starwarsffg?.criticalRoller;
       if (!data?.choices?.length) return;
       const $html = html instanceof jQuery ? html : $(html);
@@ -653,13 +673,23 @@ export default class CriticalRollerFFG extends FormApplication {
         </div>
       </div>`;
 
-    const rollMode = game.settings.get("core", "rollMode");
+    // V14 replaced core.rollMode / ChatMessage.applyRollMode with core.messageMode
+    // and ChatMessage#applyMode; feature-detect so crit cards respect the user's
+    // chosen visibility on both generations.
+    const isV14 = game.release.generation >= 14;
+    const rollMode = game.settings.get("core", isV14 ? "messageMode" : "rollMode");
     const messageData = {
       user: game.user.id,
       speaker: { alias: game.i18n.localize("SWFFG.CriticalRoller.Speaker") },
       content,
     };
-    ChatMessage.applyRollMode(messageData, rollMode);
-    await ChatMessage.create(messageData);
+    if (isV14) {
+      const msg = new ChatMessage(messageData);
+      if (rollMode) msg.applyMode(rollMode);
+      await ChatMessage.create(msg);
+    } else {
+      ChatMessage.applyRollMode(messageData, rollMode);
+      await ChatMessage.create(messageData);
+    }
   }
 }

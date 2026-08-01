@@ -1,4 +1,7 @@
 import { currencies as defaultCurrencies, defaultCurrency } from "../config/ffg-currency.js";
+import { FFGFormApplication } from "../apps/ffg-form-application.js";
+
+const { DialogV2 } = foundry.applications.api;
 
 /**
  * Settings menu for configuring the currency denominations available in the world.
@@ -6,21 +9,32 @@ import { currencies as defaultCurrencies, defaultCurrency } from "../config/ffg-
  * Each row defines a denomination key, display label, abbreviation, and conversion rate (how many
  * of that denomination equal one unit of the default currency).
  */
-export default class CurrencySettings extends FormApplication {
-  /** @override */
-  static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
-      id: "ffg-currency-settings",
-      classes: ["starwarsffg", "data-import"],
-      title: `${game.i18n.localize("SWFFG.Currency.Settings.Title")}`,
-      height: 480,
-      width: 480,
+export default class CurrencySettings extends FFGFormApplication {
+  static DEFAULT_OPTIONS = {
+    id: "ffg-currency-settings",
+    classes: ["starwarsffg", "data-import"],
+    window: {
+      title: "SWFFG.Currency.Settings.Title",
       resizable: true,
-      template: "systems/starwarsffg/templates/dialogs/currency-settings.html",
-    });
-  }
+    },
+    position: {
+      width: 480,
+      height: 480,
+    },
+    form: {
+      // V1 FormApplication closed on submit by default; keep that behavior.
+      closeOnSubmit: true,
+    },
+  };
 
-  getData(options) {
+  static PARTS = {
+    content: {
+      root: true,
+      template: "systems/starwarsffg/templates/dialogs/currency-settings.html",
+    },
+  };
+
+  async _prepareContext(_options) {
     const stored = game.settings.get("starwarsffg", "currencies") || {};
     const config = foundry.utils.isEmpty(stored) ? defaultCurrencies : stored;
     const defaultKey = game.settings.get("starwarsffg", "defaultCurrency") || defaultCurrency;
@@ -41,8 +55,9 @@ export default class CurrencySettings extends FormApplication {
     };
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    const html = $(this.element);
     html.find('button[name="reset"]').click(this._onResetDefaults.bind(this));
   }
 
@@ -112,12 +127,11 @@ export default class CurrencySettings extends FormApplication {
    * @private
    */
   _reload() {
-    Dialog.confirm({
-      title: game.i18n.localize("SWFFG.Currency.Settings.Reload.Title"),
+    DialogV2.confirm({
+      window: { title: game.i18n.localize("SWFFG.Currency.Settings.Reload.Title") },
       content: `<p>${game.i18n.localize("SWFFG.Currency.Settings.Reload.Content")}</p>`,
-      yes: () => foundry.utils.debouncedReload(),
-      no: () => {},
-      defaultYes: true,
+      yes: { callback: () => foundry.utils.debouncedReload() },
+      rejectClose: false,
     });
   }
 }

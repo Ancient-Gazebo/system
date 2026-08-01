@@ -611,10 +611,21 @@ export class ActorSheetFFG extends FFGActorSheet {
     // Force Presence scale: left emblem adds a Dark Side Balance Point, right emblem adds a Light
     // Side Balance Point. Right-click removes one from the corresponding side. Bound via delegation
     // on the sheet root so the controls work reliably regardless of tab/render timing.
-    html.on("click", ".force-presence-dark", this._onForcePresenceAdjust.bind(this, "dark", 1));
-    html.on("click", ".force-presence-light", this._onForcePresenceAdjust.bind(this, "light", 1));
-    html.on("contextmenu", ".force-presence-dark", this._onForcePresenceAdjust.bind(this, "dark", -1));
-    html.on("contextmenu", ".force-presence-light", this._onForcePresenceAdjust.bind(this, "light", -1));
+    //
+    // These are the only handlers in the system bound to the sheet ROOT rather than to descendants
+    // found under it. That distinction matters under ApplicationV2: the root <form> is reused across
+    // re-renders (only its innerHTML is swapped), so descendant handlers die with the old nodes but
+    // root-delegated ones ACCUMULATE -- one extra copy per render. A single click then ran this
+    // handler once per accumulated render, and because the copies all resolve concurrently they each
+    // saw "no alignment effect exists yet" and created one, stacking the threshold bonus; removing
+    // it then fired N deletes of the same id, N-1 of which threw "ActiveEffect does not exist".
+    // Namespacing lets us drop precisely our own previous bindings without disturbing handlers
+    // attached to the same root by core or by modules.
+    html.off(".ffgForcePresence");
+    html.on("click.ffgForcePresence", ".force-presence-dark", this._onForcePresenceAdjust.bind(this, "dark", 1));
+    html.on("click.ffgForcePresence", ".force-presence-light", this._onForcePresenceAdjust.bind(this, "light", 1));
+    html.on("contextmenu.ffgForcePresence", ".force-presence-dark", this._onForcePresenceAdjust.bind(this, "dark", -1));
+    html.on("contextmenu.ffgForcePresence", ".force-presence-light", this._onForcePresenceAdjust.bind(this, "light", -1));
 
     // Setup dice pool image and hide filtered skills
     html.find(".skill").each(async (_, elem) => {
@@ -3744,11 +3755,15 @@ export class ActorSheetFFG extends FFGActorSheet {
   async _reconcileMysticAlignmentEffects(dark, light) {
     const want = { dark: dark >= 7, light: light >= 7 };
 
+    // Collect ALL effects per side, not just the last one seen. A single slot per tag made
+    // duplicates invisible to reconciliation, so an actor that had accumulated several (see the
+    // binding note in activateListeners) could never be cleaned up: each pass deleted one and the
+    // rest kept inflating the threshold. Keeping the full list lets this converge in one pass.
     const have = {};
     for (const effect of this.actor.effects) {
       const tag = effect.getFlag("starwarsffg", "mysticAlignment");
       if (tag) {
-        have[tag] = effect;
+        (have[tag] ??= []).push(effect);
       }
     }
 
@@ -3786,15 +3801,22 @@ export class ActorSheetFFG extends FFGActorSheet {
     for (const side of ["dark", "light"]) {
       // Only want an effect if the threshold is reached AND it would actually modify something.
       const wanted = want[side] && definitions[side].changes.length > 0;
-      if (wanted && !have[side]) {
+      const existing = have[side] ?? [];
+      if (wanted && existing.length === 0) {
         toCreate.push(definitions[side]);
-      } else if (!wanted && have[side]) {
-        toDelete.push(have[side].id);
+      } else if (wanted && existing.length > 1) {
+        // Keep one, discard the surplus.
+        toDelete.push(...existing.slice(1).map((e) => e.id));
+      } else if (!wanted) {
+        toDelete.push(...existing.map((e) => e.id));
       }
     }
 
-    if (toDelete.length) {
-      await this.actor.deleteEmbeddedDocuments("ActiveEffect", toDelete);
+    // Drop ids the collection no longer holds. Deleting an already-deleted embedded document
+    // rejects, and an unhandled rejection here would abort the create pass below.
+    const deleteIds = [...new Set(toDelete)].filter((id) => this.actor.effects.has(id));
+    if (deleteIds.length) {
+      await this.actor.deleteEmbeddedDocuments("ActiveEffect", deleteIds);
     }
     if (toCreate.length) {
       await this.actor.createEmbeddedDocuments("ActiveEffect", toCreate);

@@ -4199,8 +4199,59 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
   font-weight: 900;
   font-size: 12px;
   line-height: 1;
-  color: rgba(0, 0, 0, 0.6);
+  /* Was a flat rgba(0,0,0,.6), which is invisible against a dark sheet corner
+     (black on black). Draw it light with a dark halo so it stays readable on
+     either a light or a dark theme, including reskins like Space UI. */
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 1px 1px rgba(0, 0, 0, 0.7);
   pointer-events: none;
+}
+
+/* ------------------------------------------------------------------
+   Window chrome legibility (V14 ApplicationV2 header + ⋮ menu)
+   ------------------------------------------------------------------ */
+
+/* The ⋮ header menu inherits core's light dropdown palette, which leaves pale
+   text on a near-white panel once a dark sheet theme is in play. Pin both
+   colours so the entries stay readable no matter what supplies the theme. */
+.starwarsffg.application.sheet .controls-dropdown {
+  background: rgba(20, 22, 28, 0.97) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+}
+
+.starwarsffg.application.sheet .controls-dropdown .header-control,
+.starwarsffg.application.sheet .controls-dropdown .header-control > button,
+.starwarsffg.application.sheet .controls-dropdown button.header-control {
+  color: rgba(240, 240, 240, 0.95) !important;
+  --button-text-color: rgba(240, 240, 240, 0.95) !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+
+.starwarsffg.application.sheet .controls-dropdown .header-control:hover,
+.starwarsffg.application.sheet .controls-dropdown button.header-control:hover {
+  color: #fff !important;
+  --button-text-color: #fff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Display fonts carry very tall ascent/descent metrics, so with the default
+   `line-height: normal` the title's line box is taller than the 36px header and
+   the glyphs sit low enough to spill past its bottom edge. Clamp the line box
+   and let flex centring do the rest. */
+.starwarsffg.application.sheet > .window-header {
+  align-items: center !important;
+}
+
+.starwarsffg.application.sheet > .window-header > .window-title {
+  line-height: 1 !important;
+  align-self: center !important;
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 /* Cap the dialog width so a long hint/notes line wraps onto multiple rows
@@ -4283,7 +4334,12 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
 
 .starwarsffg.application.dialog .sheet-options-dialog input[type=checkbox]:checked::after {
   content: "\f00c";
-  font-family: "Font Awesome 6 Pro";
+  /* Foundry ships Font Awesome FREE; "Pro" only resolves for users who have
+     licensed it. Naming Pro alone made U+F00C fall through to a text font,
+     where it is an unassigned Private Use codepoint and renders as tofu -- a
+     small empty box inside every ticked checkbox. Same fallback chain as the
+     resize handle below. */
+  font-family: "Font Awesome 6 Pro", "Font Awesome 6 Free", "FontAwesome";
   font-weight: 900;
   font-size: 13px;
   color: #1b0e02;

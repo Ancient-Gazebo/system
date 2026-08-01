@@ -4246,37 +4246,47 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
 }
 
 /* Right-click / header context menus opened from a sheet.
-   Foundry themes <nav id="context-menu"> from core's `uiConfig.colorScheme`
-   *applications* setting, independently of the *interface* setting. With
-   Applications=Light and Interface=Dark -- a common pairing when a reskin makes
-   the sheets look dark regardless -- the menu resolves `--background` to core's
-   parchment texture and comes up tan with pale text over it. Changing the core
-   setting is the real fix; this keeps menus opened from our own sheets legible
-   in the meantime, and is deliberately NOT applied to sidebar/chat menus, which
-   are the user's setting to control. */
-.starwarsffg #context-menu.theme-light,
-.starwarsffg nav#context-menu.themed.theme-light {
+   Core copies the menu's theme off the sheet, NOT off the colour-scheme
+   setting:
+
+       const nearestThemed = target.closest(".themed") ?? document.body;
+       const [, theme] = nearestThemed.className.match(/(?:^|\s)(theme-\w+)/) ?? [];
+       if ( theme ) menu.classList.add("themed", theme);
+
+   Our sheets are pinned to `themed theme-light` in ffg-document-sheet.js (the
+   V13 skin depends on those variables), so every menu opened from one inherits
+   theme-light and resolves `--background` to core's parchment texture -- tan
+   panel, pale text -- no matter how the user sets Applications/Interface.
+
+   The menu is `document.body.appendChild`ed as a popover, so it is NOT a
+   descendant of the sheet and cannot be scoped via `.starwarsffg ...`. Scope by
+   body instead. In practice this only ever matches menus from our sheets, since
+   they are the only thing in the world forcing theme-light. */
+body.system-starwarsffg #context-menu.theme-light,
+body.system-starwarsffg #context-menu.theme-light .context-items,
+body.system-starwarsffg #context-menu.theme-light ol.context-items {
   --background: rgba(20, 22, 28, 0.97) !important;
   --color-text-primary: #f0f0f0 !important;
   --button-text-color: #f0f0f0 !important;
   background: rgba(20, 22, 28, 0.97) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
-.starwarsffg #context-menu.theme-light .context-item,
-.starwarsffg #context-menu.theme-light li,
-.starwarsffg #context-menu.theme-light a,
-.starwarsffg #context-menu.theme-light button {
+body.system-starwarsffg #context-menu.theme-light li,
+body.system-starwarsffg #context-menu.theme-light li > span,
+body.system-starwarsffg #context-menu.theme-light a,
+body.system-starwarsffg #context-menu.theme-light button,
+body.system-starwarsffg #context-menu.theme-light i {
   color: #f0f0f0 !important;
   background: transparent !important;
   text-shadow: none !important;
 }
 
-.starwarsffg #context-menu.theme-light .context-item:hover,
-.starwarsffg #context-menu.theme-light li:hover,
-.starwarsffg #context-menu.theme-light a:hover,
-.starwarsffg #context-menu.theme-light button:hover {
+body.system-starwarsffg #context-menu.theme-light li:hover,
+body.system-starwarsffg #context-menu.theme-light li:hover > span,
+body.system-starwarsffg #context-menu.theme-light a:hover,
+body.system-starwarsffg #context-menu.theme-light button:hover {
   color: #fff !important;
   background: rgba(255, 255, 255, 0.12) !important;
 }

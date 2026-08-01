@@ -4245,6 +4245,42 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
   background: rgba(255, 255, 255, 0.12) !important;
 }
 
+/* Right-click / header context menus opened from a sheet.
+   Foundry themes <nav id="context-menu"> from core's `uiConfig.colorScheme`
+   *applications* setting, independently of the *interface* setting. With
+   Applications=Light and Interface=Dark -- a common pairing when a reskin makes
+   the sheets look dark regardless -- the menu resolves `--background` to core's
+   parchment texture and comes up tan with pale text over it. Changing the core
+   setting is the real fix; this keeps menus opened from our own sheets legible
+   in the meantime, and is deliberately NOT applied to sidebar/chat menus, which
+   are the user's setting to control. */
+.starwarsffg #context-menu.theme-light,
+.starwarsffg nav#context-menu.themed.theme-light {
+  --background: rgba(20, 22, 28, 0.97) !important;
+  --color-text-primary: #f0f0f0 !important;
+  --button-text-color: #f0f0f0 !important;
+  background: rgba(20, 22, 28, 0.97) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+}
+
+.starwarsffg #context-menu.theme-light .context-item,
+.starwarsffg #context-menu.theme-light li,
+.starwarsffg #context-menu.theme-light a,
+.starwarsffg #context-menu.theme-light button {
+  color: #f0f0f0 !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+
+.starwarsffg #context-menu.theme-light .context-item:hover,
+.starwarsffg #context-menu.theme-light li:hover,
+.starwarsffg #context-menu.theme-light a:hover,
+.starwarsffg #context-menu.theme-light button:hover {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
 /* Sheet titles sat too low in the header.
    V1 rendered the window title as <h4>; ApplicationV2 renders it as <h1>. The
    Space Opera UI module carries a generic `h1 { margin: 1rem 0 0 }`, which

@@ -791,7 +791,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
               if (modActives[i] === "true") {
                 modNames[i] = `<i class="fa-solid fa-user-check" title="Installed"></i>&nbsp;${modNames[i]}`;
               } else {
-                modNames[i] = `<i class="fa-duotone fa-solid fa-user-xmark" title="Not Installed"></i>&nbsp;${modNames[i]}`;
+                modNames[i] = `<i class="fa-solid fa-user-xmark" title="Not Installed"></i>&nbsp;${modNames[i]}`;
               }
               newDesc += `<u>${modNames[i]}</u>:&nbsp;${modDescs[i]}<br>`;
             }

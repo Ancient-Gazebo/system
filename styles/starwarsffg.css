@@ -4211,44 +4211,59 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
    Window chrome legibility (V14 ApplicationV2 header + ⋮ menu)
    ------------------------------------------------------------------ */
 
-/* The ⋮ header menu inherits core's light dropdown palette, which leaves pale
-   text on a near-white panel once a dark sheet theme is in play. Pin both
-   colours so the entries stay readable no matter what supplies the theme. */
+/* The ⋮ menu is painted from `background: var(--background)`, and core's light
+   theme resolves that to the parchment texture -- hence a tan panel behind the
+   pale header-control text. Overriding the `background` property alone is not
+   enough to be sure of winning: pin the VARIABLE on the dropdown subtree as
+   well, so every descendant that paints from it resolves dark too. */
+.starwarsffg.application.sheet .controls-dropdown,
+.starwarsffg.application.sheet .controls-dropdown .header-control,
+.starwarsffg.application.sheet .controls-dropdown .header-control > button,
+.starwarsffg.application.sheet .controls-dropdown button.header-control {
+  --background: rgba(20, 22, 28, 0.97) !important;
+  --color-text-primary: #f0f0f0 !important;
+  --button-text-color: #f0f0f0 !important;
+  --button-background-color: transparent !important;
+}
+
 .starwarsffg.application.sheet .controls-dropdown {
   background: rgba(20, 22, 28, 0.97) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
 }
 
-.starwarsffg.application.sheet .controls-dropdown .header-control,
 .starwarsffg.application.sheet .controls-dropdown .header-control > button,
 .starwarsffg.application.sheet .controls-dropdown button.header-control {
-  color: rgba(240, 240, 240, 0.95) !important;
-  --button-text-color: rgba(240, 240, 240, 0.95) !important;
+  color: #f0f0f0 !important;
   background: transparent !important;
   text-shadow: none !important;
 }
 
-.starwarsffg.application.sheet .controls-dropdown .header-control:hover,
+.starwarsffg.application.sheet .controls-dropdown .header-control > button:hover,
 .starwarsffg.application.sheet .controls-dropdown button.header-control:hover {
   color: #fff !important;
-  --button-text-color: #fff !important;
   background: rgba(255, 255, 255, 0.12) !important;
 }
 
-/* Display fonts carry very tall ascent/descent metrics, so with the default
-   `line-height: normal` the title's line box is taller than the 36px header and
-   the glyphs sit low enough to spill past its bottom edge. Clamp the line box
-   and let flex centring do the rest. */
+/* Sheet titles sat too low in the header.
+   V1 rendered the window title as <h4>; ApplicationV2 renders it as <h1>. The
+   Space Opera UI module carries a generic `h1 { margin: 1rem 0 0 }`, which
+   never touched the title under V1 but now does -- and because Foundry declares
+   `@layer ... system, modules, ...`, a module's normal declaration outranks
+   core's own `.window-title { margin: 0 }` AND anything unimportant we say.
+   That 1rem top margin is what pushes the name toward the header's bottom edge.
+   Zero the whole margin (not just the bottom) with !important, which flips
+   layer order back in our favour. */
 .starwarsffg.application.sheet > .window-header {
   align-items: center !important;
 }
 
 .starwarsffg.application.sheet > .window-header > .window-title {
-  line-height: 1 !important;
-  align-self: center !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
   padding-bottom: 0 !important;
-  margin-bottom: 0 !important;
+  line-height: var(--header-height, 36px) !important;
+  align-self: center !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;

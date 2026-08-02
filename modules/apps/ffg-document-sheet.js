@@ -232,7 +232,14 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     this._activateCoreListeners(html);
     this.activateListeners(html);
     this._callLegacyRenderHook(html, context);
-    this._restoreInjectedTab();
+    // Deferred to the next frame on purpose. ApplicationV2 dispatches its own
+    // `render<ClassName>` hook only AFTER this method's promise resolves
+    // (ApplicationV2#_doEvent calls the handler, then #dispatchEvent), and that is the
+    // hook modules actually inject their tabs from -- the netrunning module listens for
+    // `renderActorSheetFFG`. Restoring synchronously here still ran before the tab
+    // existed. A microtask is not enough either, since the dispatch happens in the
+    // promise continuation; rAF clears the whole task.
+    requestAnimationFrame(() => this._restoreInjectedTab());
     this._activateEditors();
 
     // --- Window size stability: no auto-resize on re-render ---

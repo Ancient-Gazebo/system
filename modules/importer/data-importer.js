@@ -147,14 +147,25 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
       let zip = await DataImporter._readFile();
       if (typeof zip === "undefined") return;
 
-      const selectAll = document.querySelector("[data-action='selectAll']");
-      if (importAll !== null) selectAll.disabled = false;
+      // Scope every lookup to this importer's own form. A bare document.querySelector returns the
+      // FIRST match in the whole page, so with any other window open that has a submit button --
+      // the GM screen module is one -- `button[type='submit']` resolved to that window's button
+      // instead. This enabled the wrong button and left Start Import disabled, which still shows
+      // its :hover styling but never fires a click.
+      const scope = form ?? document;
+
+      const selectAll = scope.querySelector("[data-action='selectAll']");
+      // Was `if (importAll !== null)`, and `importAll` is declared nowhere: in a module (always
+      // strict mode) that reference throws a ReferenceError, which the surrounding catch turned
+      // into a generic "file load error" -- skipping the rest of this block, including the line
+      // that enables Start Import. Test the variable actually being used.
+      if (selectAll !== null) selectAll.disabled = false;
 
       for (const importer of Object.values(this.importers)) {
         this.canImport[importer.itemName] = this._enableImportSelection(importer.displayName, importer.className, zip.files);
       }
 
-      const startImport = document.querySelector("button[type='submit']")
+      const startImport = scope.querySelector("button[type='submit']")
       if (startImport !== null) startImport.disabled = false;
 
     } catch (err) {
@@ -173,20 +184,25 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
       return;
     }
 
+    // As in _loadFile: scope to this importer's own form rather than the whole document, so
+    // another open window's submit button or checkboxes cannot be read or disabled instead of
+    // ours. `form` is supplied by the ApplicationV2 form handler.
+    const scope = form ?? document;
+
     // Disable submit button to prevent double clicking
-    const startImport = document.querySelector("button[type='submit']")
+    const startImport = scope.querySelector("button[type='submit']")
     if (startImport !== null) startImport.disabled = true;
 
-    let importFiles = Array.from(document.querySelectorAll("input[type='checkbox'][name='imports']:checked")).map(el => (
+    let importFiles = Array.from(scope.querySelectorAll("input[type='checkbox'][name='imports']:checked")).map(el => (
       el.dataset.itemtype
     ));
 
-    for (const importer of document.querySelectorAll("input[type='checkbox'][name='imports']")) {
+    for (const importer of scope.querySelectorAll("input[type='checkbox'][name='imports']")) {
       const itemName = $(importer).data("itemtype");
       this.shouldImport[itemName] = importer.checked;
     }
 
-    if (document.querySelector("#deleteExisting").checked) {
+    if (scope.querySelector("#deleteExisting")?.checked) {
       for (const itemType of importFiles) {
         await this._deleteCompendium(itemType);
       }

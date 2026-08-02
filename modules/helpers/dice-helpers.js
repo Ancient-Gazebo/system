@@ -136,7 +136,10 @@ export default class DiceHelpers {
       const key = normalize(skill?.value);
       let isRanged = ["rangedlight", "rangedheavy", "gunnery"].includes(key);
       let isMelee = ["melee", "brawl", "lightsaber"].includes(key);
-      if (itemData?.type === "weapon" || itemData?.metaData?.tags?.includes("weapon")) {
+      // `shipweapon` counts as a weapon here: a vehicle weapon fired at a personal-scale target
+      // still faces that target's ranged defence. Omitting it meant gunnery attacks silently
+      // ignored defence while the equivalent personal attack applied it.
+      if (itemData?.type === "weapon" || itemData?.type === "shipweapon" || itemData?.metaData?.tags?.includes("weapon")) {
         if (game.user.targets.size > 0) {
           for (const target of game.user.targets) {
             // Personal ranged/melee defense only exists on actors that carry a stats.defence

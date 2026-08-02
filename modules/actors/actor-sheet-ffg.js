@@ -2473,6 +2473,11 @@ export class ActorSheetFFG extends FFGActorSheet {
     // apply the weapon's damage-condition dice (Minor -> +1 Setback, Moderate -> +1 Difficulty)
     pool.setback += weaponStatus.setback;
     pool.difficulty += weaponStatus.difficulty;
+    // Target defence. The personal-weapon path picks this up inside DiceHelpers.rollSkill/rollItem,
+    // but this pool is assembled by hand (same reason the status dice are applied here), so the
+    // targeted actor's ranged defence never reached a gunnery roll. getDefenseDice reads the skill
+    // name off `.value`, and weaponSkill here is the bare name.
+    pool.setback += DiceHelpers.getDefenseDice({ value: weaponSkill }, weapon);
     // display the roll dialog
     await DiceHelpers.displayRollDialog(
       crewSheet,

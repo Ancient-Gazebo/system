@@ -224,6 +224,7 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     this.element.dataset.appid = this.appId;
 
     this._installHeaderControlDeduplicator();
+    installHeaderMenuDeduplicator();
     this._projectLegacyHeaderControls();
     this.element.querySelector(":scope > .window-resize-handle")?.classList.add("window-resizable-handle");
 
@@ -1120,4 +1121,67 @@ for (const hookName of ["renderActorSheetFFG", "renderItemSheetFFG", "renderActo
       CONFIG.logger?.warn?.("Could not install the legacy header button bridge", err);
     }
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Header menu de-duplication (DOM level)                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Remove repeated entries from a rendered header (⋮) menu.
+ *
+ * Deduplicating the control list is not sufficient. At least one module inserts its entry into the
+ * rendered menu directly rather than contributing a header control -- its item appears ABOVE the
+ * first real control and never shows up in `_getHeaderControls()` output at all. Its legacy header
+ * button is still bridged into a control, so the menu ends up with two identical rows that no
+ * control-list pass can reconcile, because only one of them exists at that stage.
+ *
+ * The rendered menu is the one place both are visible, so the last duplicate check happens here.
+ * @param {HTMLElement} menu a rendered #context-menu element
+ */
+function deduplicateHeaderMenu(menu) {
+  const items = menu.querySelectorAll("li");
+  if (items.length < 2) return;
+
+  // Only touch the sheet header menu. Other context menus (chat, sidebar, directories) may
+  // legitimately repeat a label, and silently deleting rows from those would be a worse bug than
+  // the one being fixed. The header menu always carries Configure Sheet.
+  const marker = (game.i18n?.localize("SHEETS.ConfigureSheet") ?? "Configure Sheet").trim().toLowerCase();
+  const texts = [...items].map((li) => (li.textContent ?? "").trim().toLowerCase());
+  if (!texts.includes(marker)) return;
+
+  const seen = new Set();
+  items.forEach((li, i) => {
+    const text = texts[i];
+    if (!text) return;
+    if (seen.has(text)) li.remove();
+    else seen.add(text);
+  });
+}
+
+/**
+ * Watch for header menus being opened and deduplicate them once each.
+ *
+ * The menu is built on demand and attached to <body>, so there is no render hook to use and no
+ * element to query ahead of time; an observer is the only reliable way to see it appear.
+ * Installed once for the page, from the first sheet render.
+ */
+let _ffgHeaderMenuObserver = null;
+function installHeaderMenuDeduplicator() {
+  if (_ffgHeaderMenuObserver || typeof MutationObserver !== "function" || !document.body) return;
+  _ffgHeaderMenuObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (!(node instanceof HTMLElement)) continue;
+        const menu = node.id === "context-menu" ? node : node.querySelector?.("#context-menu");
+        if (!menu) continue;
+        try {
+          deduplicateHeaderMenu(menu);
+        } catch (err) {
+          CONFIG.logger?.warn?.("Header menu de-duplication failed", err);
+        }
+      }
+    }
+  });
+  _ffgHeaderMenuObserver.observe(document.body, { childList: true, subtree: true });
 }

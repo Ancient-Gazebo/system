@@ -127,14 +127,23 @@ export class ApplyDamage {
     // worth 10 soak per rank and stacks with Pierce.
     const isVehicleTarget = type === "vehicle";
     const isShipScaleWeapon = itemData.type === "shipweapon";
-    const armourMultiplier = isVehicleTarget ? (isShipScaleWeapon ? 1 : 10) : 1;
+    // House rule: a personal weapon can be flagged to deal vehicle-scale damage TO VEHICLES
+    // (sheet options -> "Counts as a vehicle weapon", personal weapons only). Deliberately scoped
+    // to vehicle targets: the flag is about punching through Armour, not about the weapon becoming
+    // a starship cannon, so it must not pick up the x5 multiplier against people below.
+    const countsAsVehicleWeapon =
+      itemData.type === "weapon" && !!itemData.flags?.starwarsffg?.config?.countsAsVehicleWeapon;
+    const vehicleScaleVsVehicle = isShipScaleWeapon || countsAsVehicleWeapon;
+    const armourMultiplier = isVehicleTarget ? (vehicleScaleVsVehicle ? 1 : 10) : 1;
     // Crossing scales in either direction:
     //   ship weapon -> personal target: damage x5.
     //   personal weapon -> vehicle: 10 unsoaked damage per point of Hull Trauma / System Strain,
     //     so a hit that gets fewer than 10 past Armour does nothing at all.
     // Same-scale attacks leave both of these at 1.
+    // Note the asymmetry: the scale-UP check uses isShipScaleWeapon (a genuine ship weapon), while
+    // the vehicle-facing scale-DOWN uses vehicleScaleVsVehicle so the house-rule flag counts.
     const scaleDamageMultiplier = !isVehicleTarget && isShipScaleWeapon ? 5 : 1;
-    const scaleDownDivisor = isVehicleTarget && !isShipScaleWeapon ? 10 : 1;
+    const scaleDownDivisor = isVehicleTarget && !vehicleScaleVsVehicle ? 10 : 1;
     const autoPierce = isVehicleTarget ? breachRanks : pierceRanks + 10 * breachRanks;
 
     const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.Damage");

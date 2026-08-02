@@ -696,6 +696,17 @@ export class ItemSheetFFG extends FFGDocumentSheet {
         });
       }
 
+      // Personal weapons only. Ship weapons are already vehicle-scale, and gear/armour deal no
+      // damage, so neither has anything to opt into.
+      if (this.object.type === "weapon") {
+        this.sheetoptions.register("countsAsVehicleWeapon", {
+          name: game.i18n.localize("SWFFG.SheetOptions2.countsAsVehicleWeapon.Name"),
+          hint: game.i18n.localize("SWFFG.SheetOptions2.countsAsVehicleWeapon.Hint"),
+          type: "Boolean",
+          default: false,
+        });
+      }
+
       if (this.object.type === "gear") {
         this.sheetoptions.register("medicalType", {
           name: game.i18n.localize("SWFFG.SheetOptions2.isMedical.Name"),

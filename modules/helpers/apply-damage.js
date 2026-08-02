@@ -128,6 +128,13 @@ export class ApplyDamage {
     const isVehicleTarget = type === "vehicle";
     const isShipScaleWeapon = itemData.type === "shipweapon";
     const armourMultiplier = isVehicleTarget ? (isShipScaleWeapon ? 1 : 10) : 1;
+    // Crossing scales in either direction:
+    //   ship weapon -> personal target: damage x5.
+    //   personal weapon -> vehicle: 10 unsoaked damage per point of Hull Trauma / System Strain,
+    //     so a hit that gets fewer than 10 past Armour does nothing at all.
+    // Same-scale attacks leave both of these at 1.
+    const scaleDamageMultiplier = !isVehicleTarget && isShipScaleWeapon ? 5 : 1;
+    const scaleDownDivisor = isVehicleTarget && !isShipScaleWeapon ? 10 : 1;
     const autoPierce = isVehicleTarget ? breachRanks : pierceRanks + 10 * breachRanks;
 
     const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.Damage");
@@ -197,14 +204,22 @@ export class ApplyDamage {
             // Parry / Reflect reduces damage by 2 + ranks (only when ranks were
             // spent), and Damage Reduction is a flat manual reduction — both come
             // off the incoming damage BEFORE soak is applied.
+            // Crossing scales upward: a ship-scale weapon striking a personal-scale target hits far
+            // harder than its printed damage. Scale first, so Parry/Reflect and Damage Reduction
+            // then come off the real incoming figure rather than the unscaled one.
+            const scaledDamage = damage * scaleDamageMultiplier;
             const parryReduction = parryRanks > 0 ? 2 + parryRanks : 0;
-            const reducedDamage = Math.max(0, damage - parryReduction - reduction);
+            const reducedDamage = Math.max(0, scaledDamage - parryReduction - reduction);
             // For a vehicle, `pierce` here holds Breach ranks and `soakValue` holds Armour points:
             // subtract Breach from Armour first, then convert to soak-equivalent via the scale
             // multiplier (x10 vs a personal weapon, x1 vs a ship weapon). For every other target
             // the multiplier is 1 and this is the original soak-minus-pierce calculation.
             const effectiveSoak = Math.max(0, soakValue - pierce) * armourMultiplier;
-            const applied = Math.max(0, reducedDamage - effectiveSoak);
+            const unsoaked = Math.max(0, reducedDamage - effectiveSoak);
+            // Crossing scales downward: a personal-scale weapon must land 10 unsoaked damage on a
+            // vehicle to register a single point. Anything short of that bounces off entirely, so
+            // this floors rather than rounds.
+            const applied = scaleDownDivisor > 1 ? Math.floor(unsoaked / scaleDownDivisor) : unsoaked;
 
             const speaker = ChatMessage.getSpeaker({ token: target.document });
             const gmIds = game.users.filter((u) => u.isGM).map((u) => u.id);
@@ -215,6 +230,25 @@ export class ApplyDamage {
             // target's soak/pierce math. When the damage write is forwarded to the
             // GM, the GM posts this whisper too; we only post it here when we
             // applied the damage locally (i.e. we are the GM or the target's owner).
+            // When scales are crossed the headline figures do not add up on their own -- the
+            // breakdown would read as if the printed damage were what landed -- so state the
+            // conversion explicitly. `damage` below is the post-scale figure for the same reason.
+            let scaleNote = "";
+            if (scaleDamageMultiplier > 1) {
+              scaleNote = `<p>${game.i18n.format("SWFFG.ApplyDamage.ScaleUpNote", {
+                raw: damage,
+                scaled: scaledDamage,
+                multiplier: scaleDamageMultiplier,
+              })}</p>`;
+            } else if (scaleDownDivisor > 1) {
+              scaleNote = `<p>${game.i18n.format("SWFFG.ApplyDamage.ScaleDownNote", {
+                unsoaked,
+                divisor: scaleDownDivisor,
+                applied,
+                poolLabel,
+              })}</p>`;
+            }
+
             const gmChat = {
               speaker,
               whisper: gmIds,
@@ -222,14 +256,14 @@ export class ApplyDamage {
                 actorName: a.name,
                 applied,
                 poolLabel,
-                damage,
+                damage: scaledDamage,
                 parryReduction,
                 reduction,
                 effectiveSoak,
                 soakWord,
                 pierce,
                 soak: soakValue,
-              })}</p>`,
+              })}</p>${scaleNote}`,
             };
 
             let result;

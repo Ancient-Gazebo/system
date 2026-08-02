@@ -101,6 +101,8 @@
   "SWFFG.ApplyDamage.GMDetails": "<strong>{actorName}</strong> takes <strong>{applied}</strong> {poolLabel} ({damage} dmg − {parryReduction} parry/reflect − {reduction} reduction − {effectiveSoak} effective {soakWord}; pierce {pierce} vs {soakWord} {soak}).",
   "SWFFG.ApplyDamage.ParryRanks": "Parry / Reflect Ranks",
   "SWFFG.ApplyDamage.BreachRanks": "Breach Ranks",
+  "SWFFG.ApplyDamage.ScaleUpNote": "Ship-scale weapon against a personal-scale target: damage x{multiplier} ({raw} -> {scaled}).",
+  "SWFFG.ApplyDamage.ScaleDownNote": "Personal-scale weapon against a vehicle: {divisor} unsoaked damage per point, so {unsoaked} unsoaked becomes {applied} {poolLabel}.",
   "SWFFG.ApplyDamage.Reduction": "Damage Reduction",
   "SWFFG.ApplyCrit.Button": "Apply Crit",
   "SWFFG.ApplyCrit.DialogTitle": "Critical Roll — {name}",

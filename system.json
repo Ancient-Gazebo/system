@@ -2,7 +2,7 @@
   "id": "starwarsffg",
   "title": "Star Wars FFG",
   "description": "A system for playing Star Wars FFG games.",
-  "version": "2.1.26",
+  "version": "2.1.27",
   "compatibility": {
     "minimum": 13,
     "verified": 14

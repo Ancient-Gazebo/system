@@ -223,6 +223,7 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     }
     this.element.dataset.appid = this.appId;
 
+    this._installHeaderControlDeduplicator();
     this._projectLegacyHeaderControls();
     this.element.querySelector(":scope > .window-resize-handle")?.classList.add("window-resizable-handle");
 
@@ -360,6 +361,45 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     } finally {
       this._minimizing = false;
     }
+  }
+
+  /**
+   * Collapse duplicate entries out of this sheet's header (⋮) menu.
+   *
+   * Deduplicating from a prototype wrapper cannot work in general. Modules install their own
+   * wrappers on the sheet class from a render hook, and module scripts load after the system, so
+   * theirs sit OUTSIDE ours -- an entry one of them unshifts onto the front of the list is added
+   * after our code has already run and is invisible to it. That is why one module kept appearing
+   * twice (once natively at the top of the menu, once from its legacy button at the bottom) even
+   * after the bridge was moved and taught to compare localised labels.
+   *
+   * An own property on the INSTANCE shadows the entire prototype chain, so this always runs last.
+   * It calls through to the chain -- so every module's contribution is still collected -- and only
+   * then removes repeats, keeping the first occurrence so menu order is preserved.
+   * @private
+   */
+  _installHeaderControlDeduplicator() {
+    if (Object.prototype.hasOwnProperty.call(this, "_getHeaderControls")) return;
+    Object.defineProperty(this, "_getHeaderControls", {
+      configurable: true,
+      writable: true,
+      enumerable: false,
+      value: function (...args) {
+        const chain = Object.getPrototypeOf(this)?._getHeaderControls;
+        const controls = (typeof chain === "function" ? chain.apply(this, args) : []) ?? [];
+        const seen = new Set();
+        return controls.filter((control) => {
+          // Labels may be literal text or a localisation key depending on the contributor, so
+          // compare what the user will actually read.
+          const raw = String(control?.label ?? "").trim();
+          const key = raw ? (game.i18n?.localize(raw) ?? raw).trim().toLowerCase() : "";
+          if (!key) return true;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      },
+    });
   }
 
   _projectLegacyHeaderControls() {

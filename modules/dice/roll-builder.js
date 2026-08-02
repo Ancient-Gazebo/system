@@ -97,7 +97,11 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       resizable: true,
     },
     position: {
-      width: 350,
+      // 350 under V1, but V14 pads .window-content by 1rem rather than 8px and sizes
+      // inputs/buttons larger, which pushed the fixed-results table (min-width 300px
+      // plus six columns of control + label) past the edge. Widened to fit V14's
+      // control metrics; the window is resizable and the content scrolls either way.
+      width: 420,
     },
   };
 

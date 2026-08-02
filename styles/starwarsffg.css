@@ -1023,16 +1023,38 @@ img {
 }
 .starwarsffg .dice-pool-dialog .upgrade-buttons {
   display: flex;
+  /* V14 sizes buttons from --button-size and pads them more than V1 did, so the two
+     buttons in each row no longer filled it evenly -- they came out as a pair of
+     unequal pills with no separation. Split each row and give them a gap. */
+  gap: 4px;
 }
 .starwarsffg .dice-pool-dialog .upgrade-buttons button {
   line-height: 20px;
   font-size: 12px;
   text-align: left;
+  flex: 1 1 0;
+  min-width: 0;
 }
 .starwarsffg .dice-pool-dialog .pool-dice-pool {
   padding: 5px 1px;
   width: calc(100% - 2px);
 }
+/* The fixed-results table declares min-width: 300px and holds six columns of icon +
+   control + label. V14's inputs and buttons are wider than V1's, and core pads
+   .window-content by 1rem where V1 used 8px, so the table outgrew the 350px dialog.
+   Because core also sets `overflow: hidden` on .window-content, the surplus was
+   clipped outright -- the Failure/Threat/Despair/Dark column simply vanished off the
+   right edge with no scrollbar to reach it. The dialog's default width is raised to
+   match V14's control sizing; this keeps anything that still overflows (a long
+   localisation, a user-narrowed window) reachable by scrolling instead of clipped. */
+.starwarsffg.application.roll-builder-dialog > .window-content {
+  overflow: hidden auto;
+}
+
+.starwarsffg .dice-pool-dialog {
+  overflow-x: auto;
+}
+
 .starwarsffg .dice-pool-dialog .pool-additional-container {
   padding: 0 1px;
   width: calc(100% - 2px);

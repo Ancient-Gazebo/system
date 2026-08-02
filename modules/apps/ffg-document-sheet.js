@@ -1153,7 +1153,12 @@ function deduplicateHeaderMenu(menu) {
   const seen = new Set();
   items.forEach((li, i) => {
     const text = texts[i];
-    if (!text) return;
+    // A row with no text and nothing to click is a leftover, not a separator this menu uses --
+    // dropping a duplicate can leave one behind, and it renders as a blank strip at the end.
+    if (!text) {
+      if (!li.querySelector("button, a, input, select")) li.remove();
+      return;
+    }
     if (seen.has(text)) li.remove();
     else seen.add(text);
   });

@@ -381,11 +381,18 @@ export class CombatFFG extends Combat {
               const [updates, messages] = await ids.reduce(
                 async (results, id, i) => {
                   let [updates, messages] = await results;
-                  // Get Combatant data
-                  const c = initiative.getCombatantByToken(
-                    initiative.combatants.map(combatant => combatant)
+                  // Get Combatant data. V14 deprecated Combat#getCombatantByToken in favour of
+                  // #getCombatantsByToken, which returns every combatant sharing that token rather
+                  // than the first. This loop wants one combatant per id, so take the head; the
+                  // warning fired once per combatant, which is why a group roll produced a stack of
+                  // them. Feature-detected on the method so V13 still resolves.
+                  const tokenId = initiative.combatants
+                    .map(combatant => combatant)
                     .filter(combatantData => combatantData._id == id)[0]
-                    .tokenId);
+                    .tokenId;
+                  const c = initiative.getCombatantsByToken
+                    ? initiative.getCombatantsByToken(tokenId)?.[0]
+                    : initiative.getCombatantByToken(tokenId);
                   // Skip combatants the current user can't roll for, but keep processing the rest
                   // of the batch. Returning the accumulator unchanged (as the success path does) is
                   // required: returning resolve()'s value here would feed `undefined` into the next
@@ -1398,21 +1405,70 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     return combat.combatants.filter(i => i.disposition === disposition).length;
   }
 
+  /**
+   * Context-menu entry keys were renamed in V14: #name -> #label, #condition -> #visible and
+   * #callback -> #onClick, with the old names kept as deprecated aliases until V16. Core's own
+   * entries use whichever set matches the running generation, so read through both and author ours
+   * in the generation's own shape (which also keeps them out of the deprecation log).
+   * @param {object} entry a context menu entry from core or from us
+   * @returns {string|undefined} the entry's label, whichever key holds it
+   */
+  static _entryLabel(entry) {
+    return entry?.label ?? entry?.name;
+  }
+
+  /**
+   * Build a context menu entry using the key names the running Foundry generation expects.
+   * @param {{label: string, icon: string, callback: Function, condition?: Function}} spec
+   */
+  static _makeEntry({ label, icon, callback, condition }) {
+    const entry = { icon };
+    if (game.release.generation >= 14) {
+      entry.label = label;
+      if (callback) entry.onClick = callback;
+      if (condition) entry.visible = condition;
+    } else {
+      entry.name = label;
+      if (callback) entry.callback = callback;
+      if (condition) entry.condition = condition;
+    }
+    return entry;
+  }
+
+  /**
+   * Rewrite an existing core entry's label and handler, setting whichever keys that entry already
+   * uses so a V13 entry keeps working and a V14 one is not given a deprecated alias.
+   */
+  static _rewireEntry(entry, label, callback) {
+    if ("label" in entry || game.release.generation >= 14) {
+      entry.label = label;
+      entry.onClick = callback;
+      delete entry.name;
+      delete entry.callback;
+    } else {
+      entry.name = label;
+      entry.callback = callback;
+    }
+    return entry;
+  }
+
   /** @override */
   _getEntryContextOptions() {
     const baseEntries = super._getEntryContextOptions();
-    // replace the default remove combatant entry with our custom one, which allows us to detect and remove extra slots
-    const updateCombatantEntry = baseEntries.find(i => i.name === "COMBAT.CombatantUpdate");
+    const labelOf = (e) => this.constructor._entryLabel(e);
+
+    // Point core's "Update Combatant" at the system's handler, which understands initiative slots.
+    const updateCombatantEntry = baseEntries.find(i => labelOf(i) === "COMBAT.CombatantUpdate");
     if (updateCombatantEntry) {
-      updateCombatantEntry.name = "SWFFG.Notifications.Combat.Initiative.Update";
-      updateCombatantEntry.callback = async el => {
-        await this.viewed.updateCombatant(el);
-      };
-      baseEntries[0] = updateCombatantEntry;
+      this.constructor._rewireEntry(
+        updateCombatantEntry,
+        "SWFFG.Notifications.Combat.Initiative.Update",
+        async (el) => { await this.viewed.updateCombatant(el); }
+      );
     }
 
-    const removeSlot = {
-      name: 'SWFFG.Notifications.Combat.Claim.RemoveSlot',
+    const removeSlot = this.constructor._makeEntry({
+      label: 'SWFFG.Notifications.Combat.Claim.RemoveSlot',
       icon: '<i class="fa-regular fa-trash-alt"></i>',
       callback: async (el) => {
         const index = +el.getAttribute("data-slot-index");
@@ -1420,11 +1476,11 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
           await this._removeSlot(this.viewed.round, el);
         }
       },
-    };
+    });
 
     // Allow GMs to revoke an initiative slot claim.
-    const unClaimSlot = {
-      name: 'SWFFG.Notifications.Combat.Claim.UnClaim',
+    const unClaimSlot = this.constructor._makeEntry({
+      label: 'SWFFG.Notifications.Combat.Claim.UnClaim',
       icon: '<i class="fa-regular fa-xmark"></i>',
       callback: async (el) => {
         const li = $(el);
@@ -1433,14 +1489,15 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
           await this.viewed.unclaimSlot(this.viewed.round, this.viewed.turns[index].id);
         }
       },
-    };
+    });
 
-    // remove reroll initiative
-    baseEntries.splice(2, 1);
-
-    // Drop core's "Remove Participant" (COMBAT.CombatantRemove) entry - combatants leave the order
-    // via "Remove Initiative Slot", so this built-in is redundant.
-    const trimmedEntries = baseEntries.filter(i => i.name !== "COMBAT.CombatantRemove");
+    // Drop entries that do not apply to slot-based initiative:
+    //   Reroll  - initiative is rolled for the whole order, not per combatant;
+    //   Remove  - combatants leave the order via "Remove Initiative Slot".
+    // Matched by label rather than by index: the previous splice(2, 1) assumed one specific
+    // ordering of core's entries and would silently remove the wrong one if that changed.
+    const drop = (label) => /Reroll/i.test(label ?? "") || label === "COMBAT.CombatantRemove";
+    const trimmedEntries = baseEntries.filter(i => !drop(labelOf(i)));
 
     return [...trimmedEntries, removeSlot, unClaimSlot];
   }

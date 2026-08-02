@@ -4267,6 +4267,43 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
   background: rgba(255, 255, 255, 0.12) !important;
 }
 
+/* ------------------------------------------------------------------
+   Initiative dialog: the "add to the pool" grid
+   ------------------------------------------------------------------ */
+
+/* Keep each cell on one line. The die image, its counter and its label are inline siblings, so a
+   cell narrower than their combined width wraps the image onto a line of its own -- which is what
+   put the Boost and Setback swatches above their counters instead of beside them. */
+.starwarsffg .initiative-dialog .addDicePool {
+  width: 100%;
+}
+
+.starwarsffg .initiative-dialog .pool-additional {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.starwarsffg .initiative-dialog .pool-additional img,
+.starwarsffg .initiative-dialog .pool-additional span,
+.starwarsffg .initiative-dialog .pool-additional i,
+.starwarsffg .initiative-dialog .pool-additional input[type=button] {
+  vertical-align: middle;
+}
+
+.starwarsffg .initiative-dialog .pool-additional .ffg-die-swatch,
+.starwarsffg .initiative-dialog .pool-additional span,
+.starwarsffg .initiative-dialog .pool-additional i {
+  margin-right: 4px;
+}
+
+/* The Setback die art is solid black, so on a dark dialog it reads as a hole rather than a die.
+   Outline it the way a rolled Setback is outlined in chat. `outline` rather than `border` so the
+   15x15 swatch is not resized and stays aligned with the other symbols. */
+.starwarsffg .initiative-dialog .pool-additional .ffg-die-setback {
+  outline: 1px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 0;
+}
+
 /* Right-click / header context menus opened from a sheet.
    Core copies the menu's theme off the sheet, NOT off the colour-scheme
    setting:

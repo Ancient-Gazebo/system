@@ -20,12 +20,13 @@
 
   <div style="text-align: center;"><span>{{localize "SWFFG.InitiativePoolAddsHint"}}</span></div>
 
+  {{!-- Three even rows. Boost/Setback and Upgrade/Force each take half the width via colspan
+        rather than sitting in a single narrow column flanked by empty cells: those spacers
+        squeezed the cell until the die image wrapped onto its own line above the counter. --}}
   <table class="addDicePool">
     <tr>
-      <td class="pool-additional"></td>
-      <td class="pool-additional"><img src="systems/starwarsffg/images/dice/starwars/blue.png" width="15" height="15" /><input type="button" name="boost" min="0" />{{localize "SWFFG.DiceBoost"}}</td>
-      <td class="pool-additional"><img src="systems/starwarsffg/images/dice/starwars/black.png" width="15" height="15" /><input type="button" name="setback" min="0" />{{localize "SWFFG.DiceSetback"}}</td>
-      <td class="pool-additional"></td>
+      <td class="pool-additional" colspan="2"><img class="ffg-die-swatch" src="systems/starwarsffg/images/dice/starwars/blue.png" width="15" height="15" /><input type="button" name="boost" min="0" />{{localize "SWFFG.DiceBoost"}}</td>
+      <td class="pool-additional" colspan="2"><img class="ffg-die-swatch ffg-die-setback" src="systems/starwarsffg/images/dice/starwars/black.png" width="15" height="15" /><input type="button" name="setback" min="0" />{{localize "SWFFG.DiceSetback"}}</td>
     </tr>
     <tr>
       <td class="pool-additional">{{{diceSymbols.advantage}}}<input type="button" name="advantage" min="0" />{{localize "SWFFG.Advantage"}}</td>
@@ -34,14 +35,8 @@
       <td class="pool-additional">{{{diceSymbols.failure}}}<input type="button" name="failure" min="0" />{{localize "SWFFG.Failure"}}</td>
     </tr>
     <tr>
-      <td class="pool-additional"></td>
-      <td class="pool-additional">{{{diceSymbols.upgrade}}}<input type="button" name="upgrades" min="0" />{{localize "SWFFG.Upgrade"}}</td>
-      <td class="pool-additional"></td>
-    </tr>
-    <tr>
-      <td class="pool-additional"></td>
-      <td class="pool-additional">{{{diceSymbols.force}}}<input type="button" name="force" min="0" />{{localize "SWFFG.Force"}}</td>
-      <td class="pool-additional"></td>
+      <td class="pool-additional" colspan="2">{{{diceSymbols.upgrade}}}<input type="button" name="upgrades" min="0" />{{localize "SWFFG.Upgrade"}}</td>
+      <td class="pool-additional" colspan="2">{{{diceSymbols.force}}}<input type="button" name="force" min="0" />{{localize "SWFFG.Force"}}</td>
     </tr>
   </table>
 </div>

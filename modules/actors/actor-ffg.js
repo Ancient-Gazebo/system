@@ -630,7 +630,9 @@ export class ActorFFG extends Actor {
    *                Droids or Ganks, implants, talents, etc.) without needing a separate modifier for
    *                each, per the GM's preference for a simple manual override.
    *
-   * installed - the total quantity of owned items flagged to count as a cybernetic.
+   * installed - the total quantity of EQUIPPED owned items flagged to count as a cybernetic.
+   *             Carrying a cybernetic is not the same as having it implanted, so unequipped ones
+   *             do not consume a slot.
    * @private
    */
   _prepareCyberneticsData(actorData) {
@@ -645,10 +647,17 @@ export class ActorFFG extends Actor {
 
     const max = Math.max(0, base + adjustment);
 
-    // installed: total quantity of owned items flagged as cybernetics
+    // installed: total quantity of EQUIPPED owned items flagged as cybernetics.
+    //
+    // An unequipped cybernetic is being carried, not implanted, so it must not consume a slot --
+    // otherwise spares or loot in the pack push the character over their cap. The
+    // `countsAsCybernetic` option is only offered on gear, weapon and armour (see
+    // ItemSheetFFG's sheet options), and all three declare an `equippable` schema, so there is no
+    // flaggable type that lacks an equip control and would be silently excluded by this.
     let installed = 0;
     for (const item of items) {
       if (!item?.flags?.starwarsffg?.config?.countsAsCybernetic) continue;
+      if (!item.system?.equippable?.equipped) continue;
       const qty = parseInt(item.system?.quantity?.value, 10);
       installed += Number.isFinite(qty) ? Math.max(0, qty) : 1;
     }

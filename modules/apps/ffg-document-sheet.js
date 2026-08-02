@@ -1151,16 +1151,48 @@ function deduplicateHeaderMenu(menu) {
   if (!texts.includes(marker)) return;
 
   const seen = new Set();
+  let removed = false;
   items.forEach((li, i) => {
     const text = texts[i];
-    // A row with no text and nothing to click is a leftover, not a separator this menu uses --
-    // dropping a duplicate can leave one behind, and it renders as a blank strip at the end.
+    // A row with no text and nothing to click is a leftover rather than a separator this menu uses.
     if (!text) {
-      if (!li.querySelector("button, a, input, select")) li.remove();
+      if (!li.querySelector("button, a, input, select")) {
+        li.remove();
+        removed = true;
+      }
       return;
     }
-    if (seen.has(text)) li.remove();
-    else seen.add(text);
+    if (seen.has(text)) {
+      li.remove();
+      removed = true;
+    } else seen.add(text);
+  });
+
+  if (removed) releaseStaleMenuSizing(menu);
+}
+
+/**
+ * Let a header menu re-measure after rows have been taken out of it.
+ *
+ * The menu is sized when it opens -- it carries an inline `max-height` computed from the space
+ * available at that moment -- and anything removed afterwards leaves the box at its original
+ * height. The result is a blank strip below the last entry, one row's worth per row removed, which
+ * reads as empty rows even though the list itself is clean.
+ *
+ * Deferred a frame so it runs after every observer has had its turn: this module and the financial
+ * bridge both prune the same menu, and resetting between them would just re-stale the measurement.
+ * Only explicit sizing is cleared; the stylesheet's own rules are left to apply.
+ * @param {HTMLElement} menu a rendered #context-menu element
+ */
+function releaseStaleMenuSizing(menu) {
+  requestAnimationFrame(() => {
+    for (const el of [menu, ...menu.querySelectorAll("menu, ol, ul")]) {
+      if (!(el instanceof HTMLElement)) continue;
+      // `height` and `min-height` are what can hold the box open; `max-height` only caps it and is
+      // core's fit-to-viewport value, so it is deliberately left in place.
+      el.style.removeProperty("height");
+      el.style.removeProperty("min-height");
+    }
   });
 }
 

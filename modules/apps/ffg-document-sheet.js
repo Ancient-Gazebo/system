@@ -475,6 +475,52 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     return super.render(options, _options);
   }
 
+  /**
+   * Bridge the V1 `get<Document>SheetHeaderButtons` hook into ApplicationV2 header controls.
+   *
+   * V1 sheets let modules add header buttons by pushing `{label, icon, class, onclick}` onto an
+   * array passed to that hook. ApplicationV2 does not fire it and builds its menu from
+   * `_getHeaderControls()` instead, so any module still using the old hook contributes nothing and
+   * says nothing about it -- its button simply is not there. Several do (the `backpack` module's
+   * sheet control among them), and they cannot all be patched individually.
+   *
+   * Legacy entries are translated to control objects and appended. `onClick`/`onclick` are both
+   * accepted, since modules written across the transition use either. Entries whose label already
+   * appears are skipped, so a module that has been updated to contribute through BOTH routes does
+   * not show up twice.
+   * @override
+   */
+  _getHeaderControls() {
+    const controls = super._getHeaderControls() ?? [];
+    const documentName = this.document?.documentName;
+    if (!documentName) return controls;
+
+    const legacy = [];
+    try {
+      Hooks.callAll(`get${documentName}SheetHeaderButtons`, this, legacy);
+    } catch (err) {
+      CONFIG.logger?.warn?.("Legacy header button hook failed", err);
+      return controls;
+    }
+    if (!legacy.length) return controls;
+
+    const seen = new Set(controls.map((c) => c?.label).filter(Boolean));
+    for (const button of legacy) {
+      const label = button?.label;
+      const handler = button?.onClick ?? button?.onclick;
+      if (!label || typeof handler !== "function" || seen.has(label)) continue;
+      seen.add(label);
+      controls.push({
+        // Namespaced so it cannot collide with a core action name.
+        action: `ffgLegacyHeader-${button.class ?? label}`.replace(/[^\w-]/g, "-"),
+        icon: button.icon ?? "fa-solid fa-square",
+        label,
+        onClick: (...args) => handler.apply(this, args),
+      });
+    }
+    return controls;
+  }
+
   activateListeners(_html) {}
 
   /**

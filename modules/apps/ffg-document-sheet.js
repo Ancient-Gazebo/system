@@ -514,12 +514,23 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       // Compared against the FULL list, including entries added by modules that wrapped this
       // method after us. `onClick`/`onclick` are both accepted: modules written across the
       // transition use either, and one module here uses both spellings in different entries.
-      const seen = new Set(controls.map((c) => c?.label).filter(Boolean));
+      // Compare LOCALISED labels. Control labels are commonly localisation keys that Foundry
+      // resolves when it renders the menu, while a legacy button's label is usually literal text.
+      // Matching raw strings therefore misses a module contributing "GLITCHSMITH.Open" natively
+      // and "GlitchSmith" through the old hook -- two different strings that render identically,
+      // which is exactly how that entry stayed duplicated after the ordering fix.
+      const normalise = (value) => {
+        const raw = String(value ?? "").trim();
+        if (!raw) return "";
+        return (game.i18n?.localize(raw) ?? raw).trim().toLowerCase();
+      };
+      const seen = new Set(controls.map((c) => normalise(c?.label)).filter(Boolean));
       for (const button of legacy) {
         const label = button?.label;
         const handler = button?.onClick ?? button?.onclick;
-        if (!label || typeof handler !== "function" || seen.has(label)) continue;
-        seen.add(label);
+        const key = normalise(label);
+        if (!key || typeof handler !== "function" || seen.has(key)) continue;
+        seen.add(key);
         controls.push({
           // Namespaced so it cannot collide with a core action name.
           action: `ffgLegacyHeader-${button.class ?? label}`.replace(/[^\w-]/g, "-"),

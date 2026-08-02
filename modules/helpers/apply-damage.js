@@ -114,10 +114,28 @@ export class ApplyDamage {
       if (name.includes("pierce")) pierceRanks += ranks;
       else if (name.includes("breach")) breachRanks += ranks;
     }
-    const autoPierce = pierceRanks + 10 * breachRanks;
+    // Scale. A vehicle's Armour is not soak in the same units: against a personal-scale weapon
+    // each point of Armour is worth 10 soak, while a ship-scale weapon trades with it 1:1 (a
+    // 6-damage ship weapon against 2 Armour deals 4). Previously the raw Armour value was used as
+    // soak for both, so personal weapons chewed through vehicles as if Armour 2 were soak 2.
+    //
+    // The two mitigating qualities are not interchangeable here either:
+    //   Breach X - ignores X points of Armour (equivalently 10 soak per rank).
+    //   Pierce X - ignores X soak, and does NOT reduce Armour at all.
+    // So against a vehicle only Breach applies, and it is subtracted from Armour BEFORE the scale
+    // multiplier. Against a personal-scale target the existing behaviour is correct: Breach is
+    // worth 10 soak per rank and stacks with Pierce.
+    const isVehicleTarget = type === "vehicle";
+    const isShipScaleWeapon = itemData.type === "shipweapon";
+    const armourMultiplier = isVehicleTarget ? (isShipScaleWeapon ? 1 : 10) : 1;
+    const autoPierce = isVehicleTarget ? breachRanks : pierceRanks + 10 * breachRanks;
 
     const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.Damage");
-    const pierceLabel = game.i18n.localize("SWFFG.Pierce");
+    // Against a vehicle the field spends Breach ranks against Armour, so label it accordingly
+    // rather than calling it Pierce, which does not apply to Armour at all.
+    const pierceLabel = isVehicleTarget
+      ? game.i18n.localize("SWFFG.ApplyDamage.BreachRanks")
+      : game.i18n.localize("SWFFG.Pierce");
     const parryLabel = game.i18n.localize("SWFFG.ApplyDamage.ParryRanks");
     const reductionLabel = game.i18n.localize("SWFFG.ApplyDamage.Reduction");
     const applyLabel = game.i18n.localize("SWFFG.ApplyDamage.Apply");
@@ -181,7 +199,11 @@ export class ApplyDamage {
             // off the incoming damage BEFORE soak is applied.
             const parryReduction = parryRanks > 0 ? 2 + parryRanks : 0;
             const reducedDamage = Math.max(0, damage - parryReduction - reduction);
-            const effectiveSoak = Math.max(0, soakValue - pierce);
+            // For a vehicle, `pierce` here holds Breach ranks and `soakValue` holds Armour points:
+            // subtract Breach from Armour first, then convert to soak-equivalent via the scale
+            // multiplier (x10 vs a personal weapon, x1 vs a ship weapon). For every other target
+            // the multiplier is 1 and this is the original soak-minus-pierce calculation.
+            const effectiveSoak = Math.max(0, soakValue - pierce) * armourMultiplier;
             const applied = Math.max(0, reducedDamage - effectiveSoak);
 
             const speaker = ChatMessage.getSpeaker({ token: target.document });

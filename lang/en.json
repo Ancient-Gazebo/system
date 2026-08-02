@@ -100,6 +100,7 @@
   "SWFFG.ApplyDamage.PublicMessage": "<strong>{actorName}</strong> takes <strong>{damage}</strong> {poolLabel} from <em>{weaponName}</em>.",
   "SWFFG.ApplyDamage.GMDetails": "<strong>{actorName}</strong> takes <strong>{applied}</strong> {poolLabel} ({damage} dmg − {parryReduction} parry/reflect − {reduction} reduction − {effectiveSoak} effective {soakWord}; pierce {pierce} vs {soakWord} {soak}).",
   "SWFFG.ApplyDamage.ParryRanks": "Parry / Reflect Ranks",
+  "SWFFG.ApplyDamage.BreachRanks": "Breach Ranks",
   "SWFFG.ApplyDamage.Reduction": "Damage Reduction",
   "SWFFG.ApplyCrit.Button": "Apply Crit",
   "SWFFG.ApplyCrit.DialogTitle": "Critical Roll — {name}",

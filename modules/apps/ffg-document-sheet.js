@@ -476,49 +476,60 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
   }
 
   /**
-   * Bridge the V1 `get<Document>SheetHeaderButtons` hook into ApplicationV2 header controls.
+   * Install the V1 header-button bridge on a sheet class, wrapping whatever is already there.
    *
    * V1 sheets let modules add header buttons by pushing `{label, icon, class, onclick}` onto an
-   * array passed to that hook. ApplicationV2 does not fire it and builds its menu from
-   * `_getHeaderControls()` instead, so any module still using the old hook contributes nothing and
-   * says nothing about it -- its button simply is not there. Several do (the `backpack` module's
-   * sheet control among them), and they cannot all be patched individually.
+   * array passed to `get<Document>SheetHeaderButtons`. ApplicationV2 never fires that hook and
+   * builds its menu from `_getHeaderControls()`, so a module still using it contributes nothing
+   * and reports nothing -- the button is simply absent. Five modules in a typical install do this.
    *
-   * Legacy entries are translated to control objects and appended. `onClick`/`onclick` are both
-   * accepted, since modules written across the transition use either. Entries whose label already
-   * appears are skipped, so a module that has been updated to contribute through BOTH routes does
-   * not show up twice.
-   * @override
+   * This deliberately wraps the class prototype at FIRST RENDER rather than living inside
+   * `_getHeaderControls` itself. Modules that have been updated patch that same method from their
+   * own `ready`, so they sit OUTSIDE this class's implementation: bridging from within it appends
+   * the legacy entries before those modules add their native ones, and a module offering both
+   * routes is then listed twice. Wrapping late puts this outermost, where the complete list is
+   * visible and duplicates can actually be detected.
+   * @param {Object} proto a sheet class prototype
    */
-  _getHeaderControls() {
-    const controls = super._getHeaderControls() ?? [];
-    const documentName = this.document?.documentName;
-    if (!documentName) return controls;
+  static installLegacyHeaderButtonBridge(proto) {
+    if (!proto || typeof proto._getHeaderControls !== "function") return;
+    if (Object.prototype.hasOwnProperty.call(proto, "_ffgLegacyHeaderBridge")) return;
+    Object.defineProperty(proto, "_ffgLegacyHeaderBridge", { value: true, enumerable: false });
 
-    const legacy = [];
-    try {
-      Hooks.callAll(`get${documentName}SheetHeaderButtons`, this, legacy);
-    } catch (err) {
-      CONFIG.logger?.warn?.("Legacy header button hook failed", err);
+    const original = proto._getHeaderControls;
+    proto._getHeaderControls = function (...args) {
+      const controls = original.apply(this, args) ?? [];
+      const documentName = this.document?.documentName;
+      if (!documentName) return controls;
+
+      const legacy = [];
+      try {
+        Hooks.callAll(`get${documentName}SheetHeaderButtons`, this, legacy);
+      } catch (err) {
+        CONFIG.logger?.warn?.("Legacy header button hook failed", err);
+        return controls;
+      }
+      if (!legacy.length) return controls;
+
+      // Compared against the FULL list, including entries added by modules that wrapped this
+      // method after us. `onClick`/`onclick` are both accepted: modules written across the
+      // transition use either, and one module here uses both spellings in different entries.
+      const seen = new Set(controls.map((c) => c?.label).filter(Boolean));
+      for (const button of legacy) {
+        const label = button?.label;
+        const handler = button?.onClick ?? button?.onclick;
+        if (!label || typeof handler !== "function" || seen.has(label)) continue;
+        seen.add(label);
+        controls.push({
+          // Namespaced so it cannot collide with a core action name.
+          action: `ffgLegacyHeader-${button.class ?? label}`.replace(/[^\w-]/g, "-"),
+          icon: button.icon ?? "fa-solid fa-square",
+          label,
+          onClick: (...handlerArgs) => handler.apply(this, handlerArgs),
+        });
+      }
       return controls;
-    }
-    if (!legacy.length) return controls;
-
-    const seen = new Set(controls.map((c) => c?.label).filter(Boolean));
-    for (const button of legacy) {
-      const label = button?.label;
-      const handler = button?.onClick ?? button?.onclick;
-      if (!label || typeof handler !== "function" || seen.has(label)) continue;
-      seen.add(label);
-      controls.push({
-        // Namespaced so it cannot collide with a core action name.
-        action: `ffgLegacyHeader-${button.class ?? label}`.replace(/[^\w-]/g, "-"),
-        icon: button.icon ?? "fa-solid fa-square",
-        label,
-        onClick: (...args) => handler.apply(this, args),
-      });
-    }
-    return controls;
+    };
   }
 
   activateListeners(_html) {}
@@ -1035,4 +1046,27 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
   _onDragOver(_event) {}
 
   async _onDrop(_event) {}
+}
+
+/**
+ * Install the legacy header-button bridge on each sheet class the first time one renders.
+ *
+ * Timing is the whole point. Modules that contribute header controls natively wrap
+ * `_getHeaderControls` on the sheet class prototype from their own `ready`, which is before any
+ * sheet has rendered. Patching here -- on first render -- therefore lands OUTSIDE those wrappers,
+ * so the bridge sees every entry they add and can suppress the duplicate legacy copy of it.
+ * Installing earlier (or from inside the class itself) puts the bridge underneath them, which
+ * lists a module offering both routes twice.
+ *
+ * Idempotent per prototype, and the menu is built when the header menu is opened rather than at
+ * render, so a bridge installed during a render is in place before the list is ever read.
+ */
+for (const hookName of ["renderActorSheetFFG", "renderItemSheetFFG", "renderActorSheetV2", "renderItemSheetV2"]) {
+  Hooks.on(hookName, (sheet) => {
+    try {
+      FFGDocumentSheet.installLegacyHeaderButtonBridge(Object.getPrototypeOf(sheet));
+    } catch (err) {
+      CONFIG.logger?.warn?.("Could not install the legacy header button bridge", err);
+    }
+  });
 }

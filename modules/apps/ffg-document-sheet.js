@@ -232,6 +232,7 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     this._activateCoreListeners(html);
     this.activateListeners(html);
     this._callLegacyRenderHook(html, context);
+    this._restoreInjectedTab();
     this._activateEditors();
 
     // --- Window size stability: no auto-resize on re-render ---
@@ -469,11 +470,43 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
 
   activateListeners(_html) {}
 
+  /**
+   * Re-select a tab contributed by a module, once the render hook has had a chance to add it.
+   *
+   * Called after `_callLegacyRenderHook`. Without this, any sheet re-render triggered while a
+   * module-injected tab was open (e.g. the netrunning module's tab, while editing a deck's
+   * architecture) dropped the user back onto the first tab, because the tab did not exist at the
+   * moment Tabs was bound. Does nothing when the remembered tab is a native one — those are
+   * already handled by the `initial` option — or when it still is not present in the DOM.
+   */
+  _restoreInjectedTab() {
+    const desired = this._pendingTabRestore;
+    this._pendingTabRestore = null;
+    const root = this.element;
+    if (!desired || !root || !this._tabs?.length) return;
+    const selector = `[data-tab="${CSS.escape(desired)}"]`;
+    for (const tabs of this._tabs) {
+      if (tabs.active === desired) return;
+      const scoped = tabs.group ? `[data-group="${CSS.escape(tabs.group)}"]${selector}` : selector;
+      if (!root.querySelector(scoped)) continue;
+      tabs.activate(desired);
+      const cacheKey = this._activeTabCacheKey;
+      if (cacheKey) this.constructor._activeTabCache.set(cacheKey, desired);
+      return;
+    }
+  }
+
   _activateCoreListeners(html) {
     const root = html[0];
     if (!root) return;
 
     const cacheKey = this._activeTabCacheKey;
+    // Remember the tab we WANT before constructing any Tabs instance. Modules inject their own
+    // tabs from the `renderActorSheet` hook, which fires after this runs, so at bind time a
+    // module tab is not in the DOM yet: Tabs falls back to the first tab AND fires its callback,
+    // which overwrites the cache below with that fallback. Capturing the value up front keeps the
+    // real target available to _restoreInjectedTab() once the hook has run.
+    this._pendingTabRestore = (cacheKey ? this.constructor._activeTabCache.get(cacheKey) : undefined) ?? this._sheetTab ?? null;
     this._tabs = (this.options.tabs ?? []).map((tabConfig) => {
       const cached = cacheKey ? this.constructor._activeTabCache.get(cacheKey) : undefined;
       const tabs = new foundry.applications.ux.Tabs({

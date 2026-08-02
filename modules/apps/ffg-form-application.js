@@ -115,27 +115,11 @@ export class FFGFormApplication extends HandlebarsApplicationMixin(ApplicationV2
     await super._onRender(context, options);
     executeInlineScripts(this.element);
 
-    // Belt and braces against a NATIVE form submission.
-    //
-    // These windows save through ApplicationV2's form handler, but every settings template ends in
-    // a <button type="submit">. If for any reason the framework's own submit listener is not the
-    // one that runs -- a nested <form> in a template, a part rendered outside the content form, an
-    // exception thrown earlier in the handler -- the browser falls back to submitting the form for
-    // real. That is a GET navigation to a URL built from the field names, e.g.
-    // `/game?currency_label=...&defaultKey=...`, which reloads Foundry at a bogus address: the UI
-    // comes up misplaced and audio is blocked because the reload was not a user gesture. Recovering
-    // needs the query string stripped by hand, so this is worth making impossible rather than
-    // unlikely.
-    //
-    // preventDefault in the CAPTURE phase cancels only the browser's default action; it does not
-    // stopPropagation, so ApplicationV2's own submit handler still runs and the save still happens.
-    // Bound once per form element, since ApplicationV2 reuses it across re-renders.
-    const root = this.element;
-    for (const form of [root?.matches?.("form") ? root : null, ...(root?.querySelectorAll?.("form") ?? [])]) {
-      if (!form || form.dataset.ffgNoNativeSubmit) continue;
-      form.dataset.ffgNoNativeSubmit = "1";
-      form.addEventListener("submit", (event) => event.preventDefault(), { capture: true });
-    }
+    // NOTE: do not add a capture-phase `submit` listener that calls preventDefault here. It was
+    // tried (2.1.20) to stop a native GET submission navigating the page, and it silently disabled
+    // saving in every settings window and the OggDude importer: ApplicationV2's own submit handling
+    // does not run once the event has been default-prevented, so cancelling the default action
+    // cancels the save with it.
   }
 
   _minDimensions() {

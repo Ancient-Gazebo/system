@@ -1458,7 +1458,11 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     const labelOf = (e) => this.constructor._entryLabel(e);
 
     // Point core's "Update Combatant" at the system's handler, which understands initiative slots.
-    const updateCombatantEntry = baseEntries.find(i => labelOf(i) === "COMBAT.CombatantUpdate");
+    // Matched on the trailing verb rather than the full key: V14 relabelled the tracker from
+    // "Combatant" to "Participant", so an exact "COMBAT.CombatantUpdate" comparison silently stops
+    // matching and the entry is left wired to core's own handler (which does nothing useful here).
+    const isCoreEntry = (e, verb) => new RegExp(`^COMBAT\.(Combatant|Participant)${verb}$`).test(labelOf(e) ?? "");
+    const updateCombatantEntry = baseEntries.find(i => isCoreEntry(i, "Update"));
     if (updateCombatantEntry) {
       this.constructor._rewireEntry(
         updateCombatantEntry,
@@ -1496,8 +1500,9 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     //   Remove  - combatants leave the order via "Remove Initiative Slot".
     // Matched by label rather than by index: the previous splice(2, 1) assumed one specific
     // ordering of core's entries and would silently remove the wrong one if that changed.
-    const drop = (label) => /Reroll/i.test(label ?? "") || label === "COMBAT.CombatantRemove";
-    const trimmedEntries = baseEntries.filter(i => !drop(labelOf(i)));
+    const trimmedEntries = baseEntries.filter(
+      (i) => !/Reroll/i.test(labelOf(i) ?? "") && !isCoreEntry(i, "Remove")
+    );
 
     return [...trimmedEntries, removeSlot, unClaimSlot];
   }

@@ -62,6 +62,10 @@ export function executeInlineScripts(root) {
 export class FFGFormApplication extends HandlebarsApplicationMixin(ApplicationV2) {
   static DEFAULT_OPTIONS = {
     tag: "div",
+    // Save controls use data-action="ffgSave" rather than type="submit"; see the handler.
+    actions: {
+      ffgSave: FFGFormApplication.ffgSave,
+    },
     window: {
       contentTag: "form",
       resizable: false,
@@ -153,6 +157,27 @@ export class FFGFormApplication extends HandlebarsApplicationMixin(ApplicationV2
    */
   static _formSubmitHandler(event, _form, _formData) {
     return this._onSubmit(event);
+  }
+
+  /**
+   * Save handler for a `data-action="ffgSave"` control.
+   *
+   * Settings templates used to save with `<button type="submit">`. When anything prevented the
+   * framework's submit handling from running, the browser fell back to submitting the form for
+   * real -- a GET navigation to a URL built from the field names, e.g.
+   * `/game?currency_label=Glass&currency_key=glass&defaultKey=glass`, which reloaded Foundry at a
+   * bogus address and left the interface misplaced until the query string was removed by hand.
+   *
+   * A `type="button"` control cannot trigger a native submission at all, so routing Save through an
+   * action removes the failure mode rather than trying to intercept it. Cancelling the submit event
+   * instead is NOT viable: ApplicationV2 skips its own handling once the event is default-prevented,
+   * which silently disables saving everywhere (see the note in _onRender).
+   *
+   * @this {FFGFormApplication}
+   */
+  static async ffgSave(event, _target) {
+    await this._onSubmit(event);
+    if (this.options.form?.closeOnSubmit) await this.close();
   }
 
   /**

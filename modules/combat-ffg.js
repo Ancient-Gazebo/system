@@ -855,8 +855,17 @@ export class CombatFFG extends Combat {
    * @returns {Promise<void>}
    */
   async updateCombatant(el) {
-    const slotId = el.getAttribute("data-alt-id");
-    const combatant = this.combatants.get(slotId);
+    // `data-alt-id` is the id of the combatant that has CLAIMED this slot, so it is empty on an
+    // unclaimed one -- which made this throw on the next line and do nothing visible. Fall back to
+    // the row's own `data-combatant-id`, the slot's combatant, so a slot's initiative can be edited
+    // before anyone claims it (e.g. straight after everyone has rolled, before combat starts).
+    const row = el?.closest?.("[data-combatant-id]") ?? el;
+    const slotId = row?.getAttribute?.("data-alt-id") || row?.getAttribute?.("data-combatant-id");
+    const combatant = slotId ? this.combatants.get(slotId) : null;
+    if (!combatant) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Initiative.NoCombatant"));
+      return;
+    }
     const currentInitiative = combatant.initiative;
     DialogV2.wait({
       window: { title: game.i18n.localize("SWFFG.Combats.Slots.Dialog.Title") },
@@ -1423,16 +1432,36 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
    */
   static _makeEntry({ label, icon, callback, condition }) {
     const entry = { icon };
+    const handler = callback ? this._normalizeHandler(callback) : undefined;
     if (game.release.generation >= 14) {
       entry.label = label;
-      if (callback) entry.onClick = callback;
+      if (handler) entry.onClick = handler;
       if (condition) entry.visible = condition;
     } else {
       entry.name = label;
-      if (callback) entry.callback = callback;
+      if (handler) entry.callback = handler;
       if (condition) entry.condition = condition;
     }
     return entry;
+  }
+
+  /**
+   * Wrap a context-menu callback so it receives the clicked ELEMENT whichever way the framework
+   * calls it. V13 invoked `callback(target)`; V14's `onClick` does not pass the element in the same
+   * position, so a handler written for V13 received an Event instead. That fails quietly for code
+   * like `$(el).data("slot-index")` -- jQuery happily wraps the event, `.data()` returns undefined,
+   * the index is NaN and the guard skips the work with no error. That is how Unclaim Initiative
+   * Slot became a no-op.
+   * @param {Function} callback handler expecting the clicked element
+   */
+  static _normalizeHandler(callback) {
+    return function (...args) {
+      const el = args.find((a) => a instanceof HTMLElement)
+        ?? args.find((a) => a?.currentTarget instanceof HTMLElement)?.currentTarget
+        ?? args.find((a) => a?.[0] instanceof HTMLElement)?.[0]
+        ?? args[0];
+      return callback.call(this, el);
+    };
   }
 
   /**
@@ -1440,14 +1469,15 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
    * uses so a V13 entry keeps working and a V14 one is not given a deprecated alias.
    */
   static _rewireEntry(entry, label, callback) {
+    const handler = this._normalizeHandler(callback);
     if ("label" in entry || game.release.generation >= 14) {
       entry.label = label;
-      entry.onClick = callback;
+      entry.onClick = handler;
       delete entry.name;
       delete entry.callback;
     } else {
       entry.name = label;
-      entry.callback = callback;
+      entry.callback = handler;
     }
     return entry;
   }
@@ -1461,7 +1491,13 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     // Matched on the trailing verb rather than the full key: V14 relabelled the tracker from
     // "Combatant" to "Participant", so an exact "COMBAT.CombatantUpdate" comparison silently stops
     // matching and the entry is left wired to core's own handler (which does nothing useful here).
-    const isCoreEntry = (e, verb) => new RegExp(`^COMBAT\.(Combatant|Participant)${verb}$`).test(labelOf(e) ?? "");
+    // Match core's entries by their verb, not by an exact key. V14 relabelled "Combatant" to
+    // "Participant", and an exact comparison had already broken once on that rename; anything
+    // authored by this system is namespaced SWFFG.* and is excluded so we never match ourselves.
+    const isCoreEntry = (e, verb) => {
+      const label = labelOf(e) ?? "";
+      return !label.startsWith("SWFFG.") && new RegExp(verb, "i").test(label);
+    };
     const updateCombatantEntry = baseEntries.find(i => isCoreEntry(i, "Update"));
     if (updateCombatantEntry) {
       this.constructor._rewireEntry(
@@ -1501,7 +1537,7 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     // Matched by label rather than by index: the previous splice(2, 1) assumed one specific
     // ordering of core's entries and would silently remove the wrong one if that changed.
     const trimmedEntries = baseEntries.filter(
-      (i) => !/Reroll/i.test(labelOf(i) ?? "") && !isCoreEntry(i, "Remove")
+      (i) => !isCoreEntry(i, "Reroll") && !isCoreEntry(i, "Remove")
     );
 
     return [...trimmedEntries, removeSlot, unClaimSlot];

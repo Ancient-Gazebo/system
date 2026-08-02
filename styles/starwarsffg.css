@@ -4292,6 +4292,11 @@ body.game .starwarsffg.application.sheet.item > form.window-content > .sheet-bod
 .initiative-dialog .pool-additional i,
 .initiative-dialog .pool-additional input[type=button] {
   vertical-align: middle;
+  /* `nowrap` on the cell cannot keep these on one line if something upstream has made them block
+     level -- a block element starts a new line regardless. That is what left the Boost and Setback
+     swatches sitting alone above their counters. Force them inline. */
+  display: inline-block !important;
+  float: none !important;
 }
 
 .initiative-dialog .pool-additional .ffg-die-swatch,

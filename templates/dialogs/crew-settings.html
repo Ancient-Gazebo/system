@@ -24,7 +24,7 @@
         <input type="text" name="initiativeCrewRole" value="{{this.data.initiativeRole.role_name}}" data-dtype="String"/>
     </section>
     <footer class="sheet-footer flexrow">
-        <button type="submit" class="submit_role_changes"><i class="far fa-save"></i> {{ localize 'SETTINGS.Save'}}</button>
+        <button type="button" data-action="ffgSave" class="submit_role_changes"><i class="far fa-save"></i> {{ localize 'SETTINGS.Save'}}</button>
         <button type="button" name="reset"><i class="fas fa-undo"></i> {{ localize 'SETTINGS.Reset'}}</button>
     </footer>
 </form>

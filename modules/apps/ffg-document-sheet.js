@@ -32,6 +32,12 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
    */
   static _activeTabCache = new Map();
 
+  /**
+   * Legacy header-button classes belonging to modules that also insert their own row into the
+   * rendered header menu. Their legacy button is deliberately not bridged, to avoid a duplicate.
+   */
+  static SELF_RENDERING_HEADER_BUTTONS = new Set(["glitchsmith-actor-sheet-menu"]);
+
   static DEFAULT_OPTIONS = {
     tag: "div",
     // `app`/`window-app`/`sheet` are the V1-parity hooks; `application` is added
@@ -224,7 +230,6 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     this.element.dataset.appid = this.appId;
 
     this._installHeaderControlDeduplicator();
-    installHeaderMenuDeduplicator();
     this._projectLegacyHeaderControls();
     this.element.querySelector(":scope > .window-resize-handle")?.classList.add("window-resizable-handle");
 
@@ -567,6 +572,13 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       };
       const seen = new Set(controls.map((c) => normalise(c?.label)).filter(Boolean));
       for (const button of legacy) {
+        // Some modules register a legacy header button AND insert their own row into the rendered
+        // menu. Bridging their button then produces a second, identical row that no pass over the
+        // control list can detect, because their own row never appears in it. Pruning the rendered
+        // menu instead leaves the box at the height it was measured at, so the removed row shows
+        // as a blank strip. Skipping the bridge for them is the only approach that leaves the menu
+        // correct at every layer.
+        if (FFGDocumentSheet.SELF_RENDERING_HEADER_BUTTONS.has(String(button?.class ?? ""))) continue;
         const label = button?.label;
         const handler = button?.onClick ?? button?.onclick;
         const key = normalise(label);
@@ -1101,124 +1113,24 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
 }
 
 /**
- * Install the legacy header-button bridge on each sheet class the first time one renders.
+ * Install the legacy header-button bridge on every registered sheet class, once, at `ready`.
  *
- * Timing is the whole point. Modules that contribute header controls natively wrap
- * `_getHeaderControls` on the sheet class prototype from their own `ready`, which is before any
- * sheet has rendered. Patching here -- on first render -- therefore lands OUTSIDE those wrappers,
- * so the bridge sees every entry they add and can suppress the duplicate legacy copy of it.
- * Installing earlier (or from inside the class itself) puts the bridge underneath them, which
- * lists a module offering both routes twice.
- *
- * Idempotent per prototype, and the menu is built when the header menu is opened rather than at
- * render, so a bridge installed during a render is in place before the list is ever read.
+ * Installed EARLY on purpose. Modules wrap `_getHeaderControls` from their own `ready` or first
+ * render, so wrapping before them puts this innermost -- their wrappers then see the entries this
+ * bridge contributes and can filter them. The reverse order is what left the financial bridge's
+ * wallet toggle unable to take effect: it removed the entry, and this bridge added it back
+ * afterwards.
  */
-for (const hookName of ["renderActorSheetFFG", "renderItemSheetFFG", "renderActorSheetV2", "renderItemSheetV2"]) {
-  Hooks.on(hookName, (sheet) => {
-    try {
-      FFGDocumentSheet.installLegacyHeaderButtonBridge(Object.getPrototypeOf(sheet));
-    } catch (err) {
-      CONFIG.logger?.warn?.("Could not install the legacy header button bridge", err);
-    }
-  });
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Header menu de-duplication (DOM level)                                     */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Remove repeated entries from a rendered header (⋮) menu.
- *
- * Deduplicating the control list is not sufficient. At least one module inserts its entry into the
- * rendered menu directly rather than contributing a header control -- its item appears ABOVE the
- * first real control and never shows up in `_getHeaderControls()` output at all. Its legacy header
- * button is still bridged into a control, so the menu ends up with two identical rows that no
- * control-list pass can reconcile, because only one of them exists at that stage.
- *
- * The rendered menu is the one place both are visible, so the last duplicate check happens here.
- * @param {HTMLElement} menu a rendered #context-menu element
- */
-function deduplicateHeaderMenu(menu) {
-  const items = menu.querySelectorAll("li");
-  if (items.length < 2) return;
-
-  // Only touch the sheet header menu. Other context menus (chat, sidebar, directories) may
-  // legitimately repeat a label, and silently deleting rows from those would be a worse bug than
-  // the one being fixed. The header menu always carries Configure Sheet.
-  const marker = (game.i18n?.localize("SHEETS.ConfigureSheet") ?? "Configure Sheet").trim().toLowerCase();
-  const texts = [...items].map((li) => (li.textContent ?? "").trim().toLowerCase());
-  if (!texts.includes(marker)) return;
-
-  const seen = new Set();
-  let removed = false;
-  items.forEach((li, i) => {
-    const text = texts[i];
-    // A row with no text and nothing to click is a leftover rather than a separator this menu uses.
-    if (!text) {
-      if (!li.querySelector("button, a, input, select")) {
-        li.remove();
-        removed = true;
-      }
-      return;
-    }
-    if (seen.has(text)) {
-      li.remove();
-      removed = true;
-    } else seen.add(text);
-  });
-
-  if (removed) releaseStaleMenuSizing(menu);
-}
-
-/**
- * Let a header menu re-measure after rows have been taken out of it.
- *
- * The menu is sized when it opens -- it carries an inline `max-height` computed from the space
- * available at that moment -- and anything removed afterwards leaves the box at its original
- * height. The result is a blank strip below the last entry, one row's worth per row removed, which
- * reads as empty rows even though the list itself is clean.
- *
- * Deferred a frame so it runs after every observer has had its turn: this module and the financial
- * bridge both prune the same menu, and resetting between them would just re-stale the measurement.
- * Only explicit sizing is cleared; the stylesheet's own rules are left to apply.
- * @param {HTMLElement} menu a rendered #context-menu element
- */
-function releaseStaleMenuSizing(menu) {
-  requestAnimationFrame(() => {
-    for (const el of [menu, ...menu.querySelectorAll("menu, ol, ul")]) {
-      if (!(el instanceof HTMLElement)) continue;
-      // `height` and `min-height` are what can hold the box open; `max-height` only caps it and is
-      // core's fit-to-viewport value, so it is deliberately left in place.
-      el.style.removeProperty("height");
-      el.style.removeProperty("min-height");
-    }
-  });
-}
-
-/**
- * Watch for header menus being opened and deduplicate them once each.
- *
- * The menu is built on demand and attached to <body>, so there is no render hook to use and no
- * element to query ahead of time; an observer is the only reliable way to see it appear.
- * Installed once for the page, from the first sheet render.
- */
-let _ffgHeaderMenuObserver = null;
-function installHeaderMenuDeduplicator() {
-  if (_ffgHeaderMenuObserver || typeof MutationObserver !== "function" || !document.body) return;
-  _ffgHeaderMenuObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (!(node instanceof HTMLElement)) continue;
-        const menu = node.id === "context-menu" ? node : node.querySelector?.("#context-menu");
-        if (!menu) continue;
+Hooks.once("ready", () => {
+  for (const config of [CONFIG.Actor, CONFIG.Item]) {
+    for (const entries of Object.values(config?.sheetClasses ?? {})) {
+      for (const entry of Object.values(entries ?? {})) {
         try {
-          deduplicateHeaderMenu(menu);
+          FFGDocumentSheet.installLegacyHeaderButtonBridge(entry?.cls?.prototype);
         } catch (err) {
-          CONFIG.logger?.warn?.("Header menu de-duplication failed", err);
+          CONFIG.logger?.warn?.("Could not install the legacy header button bridge", err);
         }
       }
     }
-  });
-  _ffgHeaderMenuObserver.observe(document.body, { childList: true, subtree: true });
-}
+  }
+});

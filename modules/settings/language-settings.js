@@ -61,7 +61,14 @@ export default class LanguageSettings extends FFGFormApplication {
     // it is an array. Normalize, trim, drop blanks, and de-duplicate (case-insensitive) while
     // preserving the entered order.
     let raw = formData["language_name"];
-    if (typeof raw === "undefined") raw = [];
+    // A submit that carries no `language_name` at all is not "the user deleted every language" --
+    // it means the form data never reached us (a nested <form> owning the controls did exactly
+    // that, and silently wiped the list). Deleting the last row leaves a blank input, not a missing
+    // field, so refusing to write on a missing field costs nothing and makes data loss impossible.
+    if (typeof raw === "undefined") {
+      CONFIG.logger?.warn?.("LanguageSettings: submit contained no language fields; ignoring.");
+      return;
+    }
     if (!Array.isArray(raw)) raw = [raw];
 
     const seen = new Set();

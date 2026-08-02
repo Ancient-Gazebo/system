@@ -1,4 +1,9 @@
-<form autocomplete="off" class="currency_settings" style="overflow-y: auto;">
+{{!-- Deliberately a <div>, not a <form>: this window's content element IS the form
+     (window.contentTag = "form"). A nested <form> would own these controls instead, so
+     FormDataExtended on the content form would collect nothing and saving would write
+     empty data -- and a submit inside it would bypass the framework and navigate the
+     page. --}}
+<div autocomplete="off" class="currency_settings" style="overflow-y: auto;">
   <section class="content">
     <div class="settings-list">
       <h2 class="module-header">{{ systemTitle }}</h2>
@@ -23,7 +28,7 @@
     <button type="button" data-action="ffgSave" class="submit_currency_changes"><i class="far fa-save"></i> {{ localize 'SETTINGS.Save'}}</button>
     <button type="button" name="reset"><i class="fas fa-undo"></i> {{ localize 'SETTINGS.Reset'}}</button>
   </footer>
-</form>
+</div>
 
 <script>
   $(document).ready(function () {

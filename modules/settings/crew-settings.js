@@ -89,14 +89,26 @@ export default class CrewSettings extends FFGFormApplication {
   /** @override */
   async _updateObject(event, formData) {
     const existing_settings = game.settings.get("starwarsffg", "arrayCrewRoles");
+    // As in LanguageSettings: a submit with no role fields means the data never reached us, not
+    // that every role was deleted. Bail rather than dereference undefined (which aborted the save
+    // mid-way and left the roles looking like they simply refused to save).
+    if (typeof formData['role_name'] === "undefined") {
+      CONFIG.logger?.warn?.("CrewSettings: submit contained no role fields; ignoring.");
+      return;
+    }
+    const toArray = (v) => (typeof v === "undefined" ? [] : Array.isArray(v) ? v : [v]);
+    const roleNames = toArray(formData['role_name']);
+    const roleSkills = toArray(formData['role_skill']);
+    const useHandling = toArray(formData['use_handling']);
+    const useWeapons = toArray(formData['use_weapons']);
     let new_settings = [];
     // convert the arrays into the format expected
-    for (let i = 0; i < formData['role_name'].length; i++) {
+    for (let i = 0; i < roleNames.length; i++) {
       new_settings.push({
-        'role_name': formData['role_name'][i],
-        'role_skill': formData['role_skill'][i],
-        'use_handling': formData['use_handling'][i],
-        'use_weapons': formData['use_weapons'][i],
+        'role_name': roleNames[i],
+        'role_skill': roleSkills[i],
+        'use_handling': useHandling[i],
+        'use_weapons': useWeapons[i],
       })
     }
     // update the settings if they don't match the old ones

@@ -676,6 +676,19 @@
 .starwarsffg .weapon-items .gear-org-list .item .toggle-equipped.active {
   color: var(--green, #5aa02f);
 }
+/* Green must mean "equipped", never "the pointer is here". A theme's generic
+   `a:hover` (space-op tints hovered links green) carries a pseudo-class and so
+   outranks the two flat colour rules above, which made hovering an UNEQUIPPED
+   weapon in tabs mode light the fist green as if it had been clicked. Restate the
+   state colours for :hover so the icon only changes when the equip state does.
+   `!important` because the rule being beaten belongs to a third-party theme whose
+   own weight we cannot rely on. */
+.starwarsffg .weapon-items .gear-org-list .item .toggle-equipped:hover {
+  color: var(--red-light, #e01a1a) !important;
+}
+.starwarsffg .weapon-items .gear-org-list .item .toggle-equipped.active:hover {
+  color: var(--green, #5aa02f) !important;
+}
 .starwarsffg .weapon-items .gear-org-list .item-name {
   margin: 0;
   cursor: pointer;

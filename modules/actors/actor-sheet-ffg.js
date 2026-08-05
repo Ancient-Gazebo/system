@@ -59,7 +59,11 @@ export class ActorSheetFFG extends FFGActorSheet {
     classes: ["starwarsffg", "sheet", "actor", "v2"],
     position: { width: 710, height: 650 },
     tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "characteristics" }],
-    scrollY: [".tableWithHeader", ".tab", ".skillsGrid", ".skillsTablesGrid"],
+    // `.sheet-body` belongs here alongside `.tab`: on character/minion sheets the CSS
+    // makes the active `.tab` the scroller, but on vehicle/homestead sheets it is
+    // `.sheet-body` instead. Both must be tracked so the scroll survives a re-render
+    // (equipping an item, installing an attachment).
+    scrollY: [".tableWithHeader", ".tab", ".sheet-body", ".skillsGrid", ".skillsTablesGrid"],
   };
 
   /** @override */

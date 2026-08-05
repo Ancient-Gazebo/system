@@ -206,6 +206,62 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
   async _preRender(context, options) {
     await super._preRender(context, options);
     this._ffgScrollTop = this.form?.scrollTop || 0;
+    this._captureScrollPositions();
+  }
+
+  /**
+   * Stable identity for a scroll container across re-renders. Tabs are keyed by
+   * `data-tab` so a changing tab count (module-injected tabs, the optional gear /
+   * talent organization tabs) cannot shift one tab's scroll onto another; anything
+   * else falls back to its position among that selector's matches.
+   */
+  _ffgScrollKey(selector, el, index) {
+    const tab = el.dataset?.tab;
+    return tab ? `${selector}@${tab}` : `${selector}#${index}`;
+  }
+
+  /**
+   * Remember where each `scrollY` container is scrolled to.
+   *
+   * ApplicationV2 already restores `scrollable` parts, but it does so inside
+   * `_replaceHTML` -- before `_activateCoreListeners` binds Tabs and re-activates the
+   * open tab. Sheet templates hard-code the FIRST tab as active, so at that moment the
+   * tab the user is actually looking at is still `display: none`, and assigning
+   * `scrollTop` to a hidden element does nothing. That is why equipping a weapon /
+   * armour / gear item (which updates the item, re-rendering the actor sheet) snapped
+   * the list back to the top: on actor sheets `.tab` is the scrolling element, not the
+   * form. We therefore keep our own copy and re-apply it from `_onRender`, after the
+   * real tab is visible again.
+   */
+  _captureScrollPositions() {
+    const root = this.element;
+    if (!root) return;
+    const positions = (this._ffgScrollPositions ??= new Map());
+    for (const selector of this.options.scrollY ?? []) {
+      let index = -1;
+      for (const el of root.querySelectorAll(selector)) {
+        index += 1;
+        // A hidden container (an inactive tab) reports scrollTop 0 regardless of where
+        // the user left it, so keep the remembered value instead of zeroing it out.
+        if (el.offsetParent === null) continue;
+        positions.set(this._ffgScrollKey(selector, el, index), el.scrollTop);
+      }
+    }
+  }
+
+  /** Re-apply the scroll offsets captured in `_preRender`. */
+  _restoreScrollPositions() {
+    const root = this.element;
+    const positions = this._ffgScrollPositions;
+    if (!root || !positions?.size) return;
+    for (const selector of this.options.scrollY ?? []) {
+      let index = -1;
+      for (const el of root.querySelectorAll(selector)) {
+        index += 1;
+        const top = positions.get(this._ffgScrollKey(selector, el, index));
+        if (top) el.scrollTop = top;
+      }
+    }
   }
 
   async _onRender(context, options) {
@@ -246,7 +302,12 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     // `renderActorSheetFFG`. Restoring synchronously here still ran before the tab
     // existed. A microtask is not enough either, since the dispatch happens in the
     // promise continuation; rAF clears the whole task.
-    requestAnimationFrame(() => this._restoreInjectedTab());
+    requestAnimationFrame(() => {
+      this._restoreInjectedTab();
+      // A module tab only becomes visible here, so its scroll has to be re-applied
+      // after the fact; the containers already restored below are unaffected.
+      this._restoreScrollPositions();
+    });
     this._activateEditors();
 
     // --- Window size stability: no auto-resize on re-render ---
@@ -272,7 +333,12 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     // Restore the pre-render content scroll (captured in _preRender) now that the
     // new content is in place and activateListeners has re-applied the form's
     // overflow, so a re-render (e.g. a tree checkbox submit) keeps the scroll.
+    // The form is the scroller on the flat editor windows; on actor/item sheets it
+    // is the active `.tab` / `.sheet-body`, handled by the per-container restore --
+    // which must run here rather than in _replaceHTML because Tabs only re-activated
+    // the open tab a few lines above.
     if (this._ffgScrollTop && this.form) this.form.scrollTop = this._ffgScrollTop;
+    this._restoreScrollPositions();
   }
 
   _applyLegacyRootClasses(form, context = {}) {

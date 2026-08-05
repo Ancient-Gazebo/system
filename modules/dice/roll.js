@@ -264,11 +264,9 @@ export class RollFFG extends Roll {
         const item = await fromUuid(this.data.flags.starwarsffg.uuid);
         if (item) {
           // `item` is the live, cached document. Do NOT assign to `item.system`: getItemDetails()
-          // returns foundry.utils.duplicate(this.system), which serializes the DataModel to its
-          // _source and drops everything prepareData() derives (range.label -> schema default
-          // "Range", damage/crit/etc. .adjusted -> base values). Replacing item.system with that
-          // snapshot corrupts the live item, so every later read - the open actor sheet and the
-          // weapon item sheet - shows the schema defaults until the item is next re-prepared.
+          // returns a detached plain copy of the prepared system, and replacing item.system with it
+          // would swap the DataModel instance out for a plain object, corrupting every later read
+          // (the open actor sheet, the weapon item sheet) until the item is next re-prepared.
           // Build a detached plain copy for the chat card instead and leave the live item untouched.
           this.data = item.toObject();
           this.data.system = await item.getItemDetails();

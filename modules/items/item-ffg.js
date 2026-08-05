@@ -6,6 +6,7 @@ import ModifierHelpers from "../helpers/modifiers.js";
 import Helpers from "../helpers/common.js";
 import ItemHelpers from "../helpers/item-helpers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
+import { preparedSystemCopy } from "../datamodels/sheet-data.js";
 
 /**
  * Extend the basic Item with some very simple modifications.
@@ -749,7 +750,16 @@ export class ItemFFG extends ItemBaseFFG {
    * Prepare and return details of the item for display in inventory or chat.
    */
   async getItemDetails() {
-    const data = foundry.utils.duplicate(this.system);
+    // Must copy the LIVE prepared system, not foundry.utils.duplicate(this.system).
+    // `duplicate` is JSON.parse(JSON.stringify(...)), and DataModel#toJSON() returns toObject(true)
+    // -- the _source -- so every value prepareData() derives is replaced by whatever was last
+    // written to the database: damage/crit/encumbrance/... `.adjusted` fall back to their stored
+    // (usually base) numbers and range.label reverts to the schema default. That silently dropped
+    // the governing characteristic and the "Skill Damage" modifier from the chat card, and only
+    // looked correct for weapons whose sheet had been saved (the sheet binds
+    // data.damage.adjusted, which persists the derived value into _source as a side effect).
+    // preparedSystemCopy gives the same mutable plain copy the sheets already render from.
+    const data = preparedSystemCopy(this);
 
     // Item type specific properties
     const props = [];

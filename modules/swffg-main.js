@@ -1089,6 +1089,13 @@ Hooks.once("init", async function () {
     // Invisible hides the token from others. Everything else is a cosmetic marker.
     CONFIG.specialStatusEffects.BLIND = "blinded";
     CONFIG.specialStatusEffects.INVISIBLE = "invisible";
+    // DEFEATED must be repointed too. Foundry defaults it to the core "dead" status, but we emptied
+    // CONFIG.statusEffects above, so that id no longer exists in this system. Core's combat tracker
+    // toggle calls actor.toggleStatusEffect(CONFIG.specialStatusEffects.DEFEATED), which THROWS on an
+    // unregistered id (since V13) - so marking a combatant defeated blew up mid-handler, and anything
+    // reading Combatant#isDefeated (our own initiative-slot accounting below, plus modules such as
+    // Monk's Bloodsplats) could never see a defeated unit. Point it at the status we actually ship.
+    CONFIG.specialStatusEffects.DEFEATED = "starwarsffg-defeated";
 
     // custom statuses defined by the user
     try {

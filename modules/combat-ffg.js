@@ -304,27 +304,32 @@ export class CombatFFG extends Combat {
       } else {
         // Make sure we are dealing with an array of ids
         ids = typeof ids === "string" ? [ids] : ids;
-        const c = initiative.getCombatantByToken(
-            initiative.combatants.map(combatant => combatant)
-            .filter(combatantData => combatantData._id == ids[0])[0]
-            .tokenId);
-        //const data = c.actor.system;
-        const data = _findActorForInitiative(c);
-        whosInitiative = c.actor.name;
+        const c = _resolveCombatantForRoll(initiative, ids[0]);
+        if (!c?.actor) {
+          // The id no longer resolves to a combatant with an actor (removed mid-roll, or its token
+          // left the scene). This used to throw here, and a throw inside an async Promise executor
+          // is never surfaced as a rejection - the dialog never opened and the caller's await hung
+          // forever. Fall through to the generic Vigilance/Cool pools built below, which is exactly
+          // what the multi-combatant branch above does.
+          CONFIG.logger.warn(`Unable to resolve combatant '${ids[0]}' for initiative; falling back to default dice pools.`);
+        } else {
+          const data = _findActorForInitiative(c);
+          whosInitiative = c.actor.name;
 
-        vigilanceDicePool = _buildInitiativePool(data, "Vigilance");
-        coolDicePool = _buildInitiativePool(data, "Cool");
+          vigilanceDicePool = _buildInitiativePool(data, "Vigilance");
+          coolDicePool = _buildInitiativePool(data, "Cool");
 
-        const initSkills = Object.keys(data.skills).filter((skill) => data.skills[skill].useForInitiative);
+          const initSkills = Object.keys(data.skills).filter((skill) => data.skills[skill].useForInitiative);
 
-        initSkills.forEach((skill) => {
-          if (dicePools.find((p) => p.name === skill)) return;
+          initSkills.forEach((skill) => {
+            if (dicePools.find((p) => p.name === skill)) return;
 
-          const skillPool = _buildInitiativePool(data, skill);
-          skillPool.label = data.skills[skill].label;
-          skillPool.name = skill;
-          dicePools.push(skillPool);
-        });
+            const skillPool = _buildInitiativePool(data, skill);
+            skillPool.label = data.skills[skill].label;
+            skillPool.name = skill;
+            dicePools.push(skillPool);
+          });
+        }
       }
 
       if (dicePools.findIndex((p) => p.name === "Vigilance") < 0) {
@@ -381,23 +386,17 @@ export class CombatFFG extends Combat {
               const [updates, messages] = await ids.reduce(
                 async (results, id, i) => {
                   let [updates, messages] = await results;
-                  // Get Combatant data. V14 deprecated Combat#getCombatantByToken in favour of
-                  // #getCombatantsByToken, which returns every combatant sharing that token rather
-                  // than the first. This loop wants one combatant per id, so take the head; the
-                  // warning fired once per combatant, which is why a group roll produced a stack of
-                  // them. Feature-detected on the method so V13 still resolves.
-                  const tokenId = initiative.combatants
-                    .map(combatant => combatant)
-                    .filter(combatantData => combatantData._id == id)[0]
-                    .tokenId;
-                  const c = initiative.getCombatantsByToken
-                    ? initiative.getCombatantsByToken(tokenId)?.[0]
-                    : initiative.getCombatantByToken(tokenId);
+                  // Get Combatant data. See _resolveCombatantForRoll for the V14 deprecation handling
+                  // (this loop is why a group roll used to produce one warning per combatant).
+                  const c = _resolveCombatantForRoll(initiative, id);
                   // Skip combatants the current user can't roll for, but keep processing the rest
                   // of the batch. Returning the accumulator unchanged (as the success path does) is
                   // required: returning resolve()'s value here would feed `undefined` into the next
                   // iteration and throw a TypeError, aborting initiative for every later combatant.
-                  if (!c || !c.isOwner) return results;
+                  // `!c.actor` is part of the same guard because everything below dereferences it
+                  // (_findActorForInitiative reads c.actor.system first thing) - a combatant whose
+                  // token or actor has gone away must be skipped, not thrown on.
+                  if (!c || !c.actor || !c.isOwner) return results;
 
                   // Detemine Formula
                   const data = _findActorForInitiative(c);
@@ -1238,6 +1237,30 @@ function _getInitiativeFormula(skill, ability) {
   });
   dicePool.upgrade(parseInt(skill.rank));
   return dicePool.renderDiceExpression();
+}
+
+/**
+ * Resolve the Combatant to roll initiative for, given a combatant id.
+ *
+ * Looks the id up in the tracker to get its token, then resolves the combatant that owns that token.
+ *
+ * V14 deprecated `Combat#getCombatantByToken` in favour of `#getCombatantsByToken`, which returns
+ * EVERY combatant sharing the token rather than just the first. Both callers want a single
+ * combatant, so take the head to preserve the previous behaviour. The check is on the presence of
+ * the new method rather than a version number, so V13 (where only the old name exists) still
+ * resolves - and reading the deprecated name at all logs a warning, so the new one has to be tried
+ * first.
+ *
+ * @param {Combat} combat the combat to search
+ * @param {string} combatantId the Combatant's _id
+ * @returns {Combatant|undefined} undefined when the id is unknown or the combatant has no token
+ */
+function _resolveCombatantForRoll(combat, combatantId) {
+  const tokenId = combat.combatants.find((c) => c._id === combatantId)?.tokenId;
+  if (!tokenId) return undefined;
+  return combat.getCombatantsByToken
+    ? combat.getCombatantsByToken(tokenId)?.[0]
+    : combat.getCombatantByToken(tokenId);
 }
 
 function _findActorForInitiative(c) {

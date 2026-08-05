@@ -368,6 +368,7 @@
   "SWFFG.ModTypeCharacteristic": "Characteristic",
   "SWFFG.ModTypeSkillRank": "Skill Rank",
   "SWFFG.ModTypeSkillBoost": "Skill Boost",
+  "SWFFG.ModTypeSkillDamage": "Skill Weapon Damage",
   "SWFFG.ModTypeSkillDecreaseDifficulty": "Skill Decrease Difficulty",
   "SWFFG.ModTypeStat": "Stat",
   "SWFFG.ModTypeStatWeapon": "Weapon Stat",

@@ -290,6 +290,7 @@ export class ActorFFG extends Actor {
     // deliberately omits the characteristic to avoid using its pre-effect value.
     if (["character", "minion", "rival", "nemesis"].includes(actor.type)) {
       this._applyCharacteristicDamage(actor);
+      this._applySkillDamage(actor);
     }
 
     // Personal-scale defence (melee and ranged) is capped at 4 each. Armor, talents, and other
@@ -325,6 +326,29 @@ export class ActorFFG extends Actor {
       const charValue = parseInt(data.characteristics?.[idata.characteristic.value]?.value, 10);
       if (Number.isNaN(charValue)) continue;
       idata.damage.adjusted = parseInt(idata.damage.adjusted, 10) + charValue;
+    }
+  }
+
+  /**
+   * Add the "Skill Damage" modifier for a weapon's governing skill to its derived damage.
+   *
+   * The modifier is written onto the actor as an Active Effect on `system.skills.<skill>.damage`
+   * (see ModifierHelpers.getModKeyPath), so it is only resolved after applyActiveEffects() - hence
+   * this runs in prepareDerivedData() alongside _applyCharacteristicDamage. Every weapon whose
+   * `skill.value` matches picks the bonus up, so it applies to any weapon rolled with that skill.
+   *
+   * @param {Actor} actor
+   */
+  _applySkillDamage(actor) {
+    const data = actor.system;
+    for (const item of actor.items) {
+      if (!["weapon", "shipweapon"].includes(item.type)) continue;
+      const idata = item.system;
+      const skillKey = idata.skill?.value;
+      if (!skillKey) continue;
+      const bonus = parseInt(data.skills?.[skillKey]?.damage, 10);
+      if (Number.isNaN(bonus) || bonus === 0) continue;
+      idata.damage.adjusted = parseInt(idata.damage.adjusted, 10) + bonus;
     }
   }
 

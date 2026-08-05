@@ -20,9 +20,13 @@ function disablePushOnItem(options){
  * @param {ActiveEffectFFG} effect
  */
 function refreshWeaponSheetsForCharacteristicEffect(effect) {
-  // Only characteristic-affecting effects change weapon damage; ignore everything else.
+  // Only characteristic- and skill-damage-affecting effects change weapon damage; ignore the rest.
+  // (`system.skills.<skill>.damage` is the "Skill Damage" modifier, folded into every weapon rolled
+  // with that skill by Actor#_applySkillDamage.)
   const touchesCharacteristic = effect?.changes?.some(
-    (c) => typeof c?.key === "string" && c.key.startsWith("system.characteristics")
+    (c) => typeof c?.key === "string"
+      && (c.key.startsWith("system.characteristics")
+        || (c.key.startsWith("system.skills") && c.key.endsWith(".damage")))
   );
   if (!touchesCharacteristic) return;
 

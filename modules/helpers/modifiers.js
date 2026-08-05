@@ -423,6 +423,8 @@ export default class ModifierHelpers {
       return "Skill Add Upgrade";
     } else if (skillPath.endsWith("boost")) {
       return "Skill Boost";
+    } else if (skillPath.endsWith("damage")) {
+      return "Skill Damage";
     } else if (skillPath.endsWith("rank")) {
       return "Skill Rank";
     } else if (skillPath.endsWith("remsetback")) {
@@ -581,6 +583,8 @@ export default class ModifierHelpers {
       return `system.skills.${mod}.upgrades`;
     } else if (modType === "Skill Boost") {
       return `system.skills.${mod}.boost`;
+    } else if (modType === "Skill Damage") {
+      return `system.skills.${mod}.damage`;
     } else if (modType === "Skill Decrease Difficulty") {
       return `system.skills.${mod}.decreaseDifficulty`;
     } else if (modType === "Skill Rank") {

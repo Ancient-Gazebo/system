@@ -1,9 +1,15 @@
 <div id="{{id}}" class="dialog-content initiative-dialog dice-pool-dialog">
   <div style="text-align: center;"><span>{{localize "SWFFG.InitiativePoolSelectorHint"}}</span></div>
   <div class="pool-selector">
+    {{!-- The radio group is namespaced with the dialog's generated id, and so are the input ids.
+          Radio buttons outside a <form> group by name across the WHOLE document: with a bare
+          name="skill" a second initiative dialog opened while the first was still up joined the
+          same group, so checking a skill there un-checked the first dialog's selection and the
+          lookup for :checked came back empty. The duplicated id="0"/"1"/... also pointed every
+          <label for> at the first dialog's radios. --}}
     {{#each dicePools as |p key|}}
-      <input type="radio" id="{{key}}" name="skill" value="{{p.name}}" {{#if (eq ../defaultInitiativeFormula p.name) }}checked{{/if}}>
-      <label for="{{key}}">{{localize p.label}}</label>
+      <input type="radio" id="{{../id}}-{{key}}" name="skill-{{../id}}" value="{{p.name}}" {{#if (eq ../defaultInitiativeFormula p.name) }}checked{{/if}}>
+      <label for="{{../id}}-{{key}}">{{localize p.label}}</label>
     {{/each}}
   </div>
   <div id="Vigilancepool" class="hidden-content">

@@ -1965,7 +1965,10 @@ Hooks.once("ready", async () => {
       callback: () => {
         CriticalRollerFFG.launch();
       },
-      minimumRole: CONST.USER_ROLES.GAMEMASTER,
+      // Players too: a critical injury / hit sometimes has to be rolled independently of an
+      // attack, and standalone mode only rolls and posts a chat card - it never writes to an
+      // actor (that is the Apply Crit flow, which still routes through gm-bridge).
+      minimumRole: CONST.USER_ROLES.PLAYER,
     },
   ];
   const dTracker = new DestinyTracker(undefined, { menu: defaultDestinyMenu });

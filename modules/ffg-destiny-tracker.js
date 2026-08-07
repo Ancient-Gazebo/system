@@ -58,15 +58,21 @@ export default class DestinyTracker extends HandlebarsApplicationMixin(Applicati
     let destinyPool = { light: game.settings.get("starwarsffg", "dPoolLight"), dark: game.settings.get("starwarsffg", "dPoolDark") };
     let destinyPoolLabel = { light: game.settings.get("starwarsffg", "destiny-pool-light"), dark: game.settings.get("starwarsffg", "destiny-pool-dark") };
 
-    // filter menu based on role.
-    const menu = this.menu.filter((m) => game.user.hasRole(m.minimumRole) || !m.minimumRole);
+    // Filter the menu based on role. The template iterates THIS list, so its indices are what
+    // the click handler receives - keep a reference to it rather than indexing back into the
+    // unfiltered this.menu, which would fire the wrong entry for any user whose filtered list is
+    // shorter than the full one (e.g. a player who only sees the critical roller).
+    this.visibleMenu = this.menu.filter((m) => game.user.hasRole(m.minimumRole) || !m.minimumRole);
 
     // Return data
     return {
       destinyPool,
       destinyPoolLabel,
       isGM: game.user.isGM,
-      menu,
+      menu: this.visibleMenu,
+      // Whether to render the menu column at all - driven by what this user can actually see,
+      // not by isGM, so player-visible entries are not hidden behind a GM-only wrapper.
+      hasMenu: this.visibleMenu.length > 0,
       theme: game.settings.get("starwarsffg", "dicetheme"),
     };
   }
@@ -124,7 +130,9 @@ export default class DestinyTracker extends HandlebarsApplicationMixin(Applicati
       event.stopPropagation();
 
       const index = event.currentTarget.dataset.value;
-      this.menu[index].callback();
+      // Indices are into the role-filtered list the template rendered (see _prepareContext).
+      const menu = this.visibleMenu ?? this.menu;
+      menu[index]?.callback();
     });
 
     html.find(".destiny-points").click(async (event) => {

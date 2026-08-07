@@ -1,7 +1,10 @@
 <form autocomplete="off" onsubmit="event.preventDefault();">
   <div class="swffg-destiny-container">
-    <div class="swffg-destiny {{#if isGM}}swffg-groupmanager{{/if}}" title="{{localize 'SWFFG.DestinyTrackerHint'}}">
-      {{#if isGM}}
+    {{!-- The menu column is gated on hasMenu (does THIS user have any entries after the role
+          filter in _prepareContext) rather than on isGM, so player-visible entries such as the
+          critical roller actually render for players. --}}
+    <div class="swffg-destiny {{#if hasMenu}}swffg-groupmanager{{/if}}" title="{{localize 'SWFFG.DestinyTrackerHint'}}">
+      {{#if hasMenu}}
       <section id="destinyMenu" class="group-manager">
         <div class="dropdown-content">
           {{#each menu as |item id|}}
@@ -10,7 +13,7 @@
         </div>
       </section>
       {{/if}}
-      <section id="destinyLight" class="destiny-points {{#if isGM}}display-menu{{/if}} theme-{{ this.theme }}" data-value="${destinyPool.light}" data-group="dPoolLight">{{destinyPool.light}}<span>{{localize destinyPoolLabel.light }}</span></section>
+      <section id="destinyLight" class="destiny-points {{#if hasMenu}}display-menu{{/if}} theme-{{ this.theme }}" data-value="${destinyPool.light}" data-group="dPoolLight">{{destinyPool.light}}<span>{{localize destinyPoolLabel.light }}</span></section>
       <section id="destinyDark" class="destiny-points theme-{{ this.theme }}" data-value="${destinyPool.dark}" data-group="dPoolDark">{{destinyPool.dark}}<span>{{localize destinyPoolLabel.dark }}</span></section>
     </div>
   </div>

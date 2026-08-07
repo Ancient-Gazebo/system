@@ -380,7 +380,15 @@ export class CombatFFG extends Combat {
               const container = document.getElementById(id);
               const currentId = initiative.combatant?.id;
 
-              const baseFormulaType = container.querySelector('input[name="skill"]:checked').value;
+              // Scoped to this dialog's own pool selector (the radio group is namespaced per
+              // dialog, so an attribute selector on a fixed name no longer matches). Falling back
+              // to the default keeps a missing selection from throwing inside the promise executor,
+              // where the error would never surface as a rejection and the caller's await would hang.
+              const skillInput = container.querySelector('.pool-selector input[type="radio"]:checked');
+              if (!skillInput) {
+                CONFIG.logger.warn("No initiative skill was selected; falling back to the configured default.");
+              }
+              const baseFormulaType = skillInput?.value ?? defaultInitiativeFormula;
 
               // Iterate over Combatants, performing an initiative roll for each
               const [updates, messages] = await ids.reduce(
@@ -718,7 +726,10 @@ export class CombatFFG extends Combat {
     let lastSlotId;
     for (const combatant of this.combatants) {
       if (combatant.disposition === removedDisposition) {
-        if (!lowestInitiativeValue || combatant.initiative < lowestInitiativeValue) {
+        // `=== undefined`, not a truthiness test: an initiative of 0 is a real (and now common)
+        // value, and treating it as "not set yet" made a 0-initiative slot unselectable as the
+        // last slot, so removal re-homed the wrong combatant.
+        if (lowestInitiativeValue === undefined || combatant.initiative < lowestInitiativeValue) {
           lowestInitiativeValue = combatant.initiative;
           lastSlotId = combatant.id;
         }
@@ -963,8 +974,20 @@ export class CombatFFG extends Combat {
     await super.delete();
   }
 
-  /** @override */
-  async prepareDerivedData() {
+  /**
+   * @override
+   * NOTE: this is deliberately SYNCHRONOUS. Core calls prepareDerivedData() from prepareData()
+   * without awaiting it, so an async implementation let several passes run concurrently, each
+   * finishing whenever its own chain of awaits resolved and then overwriting `customTurns`. The
+   * number of awaits used to depend on the initiative values themselves (one enrichHTML per symbol
+   * icon), so a stale pass carrying a HIGHER initiative had a deeper await chain and reliably
+   * landed AFTER the fresh pass that carried a lower one - the tracker kept showing the previous
+   * roll's value (e.g. a blank roll still displaying 4 successes), most visibly when initiative was
+   * re-rolled while a previous pass was still in flight. Dice symbols are now rendered through the
+   * synchronous PopoutEditor.replaceDiceSymbols(), which emits identical markup to the registered
+   * [SU]/[AD]/[TR] enrichers, so no pass can interleave with another.
+   */
+  prepareDerivedData() {
     super.prepareDerivedData();
     CONFIG.logger.debug("Preparing combat data for custom tracker!");
 
@@ -994,7 +1017,14 @@ export class CombatFFG extends Combat {
       return;
     }
 
-    const turns = await Promise.all(this.turns.map(async (turn, index) => {
+    // rendered once per pass rather than once per icon
+    const symbol = {
+      successes: PopoutEditor.replaceDiceSymbols("[su]"),
+      advantages: PopoutEditor.replaceDiceSymbols("[ad]"),
+      triumphs: PopoutEditor.replaceDiceSymbols("[tr]"),
+    };
+
+    const turns = this.turns.map((turn, index) => {
       CONFIG.logger.debug(`Processing turn for ${turn?.name}`);
       turn.owner = turn?.isOwner || false;
       // combatant ID of the claimant of this slot, if it exists
@@ -1141,22 +1171,18 @@ export class CombatFFG extends Combat {
         "advantages": "",
         "triumphs": "",
       }
-      if (slotInitiative) {
+      // Number.isFinite, not a truthiness test: an initiative of exactly 0 (a roll with no net
+      // successes, e.g. a lone ability die coming up blank) is a rolled result, not an unrolled slot.
+      if (Number.isFinite(slotInitiative)) {
         const initiativeParts = slotInitiative.toFixed(2);
         const decimalPosition = initiativeParts.indexOf(".");
-        const successes = initiativeParts.substring(0, decimalPosition);
-        const triumphs = initiativeParts.substring(decimalPosition + 1, decimalPosition + 2);
-        const advantages = initiativeParts.substring(decimalPosition + 2, decimalPosition + 3);
+        const successes = parseInt(initiativeParts.substring(0, decimalPosition), 10);
+        const triumphs = parseInt(initiativeParts.substring(decimalPosition + 1, decimalPosition + 2), 10);
+        const advantages = parseInt(initiativeParts.substring(decimalPosition + 2, decimalPosition + 3), 10);
 
-        for (let x = 0; x < successes; x++) {
-          initiativeImage['successes'] += await foundry.applications.ux.TextEditor.enrichHTML("[su]");
-        }
-        for (let x = 0; x < advantages; x++) {
-          initiativeImage['advantages'] += await foundry.applications.ux.TextEditor.enrichHTML("[ad]");
-        }
-        for (let x = 0; x < triumphs; x++) {
-          initiativeImage['triumphs'] += await foundry.applications.ux.TextEditor.enrichHTML("[tr]");
-        }
+        initiativeImage['successes'] = symbol.successes.repeat(Math.max(successes, 0));
+        initiativeImage['advantages'] = symbol.advantages.repeat(Math.max(advantages, 0));
+        initiativeImage['triumphs'] = symbol.triumphs.repeat(Math.max(triumphs, 0));
       }
 
       return {
@@ -1171,7 +1197,7 @@ export class CombatFFG extends Combat {
         unused: unused,
         initiativeImage,
       }
-    }));
+    });
 
     // write to customTurns to avoid permanent changes
     this.customTurns = turns;
@@ -1410,8 +1436,8 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       turn.slotClaimed = combat.hasClaims(combatant.id);
     }
 
-    // the current custom turn
-    await this.viewed.prepareDerivedData();
+    // the current custom turn (prepareDerivedData is synchronous - see the note on its override)
+    this.viewed.prepareDerivedData();
     const currentTurn = this.viewed.customTurns[this.viewed.turn];
     // if the current user is an owner of the current turn (true is claimed, or they're a GM)
     const customControl = currentTurn ? currentTurn.owner : false;

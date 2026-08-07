@@ -408,6 +408,7 @@
   "SWFFG.Triggered": "Triggered",
   "SWFFG.For": "For",
   "SWFFG.Cancel": "Cancel",
+  "SWFFG.Dialogs.ActionFailed": "Could not complete {context}. See the browser console (F12) for details.",
   "SWFFG.Specialization": "Specialization",
   "SWFFG.SkillCharacteristicDialogTitle": "Change Characteristic For:",
   "SWFFG.ButtonClose": "Close",

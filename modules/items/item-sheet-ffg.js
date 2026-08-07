@@ -13,7 +13,7 @@ import ItemOptions from "./item-ffg-options.js";
 import {forcePowerEditor, itemEditor, talentEditor} from "./item-editor.js";
 import TalentTree from "../helpers/talent-tree.js";
 
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "../helpers/dialog-helpers.js";
 
 /**
  * The system's Item sheet - native ApplicationV2 DocumentSheetV2 (via the

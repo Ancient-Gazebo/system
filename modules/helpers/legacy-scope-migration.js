@@ -25,6 +25,8 @@
  *   await game.ffg.migrateLegacyScope({dryRun: true}); // report only
  */
 
+import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
+
 const LEGACY_SCOPE = "starwarsffg";
 
 /** Document classes whose flags we migrate, in the order they are reported. */
@@ -250,7 +252,6 @@ export async function promptLegacyScopeMigration() {
   if (game.settings.get(scope, "legacyScopeMigrated")) return;
   if (!hasLegacyScopeData()) return;
 
-  const { DialogV2 } = foundry.applications.api;
   const run = await DialogV2.confirm({
     window: { title: "Star Wars FFG (V14): Import Legacy World Data" },
     content: `

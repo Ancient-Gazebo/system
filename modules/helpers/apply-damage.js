@@ -5,7 +5,7 @@
  */
 import { applyToTargetActor } from "./gm-bridge.js";
 
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
 
 export class ApplyDamage {
   /** Message ids with an Apply Damage dialog currently open, so repeated

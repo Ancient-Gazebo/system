@@ -1,7 +1,7 @@
 import { currencies as defaultCurrencies, defaultCurrency } from "../config/ffg-currency.js";
 import { FFGFormApplication } from "../apps/ffg-form-application.js";
 
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "../helpers/dialog-helpers.js";
 
 /**
  * Settings menu for configuring the currency denominations available in the world.

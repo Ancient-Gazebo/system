@@ -1,4 +1,4 @@
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
 
 /**
  * Item stacks: splitting and trading.

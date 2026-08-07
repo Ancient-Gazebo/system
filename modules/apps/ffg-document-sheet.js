@@ -1,6 +1,8 @@
 import PopoutEditor from "../popout-editor.js";
 
-const { DocumentSheetV2, HandlebarsApplicationMixin, DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "../helpers/dialog-helpers.js";
+
+const { DocumentSheetV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /**
  * Native shared base for the system's document sheets (item sheets as of the

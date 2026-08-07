@@ -2,7 +2,7 @@ import {xpLogEarn} from "./helpers/actor-helpers.js";
 import ActorHelpers from "./helpers/actor-helpers.js";
 import { FFGFormApplication } from "./apps/ffg-form-application.js";
 
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 
 export class GroupManager extends FFGFormApplication {
   constructor(object = {}, options = {}) {

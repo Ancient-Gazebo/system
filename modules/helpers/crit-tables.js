@@ -16,6 +16,8 @@
  * are reused by name+type rather than duplicated.
  */
 
+import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
+
 export const CRIT_INJURY_TABLE_NAME = "Critical Injuries";
 export const CRIT_DAMAGE_TABLE_NAME = "Critical Damage";
 
@@ -177,7 +179,6 @@ export async function setupCriticalTables() {
  * @returns {Promise<boolean>} true if the tables were created.
  */
 export async function promptSetupCriticalTables() {
-  const { DialogV2 } = foundry.applications.api;
   const confirmed = await DialogV2.confirm({
     window: { title: game.i18n.localize("SWFFG.CritSetup.PromptTitle") },
     content: `<p>${game.i18n.localize("SWFFG.CritSetup.PromptContent")}</p>`,

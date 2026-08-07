@@ -32,7 +32,7 @@ import { FFGActorSheet } from "../apps/ffg-actor-sheet.js";
 import {itemPillHover} from "../swffg-main.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "../helpers/dialog-helpers.js";
 
 export class ActorSheetFFG extends FFGActorSheet {
   constructor(...args) {

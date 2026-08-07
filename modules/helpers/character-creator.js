@@ -3,7 +3,9 @@ import ActorHelpers, {xpLogEarn, xpLogSpend} from "./actor-helpers.js";
 import DiceHelpers from "./dice-helpers.js";
 import {sortDataBy, addIfNotExist} from "../actors/actor-sheet-ffg.js";
 
-const { ApplicationV2, HandlebarsApplicationMixin, DialogV2 } = foundry.applications.api
+import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
+
+const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
 
 export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) {
   // https://foundryvtt.wiki/en/development/api/applicationv2

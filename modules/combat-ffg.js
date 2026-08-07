@@ -1,7 +1,7 @@
 import {DicePoolFFG, RollFFG} from "./dice-pool-ffg.js";
 import PopoutEditor from "./popout-editor.js";
 
-const { DialogV2 } = foundry.applications.api;
+import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 
 /**
  * Extend the base Combat entity.

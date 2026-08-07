@@ -115,7 +115,7 @@
   "SWFFG.ApplyCrit.NoTable": "No critical table found in this world.",
   "SWFFG.ApplyCrit.ItemMissing": "Could not resolve the weapon from this chat message.",
   "SWFFG.ApplyCrit.TargetGone": "The target is no longer available.",
-  "SWFFG.ApplyCrit.NotEligibleTooltip": "Need advantages ≥ critical rating, or a triumph.",
+  "SWFFG.ApplyCrit.NotEligibleTooltip": "This roll did not activate the critical (needs advantages ≥ critical rating, or a triumph). Click anyway to roll one regardless.",
   "SWFFG.GMBridge.NoGM": "No GM is connected, so this could not be applied to the target.",
   "SWFFG.CritSetup.PromptTitle": "Create Critical Tables?",
   "SWFFG.CritSetup.PromptContent": "No critical roll table exists in this world. Create the standard FFG \"Critical Injuries\" and \"Critical Damage\" tables (with their result items) now?",

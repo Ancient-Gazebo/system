@@ -13,9 +13,8 @@ export class ApplyDamage {
   static _openDialogs = new Set();
 
   /**
-   * Called from the renderChatMessage hook. Enforces visibility (button is
-   * removed for users who are neither GM nor the message author) and binds
-   * the click handler.
+   * Called from the renderChatMessage hook. Enforces visibility (GM only) and
+   * binds the click handler.
    * @param {ChatMessage} message — the live ChatMessage instance.
    * @param {jQuery} html — the rendered chat-message element wrapped in jQuery.
    */
@@ -23,8 +22,10 @@ export class ApplyDamage {
     const button = html.find(".ffg-apply-damage")[0];
     if (!button) return;
 
-    const authorId = message.author?.id ?? message.user;
-    if (game.user.id !== authorId && !game.user.isGM) {
+    // GM only. Unlike Apply Crit (which the attacking player may use on their own attack),
+    // deciding how much damage actually lands - soak, defence, ranks of the relevant qualities -
+    // is the GM's call, so the button is removed for everyone else including the roller.
+    if (!game.user.isGM) {
       button.remove();
       return;
     }

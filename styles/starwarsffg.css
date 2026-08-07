@@ -3977,9 +3977,11 @@ button.ffg-critical-roller-launch {
   margin-right: 4px;
 }
 
-.ffg-apply-crit[disabled] {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* The roll did not itself activate the critical. Hinted, never blocked: a crit can still be
+   called for after the fact (advantages added or spent post-roll, GM ruling). */
+.ffg-apply-crit.ffg-crit-not-eligible {
+  opacity: 0.75;
+  cursor: pointer;
 }
 
 /* Base/Adversary pool toggle in the roll dialog */

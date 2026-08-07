@@ -13,10 +13,11 @@ import CriticalRollerFFG from "./critical-roller.js";
 export class ApplyCrit {
   /**
    * Called from the renderChatMessage hook. Enforces visibility (button is
-   * removed for users who are neither GM nor the message author, matching Apply
-   * Damage), computes crit eligibility from the roll's advantages/triumphs vs the
-   * weapon's critical rating, sets the disabled attribute and tooltip when
-   * ineligible, and binds the click handler.
+   * removed for users who are neither GM nor the message author), computes crit
+   * eligibility from the roll's advantages/triumphs vs the weapon's critical
+   * rating, tags the button with a tooltip when ineligible, and binds the click
+   * handler. Note that Apply Damage next to it is GM-only - the attacking player
+   * may apply their own crit, but not decide the damage that lands.
    * @param {ChatMessage} message — the live ChatMessage instance.
    * @param {jQuery} html — the rendered chat-message element wrapped in jQuery.
    */
@@ -26,7 +27,7 @@ export class ApplyCrit {
 
     // Visible to the attack's roller (message author) and GMs only. Non-owning
     // clicks still forward to the active GM via gm-bridge, so this is a UI
-    // consistency gate (matching Apply Damage), not a permission boundary.
+    // scoping gate, not a permission boundary.
     const authorId = message.author?.id ?? message.user;
     if (game.user.id !== authorId && !game.user.isGM) {
       button.remove();
@@ -42,14 +43,18 @@ export class ApplyCrit {
     const triumphs = Number(roll?.ffg?.triumph) || 0;
     const eligible = critRating > 0 && (advantages >= critRating || triumphs > 0);
 
+    // Advisory only - the button stays clickable. Eligibility is computed from the dice as they
+    // landed, but a crit legitimately gets activated outside that snapshot: advantages spent or
+    // added after the roll, a quality or talent applied by hand, or the GM simply calling for one.
+    // Disabling the button made those cases unreachable from the card, so ineligibility is now
+    // surfaced as a tooltip and a class instead of a hard block.
     if (!eligible) {
-      button.disabled = true;
+      button.classList.add("ffg-crit-not-eligible");
       button.title = game.i18n.localize("SWFFG.ApplyCrit.NotEligibleTooltip");
     }
 
     button.addEventListener("click", (ev) => {
       ev.preventDefault();
-      if (button.disabled) return;
       ApplyCrit.show(message);
     });
   }

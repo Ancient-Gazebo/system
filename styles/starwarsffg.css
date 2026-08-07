@@ -4055,6 +4055,19 @@ button.ffg-critical-roller-launch {
   height: max-content;
 }
 
+/* Core rests the status icons at opacity 0.5 and only lifts them to 0.7 on hover, which is
+   unreadable over light or busy map art (desert/sand scenes in particular). Rest them at the
+   hover value so they are legible without pointing at each one, and keep a smaller hover step
+   for feedback. `.active` / `.overlay` stay at core's 1.0, so an applied status is still
+   distinguishable from an unapplied one. Unlayered, so it beats core's @layer rule without
+   !important - same reasoning as the palette sizing block above. */
+#token-hud .status-effects .effect-control {
+  opacity: 0.7;
+}
+#token-hud .status-effects .effect-control:hover {
+  opacity: 1;
+}
+
 /* ============================================================
    ApplicationV2 window compatibility block (ported from the verified
    V14-migration reference): minimized-window behavior, tab-strip

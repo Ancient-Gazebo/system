@@ -52,7 +52,12 @@ export function closeOnFailure(fn, context = "this action") {
     try {
       return await fn.apply(this, args);
     } catch (err) {
-      CONFIG.logger?.error?.(`Dialog action failed: ${context}`, err);
+      // Straight to console.error rather than through CONFIG.logger. The logger is assigned
+      // during the system's init hook, so `CONFIG.logger?.error?.()` silently no-ops if it is
+      // ever missing or replaced - and the optional chaining hides that, leaving a caught
+      // exception with no trace at all beyond the notification. An error big enough to have
+      // aborted a dialog callback must always reach the console.
+      console.error(`${CONFIG?.module ?? "Star Wars FFG"} | Dialog action failed: ${context}`, err);
       ui.notifications?.error?.(game.i18n.format("SWFFG.Dialogs.ActionFailed", { context }));
     }
   };

@@ -1437,54 +1437,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     }
   }
 
-  async _buyTalent(li) {
-    let owner;
-    let cost;
-    let availableXP;
-    let totalXP;
-    try {
-      const basic_data = await this._buyHandleClick(li, "specialization");
-      owner = basic_data.owner;
-      cost = basic_data.cost;
-      availableXP = basic_data.availableXP;
-      totalXP = basic_data.totalXP;
-    } catch (e) {
-      return;
-    }
-    const baseName = $(li).data("base-item-name");
-    const talent = $(".talent-name", li).data("name");
-    const dialog = DialogV2.wait({
-        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Talent.ConfirmTitle") },
-        classes: ["dialog", "starwarsffg"],
-        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Purchase.Talent.ConfirmText", {cost: cost, talent: talent})}</p>`,
-        buttons: [
-          {
-            action: "done",
-            icon: "fa-regular fa-circle-up",
-            label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.ConfirmPurchase"),
-            default: true,
-            callback: async (event, button, dialog) => {
-            // V1 passed the dialog's jQuery content as this parameter; rebind it.
-            const that = $(dialog.element);
-              // update the form because the fields are read when an update is performed
-              const talentId = $(li).attr("id");
-              const input = $(`[name="data.talents.${talentId}.islearned"]`, this.element)[0];
-              input.checked = true;
-              await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
-              owner.update({system: {experience: {available: availableXP - cost}}});
-              await xpLogSpend(owner, `specialization ${baseName} talent ${talent}`, cost, availableXP - cost, totalXP);
-            },
-          },
-          {
-            action: "cancel",
-            icon: "fas fa-cancel",
-            label: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CancelPurchase"),
-          },
-        ],
-        rejectClose: false,
-      });
-  }
-
   // _handleSourceControl / _handleTagControl: the V1 Dialog overrides that used
   // to live here were deleted in the V2 conversion; the FFGDocumentSheet base
   // provides DialogV2 versions (same lang keys, same update shape) with a

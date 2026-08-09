@@ -36,6 +36,7 @@ import { defaultSkillList } from "./config/ffg-skillslist.js";
 import { skillModifierTypes } from "./config/ffg-modifiers.js";
 import SettingsHelpers from "./settings/settings-helpers.js";
 import {register_crew} from "./helpers/crew.js";
+import { registerChatTimestampGuard } from "./helpers/chat-timestamp-guard.js";
 
 // Import Dice Types
 import { AbilityDie, BoostDie, ChallengeDie, DifficultyDie, ForceDie, ProficiencyDie, SetbackDie } from "./dice-pool-ffg.js";
@@ -1528,6 +1529,10 @@ Hooks.once("ready", async () => {
 
   // Log adversary-roll diagnostics forwarded from players on the GM machine.
   RollBuilderFFG.registerRollLogBridge();
+
+  // Stop core rendering "11m 364d ago" on chat messages when this client's
+  // clock lags the server's. Self-disabling on builds that have been fixed.
+  registerChatTimestampGuard();
 
   // NOTE: the "currentVersion" will be updated in handleUpdate, preventing the code below from running in the future
   // this is intended to encourage migrating code to this file to clean up the main file

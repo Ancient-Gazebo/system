@@ -101,13 +101,15 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
    * @private
    */
   static _enableImportAll(event, target) {
-    document.querySelectorAll("input[type='checkbox'][name='imports']").forEach(el => el.checked = true);
+    // Scoped for the same reason as _loadFile: never touch another window's checkboxes.
+    const scope = this.element ?? document;
+    scope.querySelectorAll("input[type='checkbox'][name='imports']").forEach(el => el.checked = true);
   }
 
-  static async _readFile() {
+  static async _readFile(scope = document) {
     let selectedFile, form, file, zip;
 
-    const input = document.querySelector("#import-file");
+    const input = scope.querySelector("#import-file");
     selectedFile = input ? input.value : "";
 
     if (selectedFile) {
@@ -123,7 +125,7 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
         .then(JSZip.loadAsync);
     } else {
       // Read local file from picker
-      form = document.querySelector("form.data-importer-window");
+      form = scope.querySelector("form.data-importer-window");
       file = form?.data?.files[0];
 
       if (typeof file !== "undefined") {
@@ -144,15 +146,19 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
     }
 
     try {
-      let zip = await DataImporter._readFile();
+      let zip = await DataImporter._readFile(this.element);
       if (typeof zip === "undefined") return;
 
-      // Scope every lookup to this importer's own form. A bare document.querySelector returns the
-      // FIRST match in the whole page, so with any other window open that has a submit button --
-      // the GM screen module is one -- `button[type='submit']` resolved to that window's button
-      // instead. This enabled the wrong button and left Start Import disabled, which still shows
-      // its :hover styling but never fires a click.
-      const scope = form ?? document;
+      // Scope every lookup to this application's own root element. Two separate things go wrong
+      // otherwise. A bare document.querySelector returns the FIRST match in the whole page, so
+      // with any other window open that has a submit button -- the GM screen module is one --
+      // `button[type='submit']` resolved to that window's button instead, leaving Start Import
+      // disabled. But `target.closest("form")` is not the app root either: the template's own
+      // <form class="data-importer-window"> nests inside the app's form, and the Start Import
+      // button is rendered by the separate footer part, outside that inner form -- so scoping to
+      // it matches nothing and the enable below silently no-ops. `this.element` is the app root:
+      // it contains every part of this window and nothing belonging to any other window.
+      const scope = this.element ?? form ?? document;
 
       const selectAll = scope.querySelector("[data-action='selectAll']");
       // Was `if (importAll !== null)`, and `importAll` is declared nowhere: in a module (always
@@ -178,16 +184,17 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
     CONFIG.logger.debug("Importing Data Files");
     this._importLogger(`Starting import`);
 
-    let zip = await DataImporter._readFile();
+    let zip = await DataImporter._readFile(this.element);
     if (typeof zip === "undefined") {
       this._importLogger("zip file not found, exiting!");
       return;
     }
 
-    // As in _loadFile: scope to this importer's own form rather than the whole document, so
-    // another open window's submit button or checkboxes cannot be read or disabled instead of
-    // ours. `form` is supplied by the ApplicationV2 form handler.
-    const scope = form ?? document;
+    // As in _loadFile: scope to this application ROOT, not the whole document (another open
+    // window's submit button or checkboxes must not be read or disabled instead of ours) and not
+    // a nested form (the footer button sits outside the template's inner form). `form` from the
+    // ApplicationV2 form handler is the app root here, but keep the two paths identical.
+    const scope = this.element ?? form ?? document;
 
     // Disable submit button to prevent double clicking
     const startImport = scope.querySelector("button[type='submit']")

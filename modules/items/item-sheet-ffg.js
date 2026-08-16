@@ -983,7 +983,18 @@ export class ItemSheetFFG extends FFGDocumentSheet {
             item = await fromUuid(this.object.system.signatureabilities[itemId].source);
           }
         }
-        new Item(item).sheet.render(true);
+        // Render the REAL document's sheet. This was `new Item(item).sheet.render(true)`, which
+        // opened a throwaway COPY of the item rather than the item: the copy is unregistered and
+        // unowned, so edits and upgrade purchases made in that window were written to nothing, and
+        // the upgrade tree drew with none of its connecting branches -- a signature ability opened
+        // from a career showed as eight unlinked boxes, while the same item opened from the sidebar
+        // drew correctly. A pill can also point at a source that no longer exists (the sheet
+        // already flags those as broken), so bail out instead of constructing an Item from null.
+        if (!item) {
+          ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.LinkedItemMissing"));
+          return;
+        }
+        item.sheet.render(true);
       });
     } else if (this.object.type === "species") {
       try {
@@ -1013,8 +1024,13 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           event.stopPropagation();
           const itemId = $(event.target).data("talent-id");
           const itemType = $(event.target).data("item-type");
-          let item = await fromUuid(this.object.system.talents[itemId].source);
-          new Item(item).sheet.render(true);
+          // As on the career sheet above: open the real document, not a throwaway copy of it.
+          const item = await fromUuid(this.object.system.talents[itemId].source);
+          if (!item) {
+            ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.LinkedItemMissing"));
+            return;
+          }
+          item.sheet.render(true);
         });
       } catch (err) {
         CONFIG.logger.debug(err);

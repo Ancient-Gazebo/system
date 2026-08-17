@@ -40,6 +40,16 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
    */
   static SELF_RENDERING_HEADER_BUTTONS = new Set(["glitchsmith-actor-sheet-menu"]);
 
+  /**
+   * Header-menu labels that name the same feature, folded onto one key before deduplicating.
+   *
+   * The deduplicator matches on the localised label, which collapses the usual case where a module
+   * offers the same button both natively and through the legacy hook. Automated Animations does not
+   * fit: its legacy button reads "A-A" and its native control reads "Automated Animations", so the
+   * two never compare equal and both survive. Keyed alias -> canonical.
+   */
+  static HEADER_CONTROL_LABEL_ALIASES = new Map([["a-a", "automated animations"]]);
+
   static DEFAULT_OPTIONS = {
     tag: "div",
     // `app`/`window-app`/`sheet` are the V1-parity hooks; `application` is added
@@ -440,38 +450,57 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
   /**
    * Collapse duplicate entries out of this sheet's header (⋮) menu.
    *
-   * Deduplicating from a prototype wrapper cannot work in general. Modules install their own
-   * wrappers on the sheet class from a render hook, and module scripts load after the system, so
-   * theirs sit OUTSIDE ours -- an entry one of them unshifts onto the front of the list is added
-   * after our code has already run and is invisible to it. That is why one module kept appearing
-   * twice (once natively at the top of the menu, once from its legacy button at the bottom) even
-   * after the bridge was moved and taught to compare localised labels.
+   * Wrapping `_getHeaderControls` -- on the prototype OR on the instance -- cannot see the whole
+   * menu, which is why every bridged button in a typical install was still listed twice. Foundry
+   * does not build the menu from that method's return value directly: `_headerControlButtons()`
+   * passes it through `_doEvent`, which fires `getHeaderControls<ClassName>` for every class in the
+   * inheritance chain (`getHeaderControlsItemSheetFFG` ... `getHeaderControlsApplicationV2`) with
+   * the array as an argument. Modules push their native entries in from those hooks, i.e. strictly
+   * AFTER `_getHeaderControls` has returned. Anything comparing against that return value is
+   * therefore comparing against a list the native entries are not in yet, and the legacy copy the
+   * bridge added is kept for want of anything to match it to.
    *
-   * An own property on the INSTANCE shadows the entire prototype chain, so this always runs last.
-   * It calls through to the chain -- so every module's contribution is still collected -- and only
-   * then removes repeats, keeping the first occurrence so menu order is preserved.
+   * `_headerControlButtons` is the seam after those hooks, and the single funnel core uses for both
+   * the (⋮) menu and the header's hidden-state toggle. An own property on the INSTANCE shadows the
+   * prototype chain, so this runs outermost; it calls through -- so every module's contribution is
+   * still collected -- and only then removes repeats, keeping menu order otherwise intact.
    * @private
    */
   _installHeaderControlDeduplicator() {
-    if (Object.prototype.hasOwnProperty.call(this, "_getHeaderControls")) return;
-    Object.defineProperty(this, "_getHeaderControls", {
+    if (Object.prototype.hasOwnProperty.call(this, "_headerControlButtons")) return;
+    Object.defineProperty(this, "_headerControlButtons", {
       configurable: true,
       writable: true,
       enumerable: false,
-      value: function (...args) {
-        const chain = Object.getPrototypeOf(this)?._getHeaderControls;
-        const controls = (typeof chain === "function" ? chain.apply(this, args) : []) ?? [];
-        const seen = new Set();
-        return controls.filter((control) => {
-          // Labels may be literal text or a localisation key depending on the contributor, so
-          // compare what the user will actually read.
+      value: function* (...args) {
+        const chain = Object.getPrototypeOf(this)?._headerControlButtons;
+        const controls = typeof chain === "function" ? [...chain.apply(this, args)] : [];
+
+        // Labels may be literal text or a localisation key depending on the contributor, so
+        // compare what the user will actually read, then fold known aliases onto one key.
+        const keyOf = (control) => {
           const raw = String(control?.label ?? "").trim();
-          const key = raw ? (game.i18n?.localize(raw) ?? raw).trim().toLowerCase() : "";
-          if (!key) return true;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
+          if (!raw) return "";
+          const key = (game.i18n?.localize(raw) ?? raw).trim().toLowerCase();
+          return FFGDocumentSheet.HEADER_CONTROL_LABEL_ALIASES.get(key) ?? key;
+        };
+        const isBridged = (control) => String(control?.action ?? "").startsWith("ffgLegacyHeader-");
+
+        // When the same feature reaches the menu both natively and through the legacy bridge, the
+        // bridged copy is the one to drop wherever it sits in the order: the native entry is the
+        // module's maintained path, and its handler is the one the module keeps working.
+        const native = new Set(controls.filter((c) => !isBridged(c)).map(keyOf).filter(Boolean));
+
+        const seen = new Set();
+        for (const control of controls) {
+          const key = keyOf(control);
+          if (key) {
+            if (isBridged(control) && native.has(key)) continue;
+            if (seen.has(key)) continue;
+            seen.add(key);
+          }
+          yield control;
+        }
       },
     });
   }

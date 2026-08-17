@@ -134,35 +134,74 @@ export class ActiveEffectFFG extends ActiveEffect {
   }
 
   /**
-   * Scale a single ADD-mode change's value by this effect's stack count so that N stacks of a
-   * "+1" status (e.g. "Boost Next Check") contribute +N. Only additive numeric changes are scaled;
-   * OVERRIDE / MULTIPLY / UPGRADE / DOWNGRADE and non-numeric values are returned untouched, since
-   * multiplying those by a stack count has no well-defined meaning here.
+   * Ranked talents apply their modifiers once per rank: a talent bought to rank 2 that removes a
+   * setback removes two. A talent's modifiers live on the talent Item as user-created ("attr*")
+   * Active Effects whose stored change values are the per-rank amount, so the rank has to be folded
+   * in somewhere.
+   *
+   * Doing it here rather than rewriting the stored change values means the multiplier is re-derived
+   * on every data preparation, straight from `system.ranks.current`. Bumping (or lowering) the rank
+   * on the talent sheet therefore takes effect immediately - previously nothing rescaled the AE, so
+   * the modifier stayed stuck at one rank's worth and the only way to stack it was to drop a second
+   * copy of the talent onto the actor (two Items, two AEs). It also fixes talents that arrive at a
+   * rank above 1 in the first place (OggDude character import sets `ranks.current` directly).
+   *
+   * Only talent Items scale: specialization-tree talents and Force power upgrades carry their AEs on
+   * the specialization/forcepower Item and get their stacking from one learned node per rank, so
+   * scaling those would double-count.
+   *
+   * @returns {number} integer >= 1
+   */
+  getTalentRankMultiplier() {
+    const item = this.parent;
+    if (!(item instanceof Item) || item.type !== "talent") return 1;
+    if (!item.system?.ranks?.ranked) return 1;
+    const current = Number(item.system.ranks.current);
+    return Number.isFinite(current) && current >= 1 ? Math.floor(current) : 1;
+  }
+
+  /**
+   * Scale a single ADD-mode change's value by this effect's multipliers - the Status Icon Counters
+   * stack count and, for a talent Item's effects, the talent's rank - so that N stacks of a "+1"
+   * status (e.g. "Boost Next Check") contribute +N, and a rank-N ranked talent applies its modifier
+   * N times. Only additive numeric changes are scaled; OVERRIDE / MULTIPLY / UPGRADE / DOWNGRADE and
+   * non-numeric values are returned untouched, since multiplying those has no well-defined meaning
+   * here.
    *
    * The original change object is never mutated - callers receive the resolved value to use.
    *
    * @param {object} change - an EffectChangeData entry from this.changes
-   * @returns {string} the (possibly scaled) value, as a string for consistency with stored data
+   * @returns {string|boolean} the (possibly scaled) value, as a string for consistency with stored data
    */
   scaleChangeValue(change) {
-    const count = this.getStackCount();
-    if (count <= 1 || change?.mode !== AE_MODES.ADD) return change?.value;
+    // Stack count (statuscounter) and talent rank are independent multipliers; a ranked talent is
+    // never a stackable status, so in practice exactly one of them is ever above 1.
+    const multiplier = this.getStackCount() * this.getTalentRankMultiplier();
+    if (multiplier <= 1) return change?.value;
+    // Only additive numeric changes scale. Read the V14 string `type` first so the deprecated
+    // numeric `mode` accessor (removed in V16) is only touched on V13, where `type` is absent.
+    const mode = change?.type ?? change?.mode;
+    if (mode !== "add" && mode !== AE_MODES.ADD) return change?.value;
+    // Career Skill / Force Boost modifiers store a boolean; Number(true) is 1, so without this
+    // guard a rank-2 talent would turn `careerskill: true` into `2`.
+    if (typeof change.value === "boolean") return change.value;
     const numeric = Number(change.value);
     if (!Number.isFinite(numeric)) return change.value;
-    return String(numeric * count);
+    return String(numeric * multiplier);
   }
 
   /**
-   * Multiply additive changes by the Status Icon Counters stack count at application time. Foundry
-   * calls apply() once per change while deriving the actor's data, so scaling here makes the count
-   * flow straight into the derived skill dice (system.skills.<skill>.boost, .setback, .upgrades,
-   * .success, .light, .dark, ...) that the dice pool is built from - 2 stacks of "Boost Next Check"
-   * become +2 boost on the next check, with no per-effect configuration required.
+   * Multiply additive changes by the Status Icon Counters stack count and the ranked-talent rank at
+   * application time. Foundry calls apply() once per change while deriving the actor's data, so
+   * scaling here flows straight into the derived skill dice (system.skills.<skill>.boost, .setback,
+   * .remsetback, .upgrades, .success, .light, .dark, ...) that the dice pool is built from - 2 stacks
+   * of "Boost Next Check" become +2 boost on the next check, and a rank-2 talent that removes a
+   * setback removes two, with no per-effect configuration required.
    *
-   * The scaling is re-derived on every data preparation from the live counter flag, so it stays
-   * correct as the count is raised, lowered, or removed, and the effect's stored changes keep their
-   * base "+1" values. Leave the statuscounter module's own "multiply effect" option OFF for these
-   * statuses, or the value would be scaled twice.
+   * The scaling is re-derived on every data preparation from the live counter flag / rank value, so
+   * it stays correct as either is raised, lowered, or removed, and the effect's stored changes keep
+   * their base per-rank values. Leave the statuscounter module's own "multiply effect" option OFF for
+   * these statuses, or the value would be scaled twice.
    *
    * @override
    */

@@ -1218,6 +1218,13 @@ export class ActorSheetFFG extends FFGActorSheet {
 
     // Toggle item details
     html.find(".items .item, .header-description-block .item, .injuries .item").click(async (ev) => {
+      // A click on one of the row's control icons (roll, edit, refund, delete, split, give, ...)
+      // must not ALSO toggle/open the row -- each control has its own handler. The class tests
+      // below only ever matched the <i> glyph itself, so a click that landed on the padding of the
+      // surrounding <a class="item-control"> fell straight through to this handler as well: rolling
+      // a force power opened the roll dialog AND rendered the power's tree. Every .item-control in
+      // the templates owns a handler, so skip the whole subtree rather than sniffing the target.
+      if ($(ev.target).closest(".item-control").length) return;
       if (!$(ev.target).hasClass("fa-trash") && !$(ev.target).hasClass("fas") && !$(ev.target).hasClass("rollable")) {
         const li = $(ev.currentTarget);
         if (ev?.originalEvent?.target && !$(ev?.originalEvent?.target).hasClass("item-pill")) {

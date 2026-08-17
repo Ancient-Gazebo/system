@@ -187,13 +187,16 @@ export class ActiveEffectFFG extends ActiveEffect {
     if (typeof change.value === "boolean") return change.value;
     const numeric = Number(change.value);
     if (!Number.isFinite(numeric)) return change.value;
-    return String(numeric * multiplier);
+    // Keep the stored type: values entered through the modifier forms are strings, but changes
+    // built in code (CONFIG.statusEffects) can be numbers, and V14 field application is stricter.
+    return typeof change.value === "number" ? numeric * multiplier : String(numeric * multiplier);
   }
 
   /**
    * Multiply additive changes by the Status Icon Counters stack count and the ranked-talent rank at
-   * application time. Foundry calls apply() once per change while deriving the actor's data, so
-   * scaling here flows straight into the derived skill dice (system.skills.<skill>.boost, .setback,
+   * application time. This is the V13 entry point - Foundry calls apply() once per change while
+   * deriving the actor's data (see the static applyChange below for V14) - so scaling at this point
+   * flows straight into the derived skill dice (system.skills.<skill>.boost, .setback,
    * .remsetback, .upgrades, .success, .light, .dark, ...) that the dice pool is built from - 2 stacks
    * of "Boost Next Check" become +2 boost on the next check, and a rank-2 talent that removes a
    * setback removes two, with no per-effect configuration required.
@@ -206,9 +209,36 @@ export class ActiveEffectFFG extends ActiveEffect {
    * @override
    */
   apply(actor, change, ...rest) {
+    // On V14 this method is only a deprecated shim that forwards to the static applyChange, which
+    // does the scaling itself - doing it here as well would square the multiplier.
+    if (game.release?.generation >= 14) return super.apply(actor, change, ...rest);
     const scaled = this.scaleChangeValue(change);
     if (scaled !== change?.value) change = { ...change, value: scaled };
     return super.apply(actor, change, ...rest);
+  }
+
+  /**
+   * V14 moved change application off the ActiveEffect instance: Actor#applyActiveEffects now calls
+   * the STATIC ActiveEffect.applyChange(targetDoc, change) once per change, and the instance
+   * `apply()` survives only as a deprecated shim that nothing internal calls. Overriding `apply()`
+   * alone therefore did nothing on V14 - the ranked-talent scaling never ran, and neither did the
+   * Status Icon Counters stack scaling. Scale here so both work on V14; `apply()` above still
+   * covers V13, where this static does not exist.
+   *
+   * The effect that owns the change is attached by the caller as `change.effect`, which is how we
+   * get back to the instance (and therefore to the parent talent Item) from a static context.
+   *
+   * @override
+   */
+  static applyChange(targetDoc, change, options) {
+    const effect = change?.effect;
+    if (typeof effect?.scaleChangeValue === "function") {
+      const scaled = effect.scaleChangeValue(change);
+      // Spread keeps `effect`, `key`, `type`, `priority` and `phase`; V14's deprecated numeric
+      // `mode` shim is non-enumerable, so it is intentionally not carried onto the copy.
+      if (scaled !== change.value) change = { ...change, value: scaled };
+    }
+    return super.applyChange(targetDoc, change, options);
   }
 
   /** @override */

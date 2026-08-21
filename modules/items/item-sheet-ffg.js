@@ -1992,15 +1992,25 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     }
 
     if (action === "img") {
-      const fp = new foundry.applications.apps.FilePicker({
+      // `FilePicker.implementation` (not the base class): hosts that swap in their own picker do
+      // so through CONFIG.ux.FilePicker, and constructing `FilePicker` directly bypasses it -- on
+      // The Forge that means the vanilla local-Data browser instead of the Assets Library, so an
+      // upload here landed somewhere the resulting path did not resolve from. Every other picker
+      // in the system already goes through .implementation.
+      // Position also has to be nested under `position` for ApplicationV2; the old top-level
+      // top/left were ignored and the picker opened at the default spot.
+      const fp = new foundry.applications.apps.FilePicker.implementation({
         type: "image",
+        current: this.object.img,
         callback: async (path) => {
           await this.object.update({img: path});
-          },
+        },
+        position: {
           top: this.position.top + 40,
           left: this.position.left + 10,
-        });
-        return fp.browse();
+        },
+      });
+      return fp.browse();
     }
 
     if (action === "uplink") {

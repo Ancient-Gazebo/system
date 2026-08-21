@@ -82,15 +82,23 @@ class ffgSettings extends FFGFormApplication {
 
   _onFilePicker(event) {
     event.preventDefault();
-
+    // Resolve the paired input now, while the event is live, and keep the reference for the
+    // callback rather than re-reading event.currentTarget out of a stale event object.
+    const input = event.currentTarget.previousElementSibling;
     const fp = new foundry.applications.apps.FilePicker.implementation({
       type: "image",
+      current: input?.value,
       callback: (path) => {
-        $(event.currentTarget).prev().val(path);
-        //this._onSubmit(event);
+        // No submit here on purpose: the value sits in the field until the user clicks Save,
+        // matching the rest of this form.
+        if (input) input.value = path;
       },
-      top: this.position.top + 40,
-      left: this.position.left + 10,
+      // ApplicationV2 reads placement from `position`; the top-level top/left this used to pass
+      // were silently ignored, so the picker always opened at the default spot.
+      position: {
+        top: this.position.top + 40,
+        left: this.position.left + 10,
+      },
     });
     return fp.browse();
   }

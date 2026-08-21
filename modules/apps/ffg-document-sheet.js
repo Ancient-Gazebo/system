@@ -890,6 +890,35 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     delete this.editors[name];
   }
 
+  /**
+   * Locate the live `[data-edit="<attr>"]` node in the currently mounted form.
+   *
+   * A FilePicker callback fires an arbitrary amount of time after the click that opened it, and
+   * the V2 render pipeline replaces the form's innerHTML wholesale, so the element captured at
+   * click time is frequently detached by then (any submit-on-change edit, the post-update
+   * `render(true)` in ItemHelpers.itemUpdate, or another client's update all re-render the sheet).
+   * Writing to a detached node is invisible AND worse than invisible: the submit that follows
+   * rebuilds its payload with FormDataExtended, which reads `img[data-edit]` out of the LIVE form
+   * and therefore hands back the *old* src -- so the chosen image was silently written back to
+   * what it already was. Re-resolving here means the pick lands on the node that is actually on
+   * screen and in the form being serialized.
+   *
+   * Matching is done by iterating rather than by building an attribute selector so that attribute
+   * values containing quotes or dots (`prototypeToken.texture.src`) need no escaping.
+   *
+   * @param {string} attr        The `data-edit` value to find.
+   * @param {HTMLElement} fallback  The element captured at click time, returned if no live node matches.
+   * @returns {HTMLElement}
+   */
+  _resolveLiveEditTarget(attr, fallback) {
+    const form = this.form;
+    if (!form) return fallback;
+    for (const el of form.querySelectorAll("[data-edit]")) {
+      if (el.dataset.edit === attr) return el;
+    }
+    return fallback;
+  }
+
   async _onEditImage(event) {
     event.preventDefault();
     const target = event.currentTarget;
@@ -898,11 +927,25 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     const fp = new foundry.applications.apps.FilePicker.implementation({
       current,
       type: "image",
-      callback: (path) => {
-        target.src = path;
-        if (this.options.submitOnChange) {
-          this._onSubmit(new Event("submit", { cancelable: true }));
+      callback: async (path) => {
+        if (!this.options.submitOnChange) {
+          // This sheet saves explicitly; leave the choice in the DOM for the user's own save.
+          this._resolveLiveEditTarget(attr, target).src = path;
+          return;
         }
+        // The sheet can also be closed outright while the picker is open, taking the form (and
+        // therefore the whole submit path) with it. `attr` is a document path by construction --
+        // it is what `current` was read from above -- so write it straight to the document rather
+        // than dropping the user's choice on the floor.
+        if (!this.form) {
+          if (this.isEditable) await this.document.update({ [attr]: path });
+          return;
+        }
+        this._resolveLiveEditTarget(attr, target).src = path;
+        // Awaited so a picker callback cannot interleave with a later submit, and rendered so
+        // the displayed image is re-derived from the stored document rather than trusting the
+        // direct DOM write above to be the last word.
+        await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
       },
       position: {
         top: this.position.top + 40,
@@ -916,14 +959,16 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     event.preventDefault();
     const button = event.currentTarget;
     const field = button.dataset.target;
-    const input = this.form?.elements[field];
     const fp = new foundry.applications.apps.FilePicker.implementation({
       type: button.dataset.type ?? "image",
-      current: input?.value,
-      callback: (path) => {
+      current: this.form?.elements[field]?.value,
+      callback: async (path) => {
+        // Same staleness trap as _onEditImage: re-read the input off the live form instead of
+        // holding the one captured when the button was clicked.
+        const input = this.form?.elements[field];
         if (input) input.value = path;
         if (this.options.submitOnChange) {
-          this._onSubmit(new Event("submit", { cancelable: true }));
+          await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
         }
       },
       position: {

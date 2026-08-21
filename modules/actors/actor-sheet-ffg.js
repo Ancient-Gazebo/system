@@ -366,12 +366,14 @@ export class ActorSheetFFG extends FFGActorSheet {
         if (data.limited) {
           this.position.height = 165;
         }
-        // we need to update all specialization talents with the latest talent information
-        if (!this.actor.flags.starwarsffg?.loaded && this.actor.type !== "rival") {
-          // TODO: is this actually needed?
-          await this._updateSpecialization(data);
-          await this.object._prepareCharacterData(data);
-        }
+        // The talent list is built by Actor#_prepareCharacterData during prepareDerivedData, so it
+        // is already current here and `data.talentList` (assigned above) points at those very
+        // objects. The old "initial load" rebuild that used to run at this point re-added every
+        // specialization's ranks on top of a list that already contained them AND mutated the
+        // shared entries in place, so a ranked talent held both in a tree and as a dropped/species
+        // talent item reported rank tree+item+tree (Surgeon 2+1+2 = 5) to the actor's talentList -
+        // visible on the next render and to anything else reading actor.talentList (chat cards,
+        // talent tooltips). Nothing else it did was unique, so it is gone.
 
         // Build display data for every configured currency denomination. Values over 999 get
         // grouping separators (matching the legacy credits box); the strip-back-to-integer happens
@@ -3609,62 +3611,6 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
       await this.object.createEmbeddedDocuments("ActiveEffect", toSuspend);
     }
-  }
-
-  /**
-   * Update specialization talents
-   * @param  {Object} data
-   */
-  async _updateSpecialization(data) {
-    CONFIG.logger.debug(`Running Actor initial load`);
-    if (this.actor.flags.starwarsffg === undefined) {
-        this.actor.flags.starwarsffg = {};
-    }
-    this.actor.flags.starwarsffg.loaded = true;
-
-    const specializations = this.actor.items.filter((item) => {
-      return item.type === "specialization";
-    });
-
-    CONFIG.logger.debug(`_updateSpecialization(): data.talentList before we start:`);
-    CONFIG.logger.debug(data.talentList.slice());
-
-    // start the talent list only with talents that did not come from a specialization
-    const globalTalentList = data.talentList.filter(i => i.source.filter(s => s.type === "talent").length > 0)
-
-    for await (const spec of specializations) {
-      CONFIG.logger.debug(`_updateSpecialization(): starting work on ${spec.name}`);
-
-      if (spec?.talentList && spec.talentList.length > 0) {
-        spec.talentList.forEach((talent) => {
-          const item = talent;
-          item.firstSpecialization = spec.id;
-
-          if (item.isRanked) {
-            item.rank = typeof talent.rank === "number" ? talent.rank : 1;
-          } else {
-            item.rank = "N/A";
-          }
-
-          let index = globalTalentList.findIndex((obj) => {
-            return obj.name === item.name;
-          });
-
-          if (index < 0 || !item.isRanked) {
-            globalTalentList.push(item);
-          } else {
-            globalTalentList[index].rank += talent.rank;
-          }
-        });
-      }
-      CONFIG.logger.debug(`_updateSpecialization(): globalTalentList after current specialization:`);
-      CONFIG.logger.debug(globalTalentList.slice());
-    }
-
-    data.talentList = globalTalentList;
-
-    CONFIG.logger.debug(`_updateSpecialization(): data.talentList after update:`);
-    CONFIG.logger.debug(data.talentList.slice());
   }
 
   /**

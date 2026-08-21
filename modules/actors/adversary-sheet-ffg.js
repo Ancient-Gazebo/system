@@ -24,10 +24,9 @@ export class AdversarySheetFFG extends ActorSheetFFG {
    * @override
    * NOTE: `getData` MUST be async and MUST await `super.getData()` - the parent
    * `ActorSheetFFG.getData` is async (returns a Promise). A sync `super.getData()`
-   * here hands back a Promise: `_updateSpecialization(data)` rejects with
-   * "Cannot read properties of undefined (reading 'slice')" (data.talentList),
-   * and the `data.limited` / `data.items` tweaks land on the Promise wrapper
-   * and are silently lost.
+   * here hands back a Promise, so every read below (`data.limited`, `data.talentList`,
+   * ...) sees `undefined` and the `data.items` tweak lands on the Promise wrapper
+   * and is silently lost.
    */
   async getData() {
     const data = await super.getData();
@@ -37,11 +36,6 @@ export class AdversarySheetFFG extends ActorSheetFFG {
         this.position.height = 783;
         if (data.limited) {
           this.position.height = 165;
-        }
-
-        // we need to update all specialization talents with the latest talent information
-        if (!this.actor.flags.starwarsffg?.loaded) {
-          super._updateSpecialization(data);
         }
 
         break;

@@ -219,6 +219,7 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     await super._preRender(context, options);
     this._ffgScrollTop = this.form?.scrollTop || 0;
     this._captureScrollPositions();
+    this._captureOpenEditors();
   }
 
   /**
@@ -786,6 +787,9 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       if (!name) continue;
       const containerEl = content.closest(".editor");
       const button = containerEl?.querySelector(".editor-edit");
+      // Register the field BEFORE anything else -- an entry has to exist for
+      // every {{editor}} field on every render, open or not. See _registerEditorField.
+      this._registerEditorField(name, content, containerEl, button);
       if (!button || button.dataset.editorBound) continue;
       button.dataset.editorBound = "1";
       button.addEventListener("click", (event) => {
@@ -793,16 +797,97 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
         this._activateEditor(name, content, containerEl, button);
       });
     }
+    this._restoreOpenEditors();
   }
 
-  async _activateEditor(name, contentEl, containerEl, buttonEl) {
-    // A live editor is already open for this field — nothing to do.
-    if (this.editors[name]?.instance?.view) return;
+  /**
+   * Keep `this.editors` in sync with the DOM this render just produced.
+   *
+   * Two separate failures depend on an entry existing for a CLOSED editor:
+   *
+   * 1. FormDataExtended writes the `[data-edit]` element's innerHTML back into
+   *    the field for any name it does not find in `editors`
+   *    (`#processEditableHTML`). That div holds the ENRICHED content, so every
+   *    unrelated submit -- renaming the item, ticking a checkbox, any
+   *    submit-on-change -- silently replaced `system.description` /
+   *    `system.biography` with its own enriched rendering. V1 avoided this by
+   *    registering every `.editor-content[data-edit]` at render time with a null
+   *    instance (FormApplication#_activateEditor); the V2 port only registered on
+   *    the Edit click, so the window between renders was unprotected.
+   * 2. An entry left over from a PREVIOUS render points at DOM this render just
+   *    detached. `_activateEditor` reads it as a live editor and refuses to mount
+   *    a new one (the Edit button goes dead for the life of the sheet), while
+   *    FormDataExtended keeps serializing that orphan's stale content over the
+   *    field on every later submit.
+   */
+  _registerEditorField(name, contentEl, containerEl, buttonEl) {
+    const existing = this.editors[name];
+    // Still mounted in the live document: a genuinely open editor, leave it be.
+    if (existing?.instance?.view?.dom?.isConnected) return;
+    // Orphaned by this render -- tear the dead instance down before replacing it.
+    if (existing?.instance) this._destroyEditor(name);
+    this.editors[name] = {
+      instance: null,
+      options: { engine: "prosemirror", target: name, button: true, owner: this.isEditable },
+      active: false,
+      button: buttonEl,
+      container: containerEl,
+      content: contentEl,
+    };
+  }
+
+  /**
+   * Snapshot the live content of any open editor before the re-render throws its
+   * DOM away, so `_restoreOpenEditors` can re-open it with the user's in-progress
+   * text. Without this, a re-render that lands mid-edit (an Active Effect sync
+   * after a rename, another client's update, a submit-on-change elsewhere on the
+   * sheet) silently discarded whatever had been typed.
+   */
+  _captureOpenEditors() {
+    // Anything still queued from a previous render (its re-mount was interrupted
+    // by this render) has to survive, or the captured text is lost.
+    const pending = this._pendingEditors ?? new Map();
+    for (const [name, state] of Object.entries(this.editors ?? {})) {
+      const view = state?.instance?.view;
+      // Skip editors being torn down by _saveEditor: that teardown owns the re-render.
+      if (state?._saving || !view?.dom?.isConnected) continue;
+      try {
+        pending.set(name, ProseMirror.dom.serializeString(view.state.doc.content));
+      } catch (err) {
+        CONFIG.logger?.warn?.("starwarsffg | failed to capture open editor content", err);
+      }
+    }
+    this._pendingEditors = pending.size ? pending : null;
+  }
+
+  /** Re-open the editors captured in `_captureOpenEditors` against the new DOM. */
+  _restoreOpenEditors() {
+    const pending = this._pendingEditors;
+    if (!pending?.size) return;
+    for (const [name, content] of [...pending]) {
+      const state = this.editors[name];
+      if (!state || state.instance) continue;
+      // Drop the queued copy only once the editor is actually mounted again: a
+      // render landing mid-mount leaves the entry queued for the next one.
+      this._activateEditor(name, state.content, state.container, state.button, content)
+        .then(() => {
+          if (this.editors[name]?.instance) this._pendingEditors?.delete(name);
+        })
+        .catch((err) => CONFIG.logger?.warn?.("starwarsffg | failed to re-open editor", err));
+    }
+  }
+
+  async _activateEditor(name, contentEl, containerEl, buttonEl, initialContent) {
+    // A live editor is already open for this field — nothing to do. The DOM check
+    // matters: a re-render detaches the view without destroying it, and treating
+    // that corpse as "open" is what used to brick the Edit button.
+    if (this.editors[name]?.instance?.view?.dom?.isConnected) return;
     // A stale/half-open entry (e.g. a prior save that failed to mount) would
     // otherwise permanently brick the edit button via the guard above. Clear
     // it so this click can mount a fresh editor.
     if (this.editors[name]) this._destroyEditor(name);
-    const initial = foundry.utils.getProperty(this.document, name) ?? "";
+    if (!contentEl?.isConnected) return;
+    const initial = initialContent ?? foundry.utils.getProperty(this.document, name) ?? "";
     const { ProseMirrorEditor } = foundry.applications.ux;
 
     // Register a FormDataExtended-compatible entry BEFORE create() resolves.
@@ -811,12 +896,13 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     // `instance.view`. Omitting this shape causes both the editor instance
     // AND the matching [data-edit] node to be skipped -- silently losing
     // unsaved content on submit-on-close.
-    this.editors[name] = {
+    const state = this.editors[name] = {
       instance: null,
       options: { engine: "prosemirror", target: name, button: true, owner: this.isEditable },
       active: true,
       button: buttonEl,
       container: containerEl,
+      content: contentEl,
     };
 
     const editor = await ProseMirrorEditor.create(contentEl, initial, {
@@ -840,7 +926,14 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       },
     });
 
-    this.editors[name].instance = editor;
+    // A re-render during the await above already replaced this record (and threw
+    // away the DOM we just mounted into): drop the stillborn editor rather than
+    // publishing it as the live one.
+    if (this.editors[name] !== state || !contentEl.isConnected) {
+      try { editor.destroy(); } catch (_e) { /* nothing mounted */ }
+      return;
+    }
+    state.instance = editor;
     // The `prosemirror` class on the container is what the change-handler
     // editor guard (_onChangeInput) looks for. Without it, every keystroke
     // inside the editor bubbles a `change` to the form and triggers a full
@@ -857,6 +950,9 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     const state = this.editors[name];
     if (!state?.instance?.view || state._saving) return;
     state._saving = true;
+    // The content is being committed to the document: drop any queued copy so the
+    // post-save render does not re-open the editor from it.
+    this._pendingEditors?.delete(name);
     // Route through the normal submit pipeline so ItemHelpers.itemUpdate /
     // ActorHelpers.updateActor run AE sync, talent propagation, attribute
     // reshaping, and XP logging. FormDataExtended pulls the editor value out
@@ -874,7 +970,10 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       await this._onSubmit(event, { preventClose: true, render: false });
     } finally {
       if (remove) this._destroyEditor(name);
-      this.render(true);
+      else state._saving = false;
+      // Awaited: until the re-render lands, the form still holds the torn-down
+      // editor's markup, and any submit in that window would capture it.
+      await this.render(true);
     }
   }
 
@@ -887,7 +986,14 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     // the now-detached pre-re-render button; required if teardown happens
     // without a re-render so the button doesn't stay hidden.
     if (state.button) state.button.style.display = "";
-    delete this.editors[name];
+    // Keep a null-instance placeholder rather than dropping the record: the
+    // field must stay registered with FormDataExtended even while closed, or the
+    // next submit writes the rendered markup back into it (see
+    // _registerEditorField). V1 did the same -- saveEditor nulled `instance` and
+    // kept the entry.
+    state.instance = null;
+    state.active = false;
+    state._saving = false;
   }
 
   /**

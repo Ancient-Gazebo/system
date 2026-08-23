@@ -143,6 +143,27 @@ export class itemEditor extends FFGFormApplication {
     this._activateEditors();
   }
 
+  /**
+   * Snapshot any open editor before this re-render detaches its DOM. This window
+   * submits on change, so a re-render lands on every field edit -- without this,
+   * touching any other control while the description editor is open threw the
+   * in-progress text away. @override
+   */
+  async _preRender(context, options) {
+    await super._preRender(context, options);
+    const pending = this._pendingEditors ?? new Map();
+    for (const [name, state] of Object.entries(this.editors ?? {})) {
+      const view = state?.instance?.view;
+      if (state?._saving || !view?.dom?.isConnected) continue;
+      try {
+        pending.set(name, ProseMirror.dom.serializeString(view.state.doc.content));
+      } catch (err) {
+        CONFIG.logger?.warn?.("starwarsffg | failed to capture open editor content", err);
+      }
+    }
+    this._pendingEditors = pending.size ? pending : null;
+  }
+
   /* ---- Inline {{editor}} (ProseMirror) support ----
      FFGFormApplication half-wired this (it has the `.editor.prosemirror` change
      guard) but never activated the editors or fed them to FormDataExtended.
@@ -168,6 +189,7 @@ export class itemEditor extends FFGFormApplication {
       if (!name) continue;
       const containerEl = content.closest(".editor");
       const button = containerEl?.querySelector(".editor-edit");
+      this._registerEditorField(name, content, containerEl, button);
       if (!button || button.dataset.editorBound) continue;
       button.dataset.editorBound = "1";
       button.addEventListener("click", (event) => {
@@ -175,21 +197,67 @@ export class itemEditor extends FFGFormApplication {
         this._activateEditor(name, content, containerEl, button);
       });
     }
+    this._restoreOpenEditors();
   }
 
-  async _activateEditor(name, contentEl, containerEl, buttonEl) {
-    if (this.editors[name]?.instance?.view) return;
+  /**
+   * Register every {{editor}} field on every render, open or not.
+   *
+   * FormDataExtended writes a `[data-edit]` element's innerHTML back into the
+   * field for any name missing from `editors` (`#processEditableHTML`), and that
+   * div holds the ENRICHED description -- so with this window submitting on
+   * change, renaming a modification (or touching any other control) rewrote
+   * `system.description` with its own rendering. A null-instance placeholder
+   * suppresses that, exactly as V1 FormApplication did. It also clears out
+   * entries orphaned by a re-render, which otherwise made the Edit button dead
+   * and kept feeding the orphan's stale text back into the field.
+   */
+  _registerEditorField(name, contentEl, containerEl, buttonEl) {
+    const existing = this.editors[name];
+    if (existing?.instance?.view?.dom?.isConnected) return;
+    if (existing?.instance) this._destroyEditor(name);
+    this.editors[name] = {
+      instance: null,
+      options: { engine: "prosemirror", target: name, button: true, owner: this.isEditable },
+      active: false,
+      button: buttonEl,
+      container: containerEl,
+      content: contentEl,
+    };
+  }
+
+  /** Re-open editors captured in `_preRender` against the freshly rendered DOM. */
+  _restoreOpenEditors() {
+    const pending = this._pendingEditors;
+    if (!pending?.size) return;
+    for (const [name, content] of [...pending]) {
+      const state = this.editors[name];
+      if (!state || state.instance) continue;
+      this._activateEditor(name, state.content, state.container, state.button, content)
+        .then(() => {
+          if (this.editors[name]?.instance) this._pendingEditors?.delete(name);
+        })
+        .catch((err) => CONFIG.logger?.warn?.("starwarsffg | failed to re-open editor", err));
+    }
+  }
+
+  async _activateEditor(name, contentEl, containerEl, buttonEl, initialContent) {
+    // The DOM check matters: a re-render detaches the view without destroying it,
+    // and treating that corpse as "open" is what bricked the Edit button.
+    if (this.editors[name]?.instance?.view?.dom?.isConnected) return;
     if (this.editors[name]) this._destroyEditor(name);
-    const initial = foundry.utils.getProperty(this.data.clickedObject, name) ?? "";
+    if (!contentEl?.isConnected) return;
+    const initial = initialContent ?? foundry.utils.getProperty(this.data.clickedObject, name) ?? "";
     const { ProseMirrorEditor } = foundry.applications.ux;
     // Register the FormDataExtended-compatible entry BEFORE create() resolves so
     // a submit-on-change mid-mount still serializes this editor.
-    this.editors[name] = {
+    const state = this.editors[name] = {
       instance: null,
       options: { engine: "prosemirror", target: name, button: true, owner: this.isEditable },
       active: true,
       button: buttonEl,
       container: containerEl,
+      content: contentEl,
     };
     const editor = await ProseMirrorEditor.create(contentEl, initial, {
       // sourceObject (the host item) is a real Document — used for relative link
@@ -207,7 +275,13 @@ export class itemEditor extends FFGFormApplication {
         }),
       },
     });
-    this.editors[name].instance = editor;
+    // A re-render during the await already replaced this record (and the DOM we
+    // mounted into): drop the stillborn editor instead of publishing it.
+    if (this.editors[name] !== state || !contentEl.isConnected) {
+      try { editor.destroy(); } catch (_e) { /* nothing mounted */ }
+      return;
+    }
+    state.instance = editor;
     // `prosemirror` on the container is what FFGFormApplication's _onChangeForm
     // guard looks for to avoid submitting on every keystroke.
     containerEl.classList.add("editor-active", "prosemirror");
@@ -218,13 +292,18 @@ export class itemEditor extends FFGFormApplication {
     const state = this.editors[name];
     if (!state?.instance?.view || state._saving) return;
     state._saving = true;
+    // Committing to the object: nothing left to re-open after the render.
+    this._pendingEditors?.delete(name);
     try {
       // _onSubmit reads the form via our _getSubmitData (which serializes the
       // live editor) and routes through _updateObject -> embedded write-back.
       await this._onSubmit(new Event("submit", { cancelable: true }));
     } finally {
       if (remove) this._destroyEditor(name);
-      this.render(true);
+      else state._saving = false;
+      // Awaited: until the render lands, the form still holds the torn-down
+      // editor's markup, and a submit in that window would capture it.
+      await this.render(true);
     }
   }
 
@@ -234,7 +313,11 @@ export class itemEditor extends FFGFormApplication {
     try { state.instance?.destroy(); } catch (_e) { /* already torn down */ }
     state.container?.classList.remove("editor-active", "prosemirror");
     if (state.button) state.button.style.display = "";
-    delete this.editors[name];
+    // Keep a null-instance placeholder rather than dropping the record, so the
+    // field stays shielded from the innerHTML write-back while it is closed.
+    state.instance = null;
+    state.active = false;
+    state._saving = false;
   }
 
   /** Bind the BASICS / BASE MODS tab navigation, remembering the active tab. */

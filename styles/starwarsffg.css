@@ -1174,6 +1174,12 @@ img {
 }
 .starwarsffg span.dietype {
   position: relative;
+  /* EotESymbol/Genesys have a 1em ascent, so an inline symbol claims a taller
+     line box than the prose around it. That inflates every line holding a
+     symbol and pushes the tail of the text out of the fixed-height talent
+     boxes in a tree. line-height: 0 keeps the glyph drawn at full size while
+     contributing nothing to the line box. */
+  line-height: 0;
 }
 .starwarsffg span.dietype.ability {
   color: green;

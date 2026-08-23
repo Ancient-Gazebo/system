@@ -250,13 +250,22 @@ export class CombatFFG extends Combat {
       return new RollFFG("0");
     }
 
+    const skillName = formula;
     if (formula === "Vigilance") {
       formula = _getInitiativeFormula(cData.skills.Vigilance, parseInt(cData.characteristics.Willpower.value));
     } else if (formula === "Cool") {
       formula = _getInitiativeFormula(cData.skills.Cool, parseInt(cData.characteristics.Presence.value));
     }
 
-    const rollData = combatant.actor ? combatant.actor.getRollData() : {};
+    // See rollInitiative() below: `data` is the payload the chat card and the ffgDiceMessage
+    // hook consume, so it needs an item-like `name`. Copied, never stamped in place.
+    const rollData = {
+      ...(combatant.actor ? combatant.actor.getRollData() : {}),
+      name: ["Vigilance", "Cool"].includes(skillName)
+        ? game.i18n.localize(`SWFFG.SkillsName${skillName}`)
+        : game.i18n.localize("SWFFG.InitiativeRoll"),
+      type: "skill",
+    };
 
     let roll = await new RollFFG(formula, rollData).roll();
 
@@ -389,6 +398,9 @@ export class CombatFFG extends Combat {
                 CONFIG.logger.warn("No initiative skill was selected; falling back to the configured default.");
               }
               const baseFormulaType = skillInput?.value ?? defaultInitiativeFormula;
+              // Localized name of the skill initiative is being rolled with. Used for the chat
+              // flavor and, below, as the `name` of each roll's data payload.
+              const initiativeSkillName = game.i18n.localize(`SWFFG.SkillsName${baseFormulaType.replace(/[: ]/g, "")}`);
 
               // Iterate over Combatants, performing an initiative roll for each
               const [updates, messages] = await ids.reduce(
@@ -420,7 +432,17 @@ export class CombatFFG extends Combat {
                   pool.force = +addPool.force;
                   pool.upgrade(addPool.upgrades)
 
-                  const rollData = c.actor ? c.actor.getRollData() : {};
+                  // A RollFFG's `data` doubles as the "what was rolled" payload every downstream
+                  // consumer reads: RollFFG#render puts it on the chat card, and the ffgDiceMessage
+                  // hook hands it to modules (Automated Animations treats it as the item and looks
+                  // up an autorec entry by `.name`). Every other roll path supplies something
+                  // item-like with a name - DiceHelpers falls back to `{ name: <skill label>,
+                  // type: "skill" }` when a skill is rolled without an item - but initiative passed
+                  // the bare actor roll data, which has no `name`, so AA's lookup blew up on
+                  // `undefined.includes(...)`. Copy rather than stamp in place: getRollData() can
+                  // hand back the live actor.system, and render() also writes
+                  // `additionalFlavorText` onto this object.
+                  const rollData = { ...(c.actor ? c.actor.getRollData() : {}), name: initiativeSkillName, type: "skill" };
                   let roll = await new RollFFG(pool.renderDiceExpression(), rollData, { success: pool.success, advantage: pool.advantage, failure: pool.failure, threat: pool.threat }).roll();
                   const total = roll.ffg.success + roll.ffg.advantage * 0.01;
                   roll._result = total;
@@ -455,7 +477,7 @@ export class CombatFFG extends Combat {
                         token: c.token.id,
                         alias: c.token.name,
                       },
-                      flavor: `${c.token.name} ${game.i18n.localize("SWFFG.InitiativeRoll")} (${game.i18n.localize(`SWFFG.SkillsName${baseFormulaType.replace(/[: ]/g, "")}`)})`,
+                      flavor: `${c.token.name} ${game.i18n.localize("SWFFG.InitiativeRoll")} (${initiativeSkillName})`,
                       flags: { "core.initiativeRoll": true },
                     },
                     messageOptions

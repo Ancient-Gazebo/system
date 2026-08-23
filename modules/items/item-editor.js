@@ -259,32 +259,41 @@ export class itemEditor extends FFGFormApplication {
       container: containerEl,
       content: contentEl,
     };
-    const editor = await ProseMirrorEditor.create(contentEl, initial, {
-      // sourceObject (the host item) is a real Document — used for relative link
-      // resolution only; the actual save goes through the form, not this doc.
-      document: this.data.sourceObject,
-      fieldName: name,
-      relativeLinks: true,
-      plugins: {
-        menu: ProseMirror.ProseMirrorMenu.build(ProseMirror.defaultSchema, {
-          destroyOnSave: false,
-          onSave: () => this._saveEditor(name, { remove: true }),
-        }),
-        keyMaps: ProseMirror.ProseMirrorKeyMaps.build(ProseMirror.defaultSchema, {
-          onSave: () => this._saveEditor(name, { remove: true }),
-        }),
-      },
-    });
+    // Engine classes before the mount, not after: core scopes the menu's sizing
+    // variables and layout to `.prosemirror`, and ProseMirrorMenu caches its
+    // button widths as soon as it is built. See FFGDocumentSheet._activateEditor.
+    containerEl?.classList.add("editor-active", "prosemirror");
+
+    let editor;
+    try {
+      editor = await ProseMirrorEditor.create(contentEl, initial, {
+        // sourceObject (the host item) is a real Document — used for relative link
+        // resolution only; the actual save goes through the form, not this doc.
+        document: this.data.sourceObject,
+        fieldName: name,
+        relativeLinks: true,
+        plugins: {
+          menu: ProseMirror.ProseMirrorMenu.build(ProseMirror.defaultSchema, {
+            destroyOnSave: false,
+            onSave: () => this._saveEditor(name, { remove: true }),
+          }),
+          keyMaps: ProseMirror.ProseMirrorKeyMaps.build(ProseMirror.defaultSchema, {
+            onSave: () => this._saveEditor(name, { remove: true }),
+          }),
+        },
+      });
+    } catch (err) {
+      containerEl?.classList.remove("editor-active", "prosemirror");
+      throw err;
+    }
     // A re-render during the await already replaced this record (and the DOM we
     // mounted into): drop the stillborn editor instead of publishing it.
     if (this.editors[name] !== state || !contentEl.isConnected) {
       try { editor.destroy(); } catch (_e) { /* nothing mounted */ }
+      containerEl?.classList.remove("editor-active", "prosemirror");
       return;
     }
     state.instance = editor;
-    // `prosemirror` on the container is what FFGFormApplication's _onChangeForm
-    // guard looks for to avoid submitting on every keystroke.
-    containerEl.classList.add("editor-active", "prosemirror");
     if (buttonEl) buttonEl.style.display = "none";
   }
 

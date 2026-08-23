@@ -905,41 +905,55 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       content: contentEl,
     };
 
-    const editor = await ProseMirrorEditor.create(contentEl, initial, {
-      document: this.document,
-      fieldName: name,
-      relativeLinks: true,
-      plugins: {
-        // destroyOnSave:false -- our _saveEditor owns the teardown. If the menu
-        // destroyed the view on "Save and Close", it would race _saveEditor's
-        // _onSubmit, which reads the (now dead) view via FormDataExtended and
-        // saves empty, and would leave this.editors[name] stale (bricking the
-        // edit button). Letting our code destroy keeps the view alive until
-        // after the value is read and the document updated.
-        menu: ProseMirror.ProseMirrorMenu.build(ProseMirror.defaultSchema, {
-          destroyOnSave: false,
-          onSave: () => this._saveEditor(name, { remove: true }),
-        }),
-        keyMaps: ProseMirror.ProseMirrorKeyMaps.build(ProseMirror.defaultSchema, {
-          onSave: () => this._saveEditor(name, { remove: true }),
-        }),
-      },
-    });
+    // The engine classes have to be on the container BEFORE the editor mounts.
+    // Core scopes every ProseMirror menu variable to `.prosemirror` /
+    // `prose-mirror` (--menu-button-height, --menu-padding, --menu-height, the
+    // menu background) along with the flex layout of .menu-container /
+    // .editor-container, and ProseMirrorMenu measures and CACHES its button
+    // widths the instant it is built (#render -> #recordSizes). Adding the class
+    // after `create()` resolved meant that first measurement ran with none of it
+    // applied: default-sized buttons on a `flex-wrap: nowrap` row, too wide for
+    // the sheet, so the toolbar was clipped and Save sat off the right edge until
+    // something forced the menu to re-render and re-measure (typing in the
+    // editor, or a re-render triggered by editing the name).
+    containerEl?.classList.add("editor-active", "prosemirror");
+
+    let editor;
+    try {
+      editor = await ProseMirrorEditor.create(contentEl, initial, {
+        document: this.document,
+        fieldName: name,
+        relativeLinks: true,
+        plugins: {
+          // destroyOnSave:false -- our _saveEditor owns the teardown. If the menu
+          // destroyed the view on "Save and Close", it would race _saveEditor's
+          // _onSubmit, which reads the (now dead) view via FormDataExtended and
+          // saves empty, and would leave this.editors[name] stale (bricking the
+          // edit button). Letting our code destroy keeps the view alive until
+          // after the value is read and the document updated.
+          menu: ProseMirror.ProseMirrorMenu.build(ProseMirror.defaultSchema, {
+            destroyOnSave: false,
+            onSave: () => this._saveEditor(name, { remove: true }),
+          }),
+          keyMaps: ProseMirror.ProseMirrorKeyMaps.build(ProseMirror.defaultSchema, {
+            onSave: () => this._saveEditor(name, { remove: true }),
+          }),
+        },
+      });
+    } catch (err) {
+      containerEl?.classList.remove("editor-active", "prosemirror");
+      throw err;
+    }
 
     // A re-render during the await above already replaced this record (and threw
     // away the DOM we just mounted into): drop the stillborn editor rather than
     // publishing it as the live one.
     if (this.editors[name] !== state || !contentEl.isConnected) {
       try { editor.destroy(); } catch (_e) { /* nothing mounted */ }
+      containerEl?.classList.remove("editor-active", "prosemirror");
       return;
     }
     state.instance = editor;
-    // The `prosemirror` class on the container is what the change-handler
-    // editor guard (_onChangeInput) looks for. Without it, every keystroke
-    // inside the editor bubbles a `change` to the form and triggers a full
-    // submit. V1 added the engine class to the .editor container on mount;
-    // mirror that here.
-    containerEl.classList.add("editor-active", "prosemirror");
     // Hide the "edit" pencil while editing: clicking it mid-edit re-enters
     // _activateEditor and breaks the live view. Inline style so it wins over
     // any theme CSS. The post-save re-render provides a fresh, visible button.

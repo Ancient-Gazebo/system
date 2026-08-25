@@ -28,13 +28,26 @@ const APPLY_EVENT = "ffgApplyToTarget";
  * @param {"damage"|"crit"|"kill-minion"} op.type
  * @param {string} [op.path]    For "damage": the numeric system path to bump.
  * @param {number} [op.delta]   For "damage": the amount to add to the current value.
+ * @param {{path: string, delta: number}[]} [op.deltas] For "damage": several paths to bump in a
+ *   single update. Used when one application touches two tracks at once (wounds from the hit plus
+ *   strain paid for Block / Deflect). Takes precedence over path/delta when present.
  * @param {object[]} [op.items] For "crit": item data objects to embed.
  * @returns {Promise<void>}
  */
 async function performApply(actor, op) {
   if (op.type === "damage") {
-    const current = Number(foundry.utils.getProperty(actor, op.path)) || 0;
-    await actor.update({ [op.path]: current + op.delta });
+    const deltas = Array.isArray(op.deltas) ? op.deltas : [{ path: op.path, delta: op.delta }];
+    const update = {};
+    for (const entry of deltas) {
+      const path = entry?.path;
+      const delta = Number(entry?.delta) || 0;
+      if (!path || !delta) continue;
+      // Two deltas can name the same path (damage applied to strain plus the Block / Deflect
+      // strain cost), so accumulate onto the pending value rather than re-reading the actor.
+      const base = path in update ? update[path] : Number(foundry.utils.getProperty(actor, path)) || 0;
+      update[path] = base + delta;
+    }
+    if (Object.keys(update).length) await actor.update(update);
   } else if (op.type === "crit") {
     await actor.createEmbeddedDocuments("Item", op.items);
   } else if (op.type === "kill-minion") {

@@ -1570,6 +1570,10 @@ Hooks.once("ready", async () => {
   // Forward Apply Damage / Apply Crit writes from non-owning players to the GM.
   registerGMBridge();
 
+  // "Damage Breakdown" in the chat-message context menu: the applied-damage card
+  // carries the arithmetic in a flag and only whispers it when a GM asks.
+  ApplyDamage.registerContextMenu();
+
   // Log adversary-roll diagnostics forwarded from players on the GM machine.
   RollBuilderFFG.registerRollLogBridge();
 

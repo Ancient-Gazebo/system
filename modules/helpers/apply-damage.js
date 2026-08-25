@@ -1,11 +1,30 @@
 /**
  * Apply Damage chat button — opens a dialog seeded from the weapon item and the
  * roll's successes, applies the resulting damage to the user's targeted token,
- * and posts a short public chat message plus a detailed GM whisper.
+ * and posts a short public chat message. The full arithmetic is kept off the
+ * chat log and only whispered to the GM on demand, via the "Damage Breakdown"
+ * entry in the right-click context menu of the public card.
  */
 import { applyToTargetActor } from "./gm-bridge.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
+
+/**
+ * Block / Deflect tiers. These replace the old Parry / Reflect ranks field: the
+ * talents used at this table are flat reductions rather than "2 + ranks", and
+ * each use costs the defender strain.
+ * @type {{value: number, label: string, name: string}[]}
+ */
+const BLOCK_TIERS = [
+  { value: 0, label: "SWFFG.ApplyDamage.BlockNone", name: "SWFFG.ApplyDamage.BlockNone" },
+  { value: 4, label: "SWFFG.ApplyDamage.BlockBasic", name: "SWFFG.ApplyDamage.BlockBasicName" },
+  { value: 5, label: "SWFFG.ApplyDamage.BlockImproved", name: "SWFFG.ApplyDamage.BlockImprovedName" },
+  { value: 7, label: "SWFFG.ApplyDamage.BlockSupreme", name: "SWFFG.ApplyDamage.BlockSupremeName" },
+];
+
+/** Strain the defender pays per use of Block / Deflect. 3 is the printed cost;
+ * unarmed Block is 2, and 1 is left available for further talent reductions. */
+const STRAIN_PER_USE_OPTIONS = [3, 2, 1];
 
 export class ApplyDamage {
   /** Message ids with an Apply Damage dialog currently open, so repeated
@@ -34,6 +53,57 @@ export class ApplyDamage {
       ev.preventDefault();
       ApplyDamage.show(message);
     });
+  }
+
+  /**
+   * Add the on-demand "Damage Breakdown" entry to the chat-message context menu.
+   * The applied-damage card carries the rendered breakdown in its flags; this
+   * whispers it to the GMs only when asked, so the arithmetic no longer clutters
+   * the log on every hit.
+   *
+   * Registered against both the V14 hook name and the V13 one; the guard keeps a
+   * generation that fires both from inserting the entry twice. Likewise each
+   * entry carries both the modern (`visible`/`onClick`) and legacy
+   * (`condition`/`callback`) keys, since V14 prefers the former and V13 only
+   * knows the latter.
+   */
+  static registerContextMenu() {
+    const addEntry = (options) => {
+      if (!Array.isArray(options)) return;
+      if (options.some((o) => o?.__ffgDamageBreakdown)) return;
+
+      // V14 hands the entry an HTMLElement, V13 a jQuery wrapper.
+      const messageIdOf = (li) => (li?.[0] ?? li)?.dataset?.messageId;
+      const breakdownOf = (li) => {
+        const message = game.messages.get(messageIdOf(li));
+        return message?.getFlag(game.system.id, "damageBreakdown") || null;
+      };
+
+      const visible = (li) => game.user.isGM && !!breakdownOf(li);
+      const run = (li) => {
+        const breakdown = breakdownOf(li);
+        if (!breakdown) return;
+        return ChatMessage.create({
+          speaker: breakdown.speaker,
+          whisper: game.users.filter((u) => u.isGM).map((u) => u.id),
+          content: breakdown.content,
+        });
+      };
+
+      options.push({
+        __ffgDamageBreakdown: true,
+        name: game.i18n.localize("SWFFG.ApplyDamage.ShowBreakdown"),
+        label: game.i18n.localize("SWFFG.ApplyDamage.ShowBreakdown"),
+        icon: '<i class="fas fa-calculator"></i>',
+        visible,
+        condition: visible,
+        onClick: (event, li) => run(li),
+        callback: (li) => run(li),
+      });
+    };
+
+    Hooks.on("getChatMessageContextOptions", (app, options) => addEntry(options));
+    Hooks.on("getChatLogEntryContext", (html, options) => addEntry(options));
   }
 
   /**
@@ -147,13 +217,16 @@ export class ApplyDamage {
     const scaleDownDivisor = isVehicleTarget && !vehicleScaleVsVehicle ? 10 : 1;
     const autoPierce = isVehicleTarget ? breachRanks : pierceRanks + 10 * breachRanks;
 
-    const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.Damage");
+    const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.DamagePerHit");
+    const hitsLabel = game.i18n.localize("SWFFG.ApplyDamage.Hits");
     // Against a vehicle the field spends Breach ranks against Armour, so label it accordingly
     // rather than calling it Pierce, which does not apply to Armour at all.
     const pierceLabel = isVehicleTarget
       ? game.i18n.localize("SWFFG.ApplyDamage.BreachRanks")
       : game.i18n.localize("SWFFG.Pierce");
-    const parryLabel = game.i18n.localize("SWFFG.ApplyDamage.ParryRanks");
+    const blockLabel = game.i18n.localize("SWFFG.ApplyDamage.BlockDeflect");
+    const blockUsesLabel = game.i18n.localize("SWFFG.ApplyDamage.BlockUses");
+    const strainPerUseLabel = game.i18n.localize("SWFFG.ApplyDamage.StrainPerUse");
     const reductionLabel = game.i18n.localize("SWFFG.ApplyDamage.Reduction");
     const applyLabel = game.i18n.localize("SWFFG.ApplyDamage.Apply");
     const cancelLabel = game.i18n.localize("SWFFG.ApplyDamage.Cancel");
@@ -164,15 +237,24 @@ export class ApplyDamage {
          </div>`
       : `<div class="form-group" style="margin-bottom:10px;"><strong>${woundLabel}</strong></div>`;
 
+    const blockOptions = BLOCK_TIERS.map((t) => `<option value="${t.value}">${game.i18n.localize(t.label)}</option>`).join("");
+    const strainOptions = STRAIN_PER_USE_OPTIONS.map((n) => `<option value="${n}">${n}</option>`).join("");
+
     const content = `
       ${radioHtml}
-      <div style="display:grid; grid-template-columns: 150px 1fr; gap:6px 10px; align-items:center;">
+      <div style="display:grid; grid-template-columns: 170px 1fr; gap:6px 10px; align-items:center;">
+        <label>${hitsLabel}:</label>
+        <input type="number" name="hits" value="1" min="1" style="width:100%;"/>
         <label>${damageLabel}:</label>
         <input type="number" name="damage" value="${autoDamage}" min="0" style="width:100%;"/>
         <label>${pierceLabel}:</label>
         <input type="number" name="pierce" value="${autoPierce}" min="0" style="width:100%;"/>
-        <label>${parryLabel}:</label>
-        <input type="number" name="parry" value="0" min="0" style="width:100%;"/>
+        <label>${blockLabel}:</label>
+        <select name="block" style="width:100%;">${blockOptions}</select>
+        <label>${blockUsesLabel}:</label>
+        <input type="number" name="blockUses" value="1" min="0" style="width:100%;"/>
+        <label>${strainPerUseLabel}:</label>
+        <select name="strainPerUse" style="width:100%;">${strainOptions}</select>
         <label>${reductionLabel}:</label>
         <input type="number" name="reduction" value="0" min="0" style="width:100%;"/>
       </div>
@@ -199,10 +281,19 @@ export class ApplyDamage {
             if (submitted) return;
             submitted = true;
             const root = dialog.element;
-            const damage = Math.max(0, parseInt(root.querySelector('input[name="damage"]')?.value, 10) || 0);
-            const pierce = Math.max(0, parseInt(root.querySelector('input[name="pierce"]')?.value, 10) || 0);
-            const parryRanks = Math.max(0, parseInt(root.querySelector('input[name="parry"]')?.value, 10) || 0);
-            const reduction = Math.max(0, parseInt(root.querySelector('input[name="reduction"]')?.value, 10) || 0);
+            const num = (name, min, fallback) => Math.max(min, parseInt(root.querySelector(`[name="${name}"]`)?.value, 10) || fallback);
+            const hits = num("hits", 1, 1);
+            const damage = num("damage", 0, 0);
+            const pierce = num("pierce", 0, 0);
+            const reduction = num("reduction", 0, 0);
+            const blockValue = num("block", 0, 0);
+            // Block / Deflect is declared per incoming hit, so it can never be
+            // spent more times than there are hits to spend it on.
+            const blockUses = blockValue > 0 ? Math.min(num("blockUses", 0, 0), hits) : 0;
+            const strainPerUse = num("strainPerUse", 1, 3);
+            const blockStrain = blockUses * strainPerUse;
+            const blockName = game.i18n.localize(BLOCK_TIERS.find((t) => t.value === blockValue)?.name ?? "SWFFG.ApplyDamage.BlockNone");
+
             const pool = showRadio ? root.querySelector('input[name="pool"]:checked')?.value : "wounds";
             const path = pool === "strain" ? strainPath : woundPath;
             const poolLabel = pool === "strain" ? strainLabel : woundLabel;
@@ -211,77 +302,128 @@ export class ApplyDamage {
               return;
             }
 
-            // Parry / Reflect reduces damage by 2 + ranks (only when ranks were
-            // spent), and Damage Reduction is a flat manual reduction — both come
-            // off the incoming damage BEFORE soak is applied.
             // Crossing scales upward: a ship-scale weapon striking a personal-scale target hits far
-            // harder than its printed damage. Scale first, so Parry/Reflect and Damage Reduction
+            // harder than its printed damage. Scale first, so Block / Deflect and Damage Reduction
             // then come off the real incoming figure rather than the unscaled one.
             const scaledDamage = damage * scaleDamageMultiplier;
-            const parryReduction = parryRanks > 0 ? 2 + parryRanks : 0;
-            const reducedDamage = Math.max(0, scaledDamage - parryReduction - reduction);
             // For a vehicle, `pierce` here holds Breach ranks and `soakValue` holds Armour points:
             // subtract Breach from Armour first, then convert to soak-equivalent via the scale
             // multiplier (x10 vs a personal weapon, x1 vs a ship weapon). For every other target
             // the multiplier is 1 and this is the original soak-minus-pierce calculation.
             const effectiveSoak = Math.max(0, soakValue - pierce) * armourMultiplier;
-            const unsoaked = Math.max(0, reducedDamage - effectiveSoak);
-            // Crossing scales downward: a personal-scale weapon must land 10 unsoaked damage on a
-            // vehicle to register a single point. Anything short of that bounces off entirely, so
-            // this floors rather than rounds.
-            const applied = scaleDownDivisor > 1 ? Math.floor(unsoaked / scaleDownDivisor) : unsoaked;
+
+            // Every hit is resolved on its own: soak and Damage Reduction apply to each one, and
+            // Block / Deflect only to the hits it was actually spent on. That is what makes
+            // Autofire / Linked correct -- five hits of 8 against soak 5 is 15, not 40 - 5.
+            const resolveHit = (mitigation) => {
+              const afterMitigation = Math.max(0, scaledDamage - mitigation - reduction);
+              const unsoaked = Math.max(0, afterMitigation - effectiveSoak);
+              // Crossing scales downward: a personal-scale weapon must land 10 unsoaked damage on
+              // a vehicle to register a single point. Anything short of that bounces off entirely,
+              // so this floors rather than rounds.
+              const applied = scaleDownDivisor > 1 ? Math.floor(unsoaked / scaleDownDivisor) : unsoaked;
+              return { unsoaked, applied };
+            };
+            const blockedHit = resolveHit(blockValue);
+            const plainHit = resolveHit(0);
+            const plainHits = hits - blockUses;
+            const applied = blockUses * blockedHit.applied + plainHits * plainHit.applied;
 
             const speaker = ChatMessage.getSpeaker({ token: target.document });
-            const gmIds = game.users.filter((u) => u.isGM).map((u) => u.id);
 
-            // Detailed breakdown for the GM only. It must be authored by a GM:
-            // a chat message's author always sees it regardless of whisper, so if
-            // the attacking (non-owning) player posted this, they would see the
-            // target's soak/pierce math. When the damage write is forwarded to the
-            // GM, the GM posts this whisper too; we only post it here when we
-            // applied the damage locally (i.e. we are the GM or the target's owner).
-            // When scales are crossed the headline figures do not add up on their own -- the
-            // breakdown would read as if the printed damage were what landed -- so state the
-            // conversion explicitly. `damage` below is the post-scale figure for the same reason.
-            let scaleNote = "";
-            if (scaleDamageMultiplier > 1) {
-              scaleNote = `<p>${game.i18n.format("SWFFG.ApplyDamage.ScaleUpNote", {
-                raw: damage,
-                scaled: scaledDamage,
-                multiplier: scaleDamageMultiplier,
-              })}</p>`;
-            } else if (scaleDownDivisor > 1) {
-              scaleNote = `<p>${game.i18n.format("SWFFG.ApplyDamage.ScaleDownNote", {
-                unsoaked,
-                divisor: scaleDownDivisor,
-                applied,
-                poolLabel,
-              })}</p>`;
-            }
+            // Strain paid for Block / Deflect lands on the defender's strain track regardless of
+            // which track the damage itself went to; when the damage is also strain the two are
+            // merged into one update by the bridge. Minions and rivals have no strain track, so
+            // the cost is reported in the breakdown but cannot be written anywhere.
+            const strainApplied = strainPath ? blockStrain : 0;
+            const deltas = [{ path, delta: applied }];
+            if (strainApplied) deltas.push({ path: strainPath, delta: strainApplied });
 
-            const gmChat = {
-              speaker,
-              whisper: gmIds,
-              content: `<p>${game.i18n.format("SWFFG.ApplyDamage.GMDetails", {
+            // Detailed breakdown, stored on the public card rather than whispered up front. The
+            // GM asks for it from the card's context menu (see registerContextMenu); most hits
+            // never need it, and the log stays readable.
+            const lines = [];
+            lines.push(
+              `<p>${game.i18n.format("SWFFG.ApplyDamage.GMDetails", {
                 actorName: a.name,
                 applied,
                 poolLabel,
-                damage: scaledDamage,
-                parryReduction,
-                reduction,
-                effectiveSoak,
-                soakWord,
+                weaponName,
+                hits,
+              })}</p>`
+            );
+            if (blockUses > 0) {
+              lines.push(
+                `<p>${game.i18n.format("SWFFG.ApplyDamage.BreakdownBlockedHit", {
+                  count: blockUses,
+                  blockName,
+                  damage: scaledDamage,
+                  block: blockValue,
+                  reduction,
+                  effectiveSoak,
+                  soakWord,
+                  perHit: blockedHit.applied,
+                })}</p>`
+              );
+            }
+            if (plainHits > 0) {
+              lines.push(
+                `<p>${game.i18n.format("SWFFG.ApplyDamage.BreakdownPlainHit", {
+                  count: plainHits,
+                  damage: scaledDamage,
+                  reduction,
+                  effectiveSoak,
+                  soakWord,
+                  perHit: plainHit.applied,
+                })}</p>`
+              );
+            }
+            lines.push(
+              `<p>${game.i18n.format("SWFFG.ApplyDamage.BreakdownSoak", {
                 pierce,
+                soakWord,
                 soak: soakValue,
-              })}</p>${scaleNote}`,
-            };
+                effectiveSoak,
+              })}</p>`
+            );
+            if (blockUses > 0) {
+              lines.push(
+                `<p>${game.i18n.format(strainApplied ? "SWFFG.ApplyDamage.BreakdownStrain" : "SWFFG.ApplyDamage.BreakdownStrainNoTrack", {
+                  actorName: a.name,
+                  blockName,
+                  uses: blockUses,
+                  perUse: strainPerUse,
+                  total: blockStrain,
+                })}</p>`
+              );
+            }
+            // When scales are crossed the headline figures do not add up on their own -- the
+            // breakdown would read as if the printed damage were what landed -- so state the
+            // conversion explicitly. The per-hit lines above already quote the post-scale figure.
+            if (scaleDamageMultiplier > 1) {
+              lines.push(
+                `<p>${game.i18n.format("SWFFG.ApplyDamage.ScaleUpNote", {
+                  raw: damage,
+                  scaled: scaledDamage,
+                  multiplier: scaleDamageMultiplier,
+                })}</p>`
+              );
+            } else if (scaleDownDivisor > 1) {
+              lines.push(
+                `<p>${game.i18n.format("SWFFG.ApplyDamage.ScaleDownNote", {
+                  unsoaked: plainHits > 0 ? plainHit.unsoaked : blockedHit.unsoaked,
+                  divisor: scaleDownDivisor,
+                  applied: plainHits > 0 ? plainHit.applied : blockedHit.applied,
+                  poolLabel,
+                })}</p>`
+              );
+            }
+            const breakdown = { speaker, content: lines.join("") };
 
-            let result;
             try {
               // Writes to the target actor; when the clicking player does not own
-              // the target, this forwards to the active GM along with gmChat
-              // (see gm-bridge.js).
-              result = await applyToTargetActor(a, { type: "damage", path, delta: applied, gmChat });
+              // the target, this forwards to the active GM (see gm-bridge.js).
+              const result = await applyToTargetActor(a, { type: "damage", path, delta: applied, deltas });
               if (!result) return;
             } catch (err) {
               CONFIG.logger?.warn?.("ApplyDamage: actor.update failed", err);
@@ -290,22 +432,28 @@ export class ApplyDamage {
             }
 
             // Public line for everyone. Reports the wounds actually applied
-            // (post soak/parry/reduction) so it matches the GM breakdown and
-            // the target's bar; the math itself stays GM-only.
+            // (post soak/block/reduction) so it matches the target's bar; the
+            // math itself rides along in a flag and is only revealed on request.
+            let publicContent = `<p>${game.i18n.format(hits > 1 ? "SWFFG.ApplyDamage.PublicMessageHits" : "SWFFG.ApplyDamage.PublicMessage", {
+              actorName: a.name,
+              damage: applied,
+              poolLabel,
+              weaponName,
+              hits,
+            })}</p>`;
+            if (strainApplied) {
+              publicContent += `<p>${game.i18n.format("SWFFG.ApplyDamage.PublicStrain", {
+                actorName: a.name,
+                strain: strainApplied,
+                blockName,
+                uses: blockUses,
+              })}</p>`;
+            }
             await ChatMessage.create({
               speaker,
-              content: `<p>${game.i18n.format("SWFFG.ApplyDamage.PublicMessage", {
-                actorName: a.name,
-                damage: applied,
-                poolLabel,
-                weaponName,
-              })}</p>`,
+              content: publicContent,
+              flags: { [game.system.id]: { damageBreakdown: breakdown } },
             });
-
-            // On the forwarded path the GM already posted the whisper.
-            if (result === "local") {
-              await ChatMessage.create(gmChat);
-            }
           },
         },
         {

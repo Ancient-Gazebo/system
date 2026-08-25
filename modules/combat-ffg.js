@@ -80,6 +80,57 @@ export class CombatFFG extends Combat {
   }
 
   /**
+   * Give an existing combatant an additional activation for the rest of this encounter.
+   *
+   * Slots in this tracker are anonymous per-disposition: a side gets exactly as many slots as it has
+   * combatants, and prepareDerivedData() hands each slot the next-highest initiative out of that
+   * side's pool. So an extra turn is just a second Combatant document bound to the same token - it
+   * contributes one more slot to the side, and because it carries the real actor/token/scene ids it
+   * rolls its own initiative off the actor's stats exactly like any other slot.
+   *
+   * Deliberately NOT recorded on the actor: extra turns are per-encounter, so they live and die with
+   * these Combatant documents. Core's TokenDocument.deleteCombatants() deletes every combatant
+   * matching the token, so toggling the token out of combat clears all of its turns at once.
+   *
+   * @param combatantId - STRING - the combatant to grant another turn to
+   * @returns {Promise<string|undefined>} - the id of the created slot, when one was created
+   */
+  async addExtraTurn(combatantId) {
+    const source = this.combatants.get(combatantId);
+    if (!source) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Initiative.NoCombatant"));
+      return;
+    }
+    // A generic slot (the "Add Slot" button) has no actor behind it, so there is nothing to roll
+    // initiative from and nothing to duplicate - the GM wants another generic slot in that case.
+    if (!source.actorId || !source.tokenId) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Combats.Slots.ExtraTurn.NoActor"));
+      return;
+    }
+
+    const data = {
+      // No `name`: Combatant#name falls back to the token's name, which is how the combatant this
+      // was cloned from behaves. Stamping a name here would freeze it if the token is renamed.
+      actorId: source.actorId,
+      tokenId: source.tokenId,
+      sceneId: source.sceneId,
+      // mirror the source's visibility so an extra turn for a hidden combatant is hidden too
+      hidden: source.hidden,
+      // null rather than 0: an unrolled slot renders the initiative roll button (see the hasRolled
+      // checks in prepareDerivedData), which is the point - every turn rolls its own initiative.
+      initiative: null,
+      flags: {starwarsffg: {extraTurn: true}},
+    };
+
+    this.debounceRender();
+    const createdTurnId = (await this.createEmbeddedDocuments("Combatant", [data]))[0].id;
+    this.setupTurns();
+    game.socket.emit("system.starwarsffg", {event: "trackerRender", combatId: this.id});
+    ui.notifications.info(game.i18n.format("SWFFG.Combats.Slots.ExtraTurn.Added", {name: source.name}));
+    return createdTurnId;
+  }
+
+  /**
    * Handler for clicking the "add extra slot" button. Creates a dialog to get the slot details,
    * then calls the function to create the slot
    * @returns {Promise<void>}
@@ -1397,8 +1448,14 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     // sharing one actorId; the plain actor lookup returns whichever is first, so the claim - and the
     // turn marker that follows it (Token#_refreshTurnMarker matches combatant.tokenId) - would land
     // on the wrong token, making the marker appear to jump to a different/next token on claim.
-    const combatant = this.viewed.combatants.find(i => i.tokenId === token.document.id)
-      ?? this.viewed.combatants.find(i => i.actorId === token.actor.id);
+    // A token granted extra turns has several combatants of its own (see CombatFFG#addExtraTurn), so
+    // pick the one that has not claimed a slot yet this round. That keeps the claims map
+    // one-claim-per-combatant, which findSlotClaims()/hasClaims() both assume - they search by value
+    // and return the first hit, so pointing two slots at a single combatant id would leave a claim
+    // dangling on removal and make the header portrait dim after only the first of the turns.
+    const forToken = this.viewed.combatants.filter(i => i.tokenId === token.document.id);
+    const candidates = forToken.length ? forToken : this.viewed.combatants.filter(i => i.actorId === token.actor.id);
+    const combatant = candidates.find(i => !this.viewed.findSlotClaims(this.viewed.round, i.id)) ?? candidates[0];
     if (!combatant) {
       ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.Combatant"));
       return;
@@ -1602,6 +1659,18 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       },
     });
 
+    // Grant a combatant a second (third, ...) activation this encounter - see CombatFFG#addExtraTurn.
+    // This is reachable from the portrait rows at the top of the tracker as well as from the slot
+    // rows: core binds this menu to ".combatant", a class those <img> elements also carry, and their
+    // data-combatant-id names the actor directly. That matters because a slot row only identifies an
+    // actor once it has been claimed, while turns are usually handed out before initiative is rolled.
+    const addExtraTurn = this.constructor._makeEntry({
+      label: 'SWFFG.Combats.Slots.ExtraTurn.Add',
+      icon: '<i class="fa-solid fa-clock-rotate-left"></i>',
+      callback: async (el) => { await this._addExtraTurn(el); },
+      condition: () => game.user.isGM,
+    });
+
     // Drop entries that do not apply to slot-based initiative:
     //   Reroll  - initiative is rolled for the whole order, not per combatant;
     //   Remove  - combatants leave the order via "Remove Initiative Slot".
@@ -1611,7 +1680,7 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       (i) => !isCoreEntry(i, "Reroll") && !isCoreEntry(i, "Remove")
     );
 
-    return [...trimmedEntries, removeSlot, unClaimSlot];
+    return [...trimmedEntries, removeSlot, unClaimSlot, addExtraTurn];
   }
 
   async _removeSlot(tracker, el) {
@@ -1637,12 +1706,22 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     }
 
     const fakeTurn = combatant?.flags?.fake || false;
+    const extraTurn = combatant?.flags?.starwarsffg?.extraTurn || false;
+
+    // An extra turn is one of several slots belonging to a token, so removing it takes an activation
+    // away rather than removing anyone from the encounter - say so, or the prompt is alarming.
+    let removalPrompt;
+    if (extraTurn) {
+      removalPrompt = `Remove this extra turn? ${combatant.name} will go back to acting once per round.`;
+    } else if (fakeTurn) {
+      removalPrompt = "Remove this extra initiative slot?";
+    } else {
+      removalPrompt = "Remove this initiative slot? Its combatant will be removed from the initiative order.";
+    }
 
     const confirmed = await DialogV2.confirm({
       window: { title: "Remove Initiative Slot" },
-      content: fakeTurn
-        ? `<p>Remove this extra initiative slot?</p>`
-        : `<p>Remove this initiative slot? Its combatant will be removed from the initiative order.</p>`,
+      content: `<p>${removalPrompt}</p>`,
       no: { default: true },
       rejectClose: false,
     });
@@ -1680,6 +1759,28 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     combat.setupTurns();
     combat.debounceRender();
     game.socket.emit("system.starwarsffg", { event: "trackerRender", combatId: combat.id });
+  }
+
+  /**
+   * Context-menu handler for "Add Extra Turn". The clicked element's data-combatant-id is the
+   * claimant on a claimed slot row, the slot's own combatant on an unclaimed row, and the combatant
+   * itself on a portrait in the header rows - in every case the actor shown on what was clicked.
+   * @param el - the element the context menu was opened on
+   * @returns {Promise<void>}
+   */
+  async _addExtraTurn(el) {
+    const combat = this.viewed;
+    if (!combat) {
+      ui.notifications.error("Error detecting combat, try starting/ending combat?");
+      return;
+    }
+    const combatantId = el?.getAttribute?.("data-combatant-id");
+    const combatant = combatantId ? combat.combatants.get(combatantId) : undefined;
+    if (!combatant) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Initiative.NoCombatant"));
+      return;
+    }
+    await combat.addExtraTurn(combatant.id);
   }
 
   /** @override */
@@ -1778,6 +1879,17 @@ export default class CombatantFFG extends Combatant {
   async removeCombatEffects() {
     if (!this.actor) {
       // no actor exists for this slot
+      return;
+    }
+    // A token granted extra turns is represented by several Combatant documents (CombatFFG#addExtraTurn).
+    // Removing one of them must not strip the actor's combat-duration effects while it is still in
+    // the encounter through its remaining turns. Matched on tokenId only: unlinked tokens of the same
+    // base actor share an actorId, so an actor-wide match would wrongly spare a minion group.
+    const siblings = this.tokenId
+      ? (this.combat?.combatants.filter(c => c.id !== this.id && c.tokenId === this.tokenId) ?? [])
+      : [];
+    if (siblings.length) {
+      CONFIG.logger.debug(`${this.actor.name} still has ${siblings.length} turn(s) in this combat; keeping its combat-length effects`);
       return;
     }
     CONFIG.logger.debug(`Removing combat-length status effects from ${this.actor.name} on combatant removal`);

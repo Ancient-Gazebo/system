@@ -21,6 +21,12 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
     // to the Adversary pool so the upgrade is applied by default. Only takes
     // effect while adversaryRanks > 0.
     this._adversaryMode = true;
+    // How many of the Adversary's difficulty upgrades the user has manually
+    // peeled back with the Downgrade Difficulty button. The Adversary upgrade is
+    // computed on a clone rather than stored in the base pool, so a downgrade has
+    // no challenge die in `this.dicePool` to convert -- it has to reduce the
+    // number of upgrades applied on top of it instead. See _applyDifficultyUpgrade.
+    this._adversaryDowngrades = 0;
   }
 
   /**
@@ -243,7 +249,8 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       let adversaryPool = null;
       if (this.adversaryRanks > 0) {
         const adversaryClone = this._clonePool();
-        if (this.dicePool.difficulty > 0) adversaryClone.upgradeDifficulty(this.adversaryRanks);
+        const appliedRanks = this._appliedAdversaryRanks();
+        if (this.dicePool.difficulty > 0) adversaryClone.upgradeDifficulty(appliedRanks);
         adversaryPool = RollBuilderFFG._poolSummary(adversaryClone);
       }
       RollBuilderFFG._logRoll({
@@ -252,6 +259,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         skill: this.roll.skillName ?? null,
         selected: this.adversaryRanks > 0 && this._adversaryMode ? "adversary" : "base",
         adversaryRanks: this.adversaryRanks,
+        adversaryDowngrades: this._adversaryDowngrades,
         basePool: RollBuilderFFG._poolSummary(this.dicePool),
         adversaryPool,
       });
@@ -426,12 +434,14 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
   }
 
   _refreshAdversary(html) {
+    const previousRanks = this.adversaryRanks;
     this.adversaryRanks = RollBuilderFFG._computeAdversaryRanks();
+    // A different target is a different Adversary upgrade; drop manual downgrades
+    // aimed at the old one rather than silently applying them to the new ranks.
+    if (this.adversaryRanks !== previousRanks) this._adversaryDowngrades = 0;
     // Show the Base/Adversary toggle only while an Adversary is targeted (ranks > 0).
     const toggle = html.find(".adversary-pool-toggle")[0];
     if (toggle) toggle.style.display = this.adversaryRanks > 0 ? "" : "none";
-    const label = html.find(".adversary-pool-label")[0];
-    if (label) label.textContent = game.i18n.format("SWFFG.Adversary.AdversaryPool", { ranks: this.adversaryRanks });
     this._syncAdversaryButtons(html);
     this._updatePreview(html);
   }
@@ -440,6 +450,10 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
   _syncAdversaryButtons(html) {
     const adversaryAvailable = this.adversaryRanks > 0;
     const mode = adversaryAvailable && this._adversaryMode ? "adversary" : "base";
+    // Count the upgrades actually applied, so manually downgrading one is reflected
+    // in the label as well as in the dice preview.
+    const label = html.find(".adversary-pool-label")[0];
+    if (label) label.textContent = game.i18n.format("SWFFG.Adversary.AdversaryPool", { ranks: this._appliedAdversaryRanks() });
     html.find(".adversary-mode-btn").each((i, btn) => {
       btn.classList.toggle("active", btn.dataset.mode === mode);
     });
@@ -484,11 +498,43 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
    * the two modes can be toggled back and forth freely.
    */
   _effectivePool() {
-    const adversaryActive = this._adversaryMode && this.adversaryRanks > 0 && this.dicePool.difficulty > 0;
+    const ranks = this._appliedAdversaryRanks();
+    const adversaryActive = this._adversaryMode && ranks > 0 && this.dicePool.difficulty > 0;
     if (!adversaryActive) return this.dicePool;
     const clone = this._clonePool();
-    clone.upgradeDifficulty(this.adversaryRanks);
+    clone.upgradeDifficulty(ranks);
     return clone;
+  }
+
+  /**
+   * Adversary ranks still applied to the pool: the targeted Adversary's ranks minus
+   * any the user manually downgraded away.
+   */
+  _appliedAdversaryRanks() {
+    return Math.max(0, this.adversaryRanks - this._adversaryDowngrades);
+  }
+
+  /**
+   * Manual difficulty upgrade/downgrade, treating the pool as a stack: the base pool
+   * with the Adversary's upgrades layered on top. Downgrades peel the topmost layer
+   * first (an applied Adversary rank, then the base pool's own challenge dice) and
+   * upgrades push back onto it, so the two buttons stay exact inverses. Without this,
+   * a downgrade ran against the base pool -- which holds no challenge die while the
+   * Adversary upgrade lives on the display clone -- and silently did nothing.
+   * @param {number} direction 1 to upgrade, -1 to downgrade
+   */
+  _applyDifficultyUpgrade(direction) {
+    if (this._adversaryMode && this.adversaryRanks > 0 && this.dicePool.difficulty > 0) {
+      if (direction < 0 && this._appliedAdversaryRanks() > 0) {
+        this._adversaryDowngrades++;
+        return;
+      }
+      if (direction > 0 && this._adversaryDowngrades > 0) {
+        this._adversaryDowngrades--;
+        return;
+      }
+    }
+    this.dicePool.upgradeDifficulty(direction);
   }
 
   _initializeInputs(html) {
@@ -523,14 +569,15 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
           break;
         }
         case "upgrade-difficulty": {
-          this.dicePool.upgradeDifficulty(1);
+          this._applyDifficultyUpgrade(1);
           break;
         }
         case "downgrade-difficulty": {
-          this.dicePool.upgradeDifficulty(-1);
+          this._applyDifficultyUpgrade(-1);
           break;
         }
       }
+      this._syncAdversaryButtons(html);
       this._initializeInputs(html);
     });
 

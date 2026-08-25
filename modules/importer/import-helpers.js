@@ -3002,7 +3002,8 @@ export default class ImportHelpers {
           for (const attribute of Object.keys(item.system.attributes)) {
             const explodedMods = ModifierHelpers.explodeMod(
               item.system.attributes[attribute].modtype,
-              attribute
+              attribute,
+              item.type
             );
             for (const cur_mod of explodedMods) {
               const path = ModifierHelpers.getModKeyPath(
@@ -3104,7 +3105,8 @@ export default class ImportHelpers {
 
         const explodedMods = ModifierHelpers.explodeMod(
           formData.system.attributes[k].modtype,
-          formData.system.attributes[k].mod
+          formData.system.attributes[k].mod,
+          item.type
         );
 
         for (const curMod of explodedMods) {
@@ -3184,7 +3186,8 @@ export default class ImportHelpers {
         const match = existing.find(i => i.name === k);
         const explodedMods = ModifierHelpers.explodeMod(
           formData.system.attributes[k].modtype,
-          formData.system.attributes[k].mod
+          formData.system.attributes[k].mod,
+          item.type
         );
 
         const changes = [];
@@ -3285,7 +3288,8 @@ export default class ImportHelpers {
           const attribute = talent.attributes[attributeName];
           const explodedMods = ModifierHelpers.explodeMod(
             attribute.modtype,
-            attribute.mod
+            attribute.mod,
+            "talent"
           );
 
           const changes = [];

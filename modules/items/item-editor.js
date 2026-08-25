@@ -632,7 +632,8 @@ export class itemEditor extends FFGFormApplication {
               const match = existingActiveEffects.find(i => i.name === modKey);
               const explodedMods = ModifierHelpers.explodeMod(
                 formData.system.attributes[modKey].modtype,
-                formData.system.attributes[modKey].mod
+                formData.system.attributes[modKey].mod,
+                this.data.sourceObject?.type
               );
 
               const changes = [];
@@ -686,7 +687,8 @@ export class itemEditor extends FFGFormApplication {
                 const match = existingActiveEffects.find(i => i.name === modKey);
                 const explodedMods = ModifierHelpers.explodeMod(
                   modifier.system.attributes[modKey].modtype,
-                  modifier.system.attributes[modKey].mod
+                  modifier.system.attributes[modKey].mod,
+                  this.data.sourceObject?.type
                 );
 
                 const changes = [];
@@ -791,7 +793,8 @@ export class itemEditor extends FFGFormApplication {
         const match = existingActiveEffects.find(i => i.name === modKey);
         const explodedMods = ModifierHelpers.explodeMod(
           formData.system.attributes[modKey].modtype,
-          formData.system.attributes[modKey].mod
+          formData.system.attributes[modKey].mod,
+          this.data.sourceObject?.type
         );
 
         const changes = [];
@@ -979,7 +982,8 @@ export class talentEditor extends itemEditor {
         const match = existingActiveEffects.find(i => i.name === modKey);
         const explodedMods = ModifierHelpers.explodeMod(
           formData.attributes[modKey].modtype,
-          formData.attributes[modKey].mod
+          formData.attributes[modKey].mod,
+          this.data.sourceObject?.type
         );
 
         const changes = [];
@@ -1185,7 +1189,8 @@ export class forcePowerEditor extends itemEditor {
         const match = existingActiveEffects.find(i => i.name === modKey);
         const explodedMods = ModifierHelpers.explodeMod(
           formData.attributes[modKey].modtype,
-          formData.attributes[modKey].mod
+          formData.attributes[modKey].mod,
+          this.data.sourceObject?.type
         );
 
         const changes = [];

@@ -106,14 +106,14 @@ export default class DiceHelpers {
       success: skill.success ?? 0,
       triumph: skill.triumph ?? 0,
       despair: skill.despair ?? 0,
-      upgrades: skill.upgrades ?? 0,
+      upgrades: (skill.upgrades ?? 0) - (skill.downgradeAbility ?? 0),
       remsetback: skill.remsetback ?? 0,
       difficulty: Math.max(0, 2 + status.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)), // default average + status-effect difficulty dice, minus "Skill Decrease Difficulty"
     });
 
     dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
     // status-effect difficulty upgrades (mirrors skill.upgrades for ability)
-    dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
+    dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
 
     if (type === "ability") {
       dicePool.upgrade();
@@ -183,7 +183,7 @@ export default class DiceHelpers {
         success: skill.success,
         triumph: skill?.triumph ? skill.triumph : 0,
         despair: skill?.despair ? skill.despair : 0,
-        upgrades: skill?.upgrades ? skill.upgrades : 0,
+        upgrades: (skill?.upgrades ?? 0) - (skill?.downgradeAbility ?? 0),
         remsetback: skill?.remsetback ? skill.remsetback : 0,
         source: {
           skill: skill?.ranksource?.length ? skill.ranksource : [],
@@ -237,13 +237,13 @@ export default class DiceHelpers {
       success: skill.success,
       triumph: skill?.triumph ? skill.triumph : 0,
       despair: skill?.despair ? skill.despair : 0,
-      upgrades: skill?.upgrades ? skill.upgrades : 0,
+      upgrades: (skill?.upgrades ?? 0) - (skill?.downgradeAbility ?? 0),
       remsetback: skill?.remsetback ? skill.remsetback : 0,
       difficulty: Math.max(0, 2 + status.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)), // default average + status-effect difficulty dice, minus "Skill Decrease Difficulty"
     });
 
     dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
-    dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
+    dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
 
     dicePool = new DicePoolFFG(await this.getModifiers(dicePool, item));
 
@@ -267,11 +267,11 @@ export default class DiceHelpers {
       triumph: skill?.triumph ? skill.triumph : 0,
       despair: skill?.despair ? skill.despair : 0,
       remsetback: skill?.remsetback ? skill.remsetback : 0,
-      upgrades: skill?.upgrades ? skill.upgrades : 0,
+      upgrades: (skill?.upgrades ?? 0) - (skill?.downgradeAbility ?? 0),
     });
 
     dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
-    dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
+    dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
 
     this.displayRollDialog(sheet, dicePool, `${game.i18n.localize("SWFFG.Rolling")} ${skill.label}`, skill.label, { name: game.i18n.localize(skill.label), type: "skill" }, flavorText, sound);
   }
@@ -431,12 +431,12 @@ export function get_dice_pool(actor_id, skill_name, incoming_roll) {
     success: (skill.success ?? 0) + incoming_roll.success,
     triumph: (skill.triumph ?? 0) + incoming_roll.triumph,
     despair: (skill.despair ?? 0) + incoming_roll.despair,
-    upgrades: (skill.upgrades ?? 0) + incoming_roll.upgrades,
+    upgrades: (skill.upgrades ?? 0) - (skill.downgradeAbility ?? 0) + incoming_roll.upgrades,
     remsetback: skill?.remsetback ? skill.remsetback : 0 + incoming_roll.remsetback,
     difficulty: Math.max(0, +incoming_roll.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)),
     challenge: +incoming_roll.challenge,
   });
-  dicePool.upgradeDifficulty(skill.upgradeDifficulty ?? 0);
+  dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
   return dicePool;
 }
 

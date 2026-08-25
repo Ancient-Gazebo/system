@@ -180,12 +180,12 @@ export class FFGActorSheet extends FFGDocumentSheet {
       case "Folder":
         return this._onDropFolder(event, data);
       case "Transfer":
-        // The FFG cross-actor transfer payload (player-to-player item trading).
-        // Normally the trading feature's own DragDrop on .sheet-body fires first
-        // and stopPropagation() keeps the drop from reaching this root handler;
-        // this route is the fallback for layouts where the inner target misses
-        // the event. Guarded so sheet subclasses without the trading handler
-        // (e.g. non-inventory sheets) fall through harmlessly.
+        // The FFG cross-actor drag payload (copying gear between sheets).
+        // The sheet's own DragDrop on .sheet-body normally handles this first and
+        // marks the event as claimed, so the call below returns immediately; this
+        // route is the fallback for drops that land outside .sheet-body. Guarded so
+        // sheet subclasses without the drop handler (e.g. non-inventory sheets)
+        // fall through harmlessly.
         return this._onTransferItemDrop?.(event);
       default:
         return undefined;

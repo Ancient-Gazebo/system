@@ -3498,7 +3498,12 @@ export class ActorSheetFFG extends FFGActorSheet {
   }
 
   /**
-   * Drop Event function for transferring items between actors
+   * Drop Event function for copying items between actors.
+   *
+   * Dragging a row onto another sheet COPIES the item: the original stays on the source
+   * actor. Moving an item from one character to another is the job of the give/trade flow
+   * (`StackHelpers.promptTrade`), which asks the recipient to accept and only then removes
+   * the source item.
    *
    * @param  {Object} event
    */
@@ -3512,24 +3517,24 @@ export class ActorSheetFFG extends FFGActorSheet {
       return false;
     }
 
+    // Two DragDrop controllers can see the same drop: the trading one bound to
+    // `.sheet-body` in activateListeners, and the sheet-root one whose `_onDrop` routes
+    // "Transfer" payloads back here. Core's DragDrop#_handleDrop only calls
+    // preventDefault(), so the drop still bubbles from `.sheet-body` to the root form and
+    // this ran TWICE for any drop inside the body -- creating the item twice on the target.
+    // Claim the event for whichever handler sees it first.
+    if (event._ffgTransferHandled) return;
+    event._ffgTransferHandled = true;
+    event.stopPropagation();
+
     if (data.data) {
       let sameActor = data.actorId === this.actor.id;
       if (!sameActor) {
         try {
-          this.actor.createEmbeddedDocuments("Item", [foundry.utils.duplicate(data.data)]); // Create a new Item
-          let token;
-          if (game.scenes.current) {
-            token = game.scenes.current.tokens.get(data?.tokenId);
-            if (token) {
-              // Delete originating item from other _token_
-              token.actor.items.get(data.data._id)?.delete();
-              return;
-            }
-          }
-          const actor = game.actors.get(data.actorId);
-          await actor.items.get(data.data._id)?.delete(); // Delete originating item from other actor
+          // Copy only -- the source actor keeps its item. See the note above about trading.
+          await this.actor.createEmbeddedDocuments("Item", [foundry.utils.duplicate(data.data)]);
         } catch (err) {
-          CONFIG.logger.error(`Error transferring item between actors.`, err);
+          CONFIG.logger.error(`Error copying item between actors.`, err);
         }
       } else {
         // Dropped back onto the same actor: reorder the inventory item rather than no-op.
@@ -3537,7 +3542,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
     }
 
-    await this._suspendActiveEffects(await fromUuid(data.uuid));
+    if (data.uuid) await this._suspendActiveEffects(await fromUuid(data.uuid));
   }
 
   /**

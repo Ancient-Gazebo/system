@@ -301,7 +301,8 @@ async function migrateTo1907() {
 
                   const explodedMods = ModifierHelpers.explodeMod(
                     item.system.talents[`talent${i}`].attributes[nk].modtype,
-                    item.system.talents[`talent${i}`].attributes[nk].mod
+                    item.system.talents[`talent${i}`].attributes[nk].mod,
+                    "talent"
                   );
                   const changes = [];
                   for (const curMod of explodedMods) {
@@ -342,7 +343,8 @@ async function migrateTo1907() {
 
                   const explodedMods = ModifierHelpers.explodeMod(
                     item.system.upgrades[`upgrade${i}`].attributes[nk].modtype,
-                    item.system.upgrades[`upgrade${i}`].attributes[nk].mod
+                    item.system.upgrades[`upgrade${i}`].attributes[nk].mod,
+                    "upgrade"
                   );
                   const changes = [];
                   for (const curMod of explodedMods) {
@@ -385,7 +387,8 @@ async function migrateTo1907() {
 
                   const explodedMods = ModifierHelpers.explodeMod(
                     item.system.upgrades[`upgrade${i}`].attributes[nk].modtype,
-                    item.system.upgrades[`upgrade${i}`].attributes[nk].mod
+                    item.system.upgrades[`upgrade${i}`].attributes[nk].mod,
+                    "upgrade"
                   );
                   const changes = [];
                   for (const curMod of explodedMods) {
@@ -494,7 +497,7 @@ export async function migrateSpeciesInherentEffects() {
       if (attribute.startsWith("attr")) continue; // user modifiers live in their own AEs
       const attr = attributes[attribute];
       if (!attr || typeof attr !== "object") continue;
-      const explodedMods = ModifierHelpers.explodeMod(attr.modtype, attribute);
+      const explodedMods = ModifierHelpers.explodeMod(attr.modtype, attribute, item.type);
       for (const curMod of explodedMods) {
         const key = ModifierHelpers.getModKeyPath(curMod.modType, curMod.mod);
         if (!key) continue;

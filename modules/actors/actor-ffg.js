@@ -214,6 +214,53 @@ export class ActorFFG extends Actor {
   }
 
   /**
+   * The additive per-skill dice fields. None of these is stored on a skill - they exist only as
+   * Active Effect targets (the dice status effects in swffg-main.js, and the "Skill Add ..." /
+   * "Skill Boost" / "Force Boost" modifier types mapped by ModifierHelpers.getModKeyPath).
+   * `careerskill` is deliberately absent: it is a boolean, not a die count.
+   */
+  static SKILL_DICE_FIELDS = [
+    "boost", "setback", "remsetback", "force",
+    "upgrades", "upgradeDifficulty", "difficulty", "decreaseDifficulty",
+    "downgradeAbility", "downgradeDifficulty",
+    "success", "failure", "advantage", "threat", "triumph", "despair",
+    "light", "dark", "damage",
+  ];
+
+  /**
+   * Seed the additive per-skill dice fields with a numeric 0 before Active Effects are applied.
+   *
+   * prepareBaseData() runs ahead of prepareEmbeddedDocuments()/applyActiveEffects(), and because
+   * none of these fields is ever stored on a skill, the first effect to touch one used to land on
+   * core's `current === null` branch in ActiveEffect._applyChangeAdd, which assigns the change's
+   * raw value rather than adding it. The dice statuses carry string values ("1"), so the field
+   * became the STRING "1" - and a second effect on the same skill and field then hit the default
+   * branch and did "1" + "1" = "11". A "Boost This Combat" status plus a talent's Skill Boost
+   * modifier produced eleven boost dice instead of two, and the same held for setback, success,
+   * advantage, failure, threat and the rest.
+   *
+   * Starting from a number makes core cast every subsequent delta to a number too, so multiple
+   * sources add. Existing non-numeric values are normalised for the same reason.
+   *
+   * This is in-memory only: ObjectField#initialize deep-clones, so `system.skills` is detached
+   * from `_source` and nothing here is ever persisted onto the actor.
+   *
+   * @override
+   */
+  prepareBaseData() {
+    super.prepareBaseData();
+    const skills = this.system?.skills;
+    if (!skills || typeof skills !== "object") return;
+    for (const skill of Object.values(skills)) {
+      if (!skill || typeof skill !== "object") continue;
+      for (const field of ActorFFG.SKILL_DICE_FIELDS) {
+        const value = Number(skill[field]);
+        skill[field] = Number.isFinite(value) ? value : 0;
+      }
+    }
+  }
+
+  /**
    * Augment the basic actor data with additional dynamic data.
    */
   prepareDerivedData() {

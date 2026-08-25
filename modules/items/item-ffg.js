@@ -146,7 +146,8 @@ export class ItemFFG extends ItemBaseFFG {
             }
             const explodedMods = ModifierHelpers.explodeMod(
               this.system.attributes[attribute].modtype,
-              attribute
+              attribute,
+              this.type
             );
             for (const cur_mod of explodedMods) {
               const path = ModifierHelpers.getModKeyPath(
@@ -295,7 +296,7 @@ export class ItemFFG extends ItemBaseFFG {
         // Defensive: only explode mods if modtype and mod are defined
         let explodedMods = [];
         if (attr && typeof attr.modtype !== 'undefined' && typeof attr.mod !== 'undefined') {
-          explodedMods = ModifierHelpers.explodeMod(attr.modtype, attr.mod);
+          explodedMods = ModifierHelpers.explodeMod(attr.modtype, attr.mod, this.type);
         }
 
         const changes = [];

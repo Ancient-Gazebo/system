@@ -64,6 +64,7 @@ import { migrateLegacyScope, promptLegacyScopeMigration } from "./helpers/legacy
 import { setupCriticalTables } from "./helpers/crit-tables.js";
 import { registerGlitchSmithIntegration } from "./integrations/glitchsmith.js";
 import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-details.js";
+import { registerAutoAnimationsShim } from "./integrations/autoanimations.js";
 import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
 import TalentTree from "./helpers/talent-tree.js";
@@ -102,6 +103,10 @@ Hooks.once("init", async function () {
   // Register the Monk's Combat Details V13 popout repositioning shim (runs at ready; no-op if
   // the module is absent or already fixed upstream).
   registerMonksCombatDetailsShim();
+
+  // Stop Automated Animations from throwing on every roll made without a source item
+  // (skill checks, initiative, Destiny). No-op when AA is not installed.
+  registerAutoAnimationsShim();
 
   // Place our classes in their own namespace for later reference.
   game.ffg = {
@@ -730,6 +735,8 @@ Hooks.once("init", async function () {
       upgradeDifficulty: [],
       success: [],
       advantage: [],
+      failure: [],
+      threat: [],
       difficulty: [],
       light: [],
       dark: [],
@@ -762,6 +769,16 @@ Hooks.once("init", async function () {
       });
       allSkillChanges['advantage'].push({
         key: `system.skills.${skill}.advantage`,
+        mode: AE_MODES.ADD,
+        value: "1",
+      });
+      allSkillChanges['failure'].push({
+        key: `system.skills.${skill}.failure`,
+        mode: AE_MODES.ADD,
+        value: "1",
+      });
+      allSkillChanges['threat'].push({
+        key: `system.skills.${skill}.threat`,
         mode: AE_MODES.ADD,
         value: "1",
       });
@@ -978,10 +995,36 @@ Hooks.once("init", async function () {
       }
     });
     CONFIG.statusEffects.push({
+      id: "starwarsffg-failure-combat",
+      img: `systems/starwarsffg/images/status/failure.png`,
+      name: "SWFFG.Status.Failure.Combat",
+      changes: allSkillChanges['failure'],
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
+      }
+    });
+    CONFIG.statusEffects.push({
       id: "starwarsffg-advantage-combat",
       img: `systems/starwarsffg/images/status/advantage.png`,
       name: "SWFFG.Status.Advantage.Combat",
       changes: allSkillChanges['advantage'],
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "combat",
+        },
+      }
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-threat-combat",
+      img: `systems/starwarsffg/images/status/threat.png`,
+      name: "SWFFG.Status.Threat.Combat",
+      changes: allSkillChanges['threat'],
       // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
       // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
       flags: {

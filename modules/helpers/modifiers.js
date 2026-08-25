@@ -403,6 +403,14 @@ export default class ModifierHelpers {
       return "Force Boost";
     } else if (skillPath.endsWith("decreaseDifficulty")) {
       return "Skill Decrease Difficulty";
+    } else if (skillPath.endsWith("downgradeDifficulty")) {
+      return "Skill Downgrade Difficulty";
+    } else if (skillPath.endsWith("upgradeDifficulty")) {
+      return "Skill Upgrade Difficulty";
+    } else if (skillPath.endsWith("downgradeAbility")) {
+      return "Skill Downgrade Ability";
+    } else if (skillPath.endsWith("difficulty")) {
+      return "Skill Add Difficulty";
     } else if (skillPath.endsWith("advantage")) {
       return "Skill Add Advantage";
     } else if (skillPath.endsWith("dark")) {
@@ -438,13 +446,76 @@ export default class ModifierHelpers {
 
 
   /**
+   * The three item-scoped modifier categories - "Result Modifiers", "Roll Modifiers" and
+   * "Dice Modifiers" - mapped onto the equivalent skill-scoped modifier type, which is the only
+   * shape getModKeyPath knows how to turn into an Active Effect key. See explodeMod().
+   *
+   * "Downgrade Ability" / "Downgrade Difficulty" subtract rather than add, so they map to their
+   * own `downgrade*` skill fields, which the dice pool subtracts at read time - the same pattern
+   * "Skill Decrease Difficulty" already uses. (An Active Effect change carries a single value
+   * that every expanded key shares, so a sign flip cannot be expressed any other way.)
+   */
+  static POOL_MODIFIER_SKILL_EQUIVALENT = {
+    "Result Modifiers": {
+      "Add Advantage": "Skill Add Advantage",
+      "Add Dark": "Skill Add Dark",
+      "Add Despair": "Skill Add Despair",
+      "Add Failure": "Skill Add Failure",
+      "Add Light": "Skill Add Light",
+      "Add Success": "Skill Add Success",
+      "Add Threat": "Skill Add Threat",
+      "Add Triumph": "Skill Add Triumph",
+    },
+    "Roll Modifiers": {
+      "Add Boost": "Skill Boost",
+      "Add Setback": "Skill Setback",
+      "Remove Setback": "Skill Remove Setback",
+    },
+    "Dice Modifiers": {
+      "Add Difficulty": "Skill Add Difficulty",
+      "Upgrade Ability": "Skill Add Upgrade",
+      "Upgrade Difficulty": "Skill Upgrade Difficulty",
+      "Downgrade Ability": "Skill Downgrade Ability",
+      "Downgrade Difficulty": "Skill Downgrade Difficulty",
+    },
+  };
+
+  /**
+   * Item types whose "Result Modifiers" are already read straight off the item at roll time by
+   * DiceHelpers.getModifiers - the weapon being rolled, plus the modifications and attachments
+   * installed on it. Those must NOT also be expanded into skill modifiers by explodeMod(): the
+   * bonus would be counted twice on the weapon's own check, and would leak onto every unrelated
+   * skill check (a Superior blaster is not meant to add an advantage to your Charm rolls).
+   */
+  static ITEM_SCOPED_MODIFIER_CARRIERS = ["weapon", "shipweapon", "itemmodifier", "itemattachment", "shipattachment"];
+
+  /**
    * Given a mod and mod type, expand them into a list of mods which should be applied
    * For example, modifying Brawn also modifies Encumbrance
    * @param modType
    * @param mod
+   * @param {string} [carrierType] the `type` of the item carrying the modifier, when known. Only
+   *   consulted for "Result Modifiers" (see ITEM_SCOPED_MODIFIER_CARRIERS).
    * @returns {[{modType, mod}]|[{modType, mod: string},{modType, mod: string}]}
    */
-  static explodeMod(modType, mod) {
+  static explodeMod(modType, mod, carrierType) {
+    // "Result Modifiers" (Add Success / Add Light / ...), "Roll Modifiers" (Add Boost / Add
+    // Setback / Remove Setback) and "Dice Modifiers" (Add Difficulty / Upgrade Ability / ...) are
+    // item-scoped by design: DiceHelpers.getModifiers reads them off the weapon being rolled.
+    // Carried by anything else - a talent, gear, armour, a species - they can only reach the dice
+    // pool through Active Effects, and getModKeyPath has no path for a modtype that is not tied
+    // to a skill, so the effect was created with an undefined key and silently did nothing.
+    //
+    // Expand those into the equivalent per-skill modifier for EVERY skill, which is exactly how
+    // the "... This Combat" status effects add a static symbol to every check. The result flows
+    // through the existing pipeline for free: equip state (the effect is disabled while
+    // unequipped), ranked-talent scaling, and the dice pool's own `skill.<symbol>` reads.
+    const skillEquivalent = ModifierHelpers.POOL_MODIFIER_SKILL_EQUIVALENT[modType]?.[mod];
+    if (skillEquivalent && !ModifierHelpers.ITEM_SCOPED_MODIFIER_CARRIERS.includes(carrierType)) {
+      const skills = Object.keys(CONFIG.FFG?.skills ?? {});
+      if (skills.length) return skills.map((skill) => ({ modType: skillEquivalent, mod: skill }));
+    }
+
     const modLower = mod.toLocaleLowerCase();
     if (["defence-melee", "defense-melee"].includes(modLower)) {
       return [
@@ -581,6 +652,14 @@ export default class ModifierHelpers {
       return `system.skills.${mod}.triumph`;
     } else if (modType === "Skill Add Upgrade") {
       return `system.skills.${mod}.upgrades`;
+    } else if (modType === "Skill Add Difficulty") {
+      return `system.skills.${mod}.difficulty`;
+    } else if (modType === "Skill Upgrade Difficulty") {
+      return `system.skills.${mod}.upgradeDifficulty`;
+    } else if (modType === "Skill Downgrade Ability") {
+      return `system.skills.${mod}.downgradeAbility`;
+    } else if (modType === "Skill Downgrade Difficulty") {
+      return `system.skills.${mod}.downgradeDifficulty`;
     } else if (modType === "Skill Boost") {
       return `system.skills.${mod}.boost`;
     } else if (modType === "Skill Damage") {
@@ -659,7 +738,8 @@ export default class ModifierHelpers {
 
         const explodedMods = ModifierHelpers.explodeMod(
           formData.data.attributes[k].modtype,
-          formData.data.attributes[k].mod
+          formData.data.attributes[k].mod,
+          item.type
         );
 
         for (const curMod of explodedMods) {
@@ -781,7 +861,8 @@ export default class ModifierHelpers {
         const match = existing.find(i => i.name === k);
         const explodedMods = ModifierHelpers.explodeMod(
           formData.data.attributes[k].modtype,
-          formData.data.attributes[k].mod
+          formData.data.attributes[k].mod,
+          item.type
         );
 
         const changes = [];

@@ -250,7 +250,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       if (this.adversaryRanks > 0) {
         const adversaryClone = this._clonePool();
         const appliedRanks = this._appliedAdversaryRanks();
-        if (this.dicePool.difficulty > 0) adversaryClone.upgradeDifficulty(appliedRanks);
+        if (this._hasDifficultyDice()) adversaryClone.upgradeDifficulty(appliedRanks);
         adversaryPool = RollBuilderFFG._poolSummary(adversaryClone);
       }
       RollBuilderFFG._logRoll({
@@ -499,11 +499,24 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
    */
   _effectivePool() {
     const ranks = this._appliedAdversaryRanks();
-    const adversaryActive = this._adversaryMode && ranks > 0 && this.dicePool.difficulty > 0;
+    const adversaryActive = this._adversaryMode && ranks > 0 && this._hasDifficultyDice();
     if (!adversaryActive) return this.dicePool;
     const clone = this._clonePool();
     clone.upgradeDifficulty(ranks);
     return clone;
+  }
+
+  /**
+   * Whether the base pool has a difficulty side for the Adversary to upgrade. An
+   * Adversary makes an existing check harder; it never invents difficulty for a check
+   * that has none, so a pool with no difficulty AND no challenge dice is left alone.
+   * Challenge dice count: manually upgrading every difficulty die away leaves a pool
+   * that is still a difficulty side, and upgrading it again correctly adds a difficulty
+   * die back. Testing `difficulty > 0` alone dropped the Adversary upgrade entirely at
+   * that point, which read as a difficulty die vanishing from the preview.
+   */
+  _hasDifficultyDice() {
+    return this.dicePool.difficulty > 0 || this.dicePool.challenge > 0;
   }
 
   /**
@@ -524,7 +537,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
    * @param {number} direction 1 to upgrade, -1 to downgrade
    */
   _applyDifficultyUpgrade(direction) {
-    if (this._adversaryMode && this.adversaryRanks > 0 && this.dicePool.difficulty > 0) {
+    if (this._adversaryMode && this.adversaryRanks > 0 && this._hasDifficultyDice()) {
       if (direction < 0 && this._appliedAdversaryRanks() > 0) {
         this._adversaryDowngrades++;
         return;

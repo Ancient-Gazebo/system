@@ -1762,9 +1762,21 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
   }
 
   /**
-   * Context-menu handler for "Add Extra Turn". The clicked element's data-combatant-id is the
-   * claimant on a claimed slot row, the slot's own combatant on an unclaimed row, and the combatant
-   * itself on a portrait in the header rows - in every case the actor shown on what was clicked.
+   * Context-menu handler for "Add Extra Turn". Resolves the combatant the clicked element stands for,
+   * trying three attributes in order of how specifically each names the acting actor:
+   *
+   *   data-combatant-id - a portrait in the header rows, or the CLAIMANT of a claimed slot row (the
+   *                       actor actually taking that turn, which is the one to duplicate).
+   *   data-alt-id       - the slot's own combatant. This is the attribute that carries a pre-combat
+   *                       row: prepareDerivedData builds rows as `{...turn, ...claim}`, and spreading
+   *                       a Document copies `_id` but NOT `id` (a prototype getter), so the only
+   *                       thing that ever puts an `id` on a row is the `claim` object - which is only
+   *                       populated once `started && claimant`. Before "Begin Combat" every slot row
+   *                       therefore renders data-combatant-id="", while `combatantId` (-> data-alt-id)
+   *                       is always set. Without this fallback turns could only be granted after the
+   *                       encounter had begun.
+   *   data-slot-index   - last resort; indexes this.turns directly and is present on every slot row.
+   *
    * @param el - the element the context menu was opened on
    * @returns {Promise<void>}
    */
@@ -1774,8 +1786,11 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       ui.notifications.error("Error detecting combat, try starting/ending combat?");
       return;
     }
-    const combatantId = el?.getAttribute?.("data-combatant-id");
-    const combatant = combatantId ? combat.combatants.get(combatantId) : undefined;
+    const attr = (name) => el?.getAttribute?.(name) || undefined;
+    const slotIndex = attr("data-slot-index");
+    const combatant = combat.combatants.get(attr("data-combatant-id") ?? "")
+      ?? combat.combatants.get(attr("data-alt-id") ?? "")
+      ?? (slotIndex === undefined ? undefined : combat.turns[Number(slotIndex)]);
     if (!combatant) {
       ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Initiative.NoCombatant"));
       return;

@@ -135,9 +135,9 @@ export class ApplyDamage {
     const a = target.actor;
     const type = a?.type;
 
-    let woundLabel, strainLabel, soakValue, soakWord, woundPath, strainPath, showRadio;
+    let woundLabel, strainLabel, soakValue, soakWord, woundPath, strainPath, canChoosePool;
     if (type === "vehicle") {
-      showRadio = true;
+      canChoosePool = true;
       woundLabel = game.i18n.localize("SWFFG.VehicleHullTrauma");
       strainLabel = game.i18n.localize("SWFFG.VehicleHullStrain");
       soakWord = "armour";
@@ -145,7 +145,7 @@ export class ApplyDamage {
       woundPath = "system.stats.hullTrauma.value";
       strainPath = "system.stats.systemStrain.value";
     } else if (type === "minion" || type === "rival") {
-      showRadio = false;
+      canChoosePool = false;
       woundLabel = game.i18n.localize("SWFFG.Wounds");
       strainLabel = null;
       soakWord = "soak";
@@ -153,7 +153,7 @@ export class ApplyDamage {
       woundPath = "system.stats.wounds.value";
       strainPath = null;
     } else if (type === "character" || type === "nemesis") {
-      showRadio = true;
+      canChoosePool = true;
       woundLabel = game.i18n.localize("SWFFG.Wounds");
       strainLabel = game.i18n.localize("SWFFG.Strain");
       soakWord = "soak";
@@ -219,6 +219,7 @@ export class ApplyDamage {
 
     const damageLabel = game.i18n.localize("SWFFG.ApplyDamage.DamagePerHit");
     const hitsLabel = game.i18n.localize("SWFFG.ApplyDamage.Hits");
+    const applyToLabel = game.i18n.localize("SWFFG.ApplyDamage.ApplyTo");
     // Against a vehicle the field spends Breach ranks against Armour, so label it accordingly
     // rather than calling it Pierce, which does not apply to Armour at all.
     const pierceLabel = isVehicleTarget
@@ -230,19 +231,24 @@ export class ApplyDamage {
     const reductionLabel = game.i18n.localize("SWFFG.ApplyDamage.Reduction");
     const applyLabel = game.i18n.localize("SWFFG.ApplyDamage.Apply");
     const cancelLabel = game.i18n.localize("SWFFG.ApplyDamage.Cancel");
-    const radioHtml = showRadio
-      ? `<div class="form-group" style="margin-bottom:10px;">
-           <label><input type="radio" name="pool" value="wounds" checked> ${woundLabel}</label>
-           <label style="margin-left:16px;"><input type="radio" name="pool" value="strain"> ${strainLabel}</label>
-         </div>`
-      : `<div class="form-group" style="margin-bottom:10px;"><strong>${woundLabel}</strong></div>`;
+    // Which track the damage lands on. This is a plain <select> row in the same grid as every other
+    // field rather than the pair of .form-group radios it used to be: the radios stopped showing up
+    // once the form grew, and a row here cannot be laid out away by dialog form styling.
+    const poolRow = canChoosePool
+      ? `<label>${applyToLabel}:</label>
+         <select name="pool" style="width:100%;">
+           <option value="wounds" selected>${woundLabel}</option>
+           <option value="strain">${strainLabel}</option>
+         </select>`
+      : `<label>${applyToLabel}:</label>
+         <div><strong>${woundLabel}</strong></div>`;
 
     const blockOptions = BLOCK_TIERS.map((t) => `<option value="${t.value}">${game.i18n.localize(t.label)}</option>`).join("");
     const strainOptions = STRAIN_PER_USE_OPTIONS.map((n) => `<option value="${n}">${n}</option>`).join("");
 
     const content = `
-      ${radioHtml}
       <div style="display:grid; grid-template-columns: 170px 1fr; gap:6px 10px; align-items:center;">
+        ${poolRow}
         <label>${hitsLabel}:</label>
         <input type="number" name="hits" value="1" min="1" style="width:100%;"/>
         <label>${damageLabel}:</label>
@@ -270,6 +276,7 @@ export class ApplyDamage {
     ApplyDamage._openDialogs.add(message.id);
     DialogV2.wait({
       window: { title },
+      position: { width: 420 },
       content,
       buttons: [
         {
@@ -294,7 +301,7 @@ export class ApplyDamage {
             const blockStrain = blockUses * strainPerUse;
             const blockName = game.i18n.localize(BLOCK_TIERS.find((t) => t.value === blockValue)?.name ?? "SWFFG.ApplyDamage.BlockNone");
 
-            const pool = showRadio ? root.querySelector('input[name="pool"]:checked')?.value : "wounds";
+            const pool = (canChoosePool ? root.querySelector('select[name="pool"]')?.value : "wounds") || "wounds";
             const path = pool === "strain" ? strainPath : woundPath;
             const poolLabel = pool === "strain" ? strainLabel : woundLabel;
             if (!path) {
@@ -332,12 +339,14 @@ export class ApplyDamage {
             const speaker = ChatMessage.getSpeaker({ token: target.document });
 
             // Strain paid for Block / Deflect lands on the defender's strain track regardless of
-            // which track the damage itself went to; when the damage is also strain the two are
-            // merged into one update by the bridge. Minions and rivals have no strain track, so
-            // the cost is reported in the breakdown but cannot be written anywhere.
-            const strainApplied = strainPath ? blockStrain : 0;
+            // which track the damage itself went to. Minions and rivals have no strain track --
+            // by the rules they suffer strain as wounds -- so their cost is routed to wounds
+            // instead of being dropped. Where the cost and the damage share a path the bridge
+            // merges them into a single update.
+            const costPath = strainPath ?? woundPath;
+            const costLabel = strainPath ? strainLabel : woundLabel;
             const deltas = [{ path, delta: applied }];
-            if (strainApplied) deltas.push({ path: strainPath, delta: strainApplied });
+            if (blockStrain) deltas.push({ path: costPath, delta: blockStrain });
 
             // Detailed breakdown, stored on the public card rather than whispered up front. The
             // GM asks for it from the card's context menu (see registerContextMenu); most hits
@@ -388,12 +397,13 @@ export class ApplyDamage {
             );
             if (blockUses > 0) {
               lines.push(
-                `<p>${game.i18n.format(strainApplied ? "SWFFG.ApplyDamage.BreakdownStrain" : "SWFFG.ApplyDamage.BreakdownStrainNoTrack", {
+                `<p>${game.i18n.format(strainPath ? "SWFFG.ApplyDamage.BreakdownStrain" : "SWFFG.ApplyDamage.BreakdownStrainAsWounds", {
                   actorName: a.name,
                   blockName,
                   uses: blockUses,
                   perUse: strainPerUse,
                   total: blockStrain,
+                  costLabel,
                 })}</p>`
               );
             }
@@ -441,10 +451,11 @@ export class ApplyDamage {
               weaponName,
               hits,
             })}</p>`;
-            if (strainApplied) {
+            if (blockStrain) {
               publicContent += `<p>${game.i18n.format("SWFFG.ApplyDamage.PublicStrain", {
                 actorName: a.name,
-                strain: strainApplied,
+                cost: blockStrain,
+                costLabel,
                 blockName,
                 uses: blockUses,
               })}</p>`;

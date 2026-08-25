@@ -96,6 +96,12 @@ Hooks.on("setup", function (){
 Hooks.once("init", async function () {
   console.log(`Initializing SWFFG System`);
 
+  // "Damage Breakdown" in the chat-message context menu: the applied-damage card carries the
+  // arithmetic in a flag and only whispers it when a GM asks. Registered at init, NOT at ready:
+  // the chat sidebar builds its context menu in _onFirstRender during Game#initializeUI(), which
+  // runs before the ready hook fires, so a later registration is never seen.
+  ApplyDamage.registerContextMenu();
+
   // Register GlitchSmith Library integration listeners first, before any await in this handler, so
   // the listeners exist before GlitchSmith fires its registration hooks during its own init.
   registerGlitchSmithIntegration();
@@ -1569,10 +1575,6 @@ Hooks.once("ready", async () => {
 
   // Forward Apply Damage / Apply Crit writes from non-owning players to the GM.
   registerGMBridge();
-
-  // "Damage Breakdown" in the chat-message context menu: the applied-damage card
-  // carries the arithmetic in a flag and only whispers it when a GM asks.
-  ApplyDamage.registerContextMenu();
 
   // Log adversary-roll diagnostics forwarded from players on the GM machine.
   RollBuilderFFG.registerRollLogBridge();

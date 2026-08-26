@@ -17,9 +17,12 @@ export class AbilityItemModel extends FFGTypeModel {
       // with, so they get their own on/off switch: while it is off the ability's Active Effects are
       // suspended (ItemHelpers.syncAEStatus) and it contributes nothing. `active` is the key
       // ModifierHelpers.getCalculatedValueFromItems already tests for embedded modifications, so the
-      // aggregation path honours the toggle for free. Defaults to on, which is how every ability
-      // that predates the toggle behaves.
-      active: new fields.BooleanField({ initial: true }),
+      // aggregation path honours the toggle for free.
+      // Defaults to OFF, matching how equippable items arrive unequipped: an ability that lands on a
+      // character should not start altering its stats until someone switches it on. Abilities that
+      // predate the toggle have no stored value and so read as off too, which is exactly their
+      // current behaviour (they carried no modifiers at all).
+      active: new fields.BooleanField({ initial: false }),
     };
   }
 }

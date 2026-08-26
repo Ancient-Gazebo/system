@@ -1231,7 +1231,7 @@ export class ActorSheetFFG extends FFGActorSheet {
 
       const item = this.actor.items.get($(ev.currentTarget).data("itemId"));
       if (item) {
-        await item.update({ "system.active": item.system?.active === false });
+        await item.update({ "system.active": !item.system?.active });
       }
     });
 

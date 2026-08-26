@@ -3570,15 +3570,26 @@ img {
   display: flex;
   align-items: center;
 }
-/* On/off switch for an ability's modifiers. Mirrors the equip toggle's greyed /
-   inked treatment so "off" reads the same way an unequipped item does. */
-.starwarsffg .ability-items .toggle-ability-active,
-.starwarsffg .items .items-list .item .toggle-ability-active {
-  color: #888;
+/* On/off switch for an ability's modifiers.
+   The state is carried by the ICON (fa-toggle-on / fa-toggle-off), not by colour
+   alone: the equip toggle's ink-vs-grey treatment is nearly invisible on a dark
+   sheet, where the "on" ink (#191813) sits on an almost-black background.
+   The "on" state is deliberately left uncoloured so it inherits whatever colour
+   the active theme gives the row's other controls (edit / delete); only "off" is
+   restyled, to a mid grey that reads against both parchment and dark backgrounds.
+   Specificity is pushed up to the full row path because theme and module
+   stylesheets load after the system's and colour `.item-control` generically. */
+.starwarsffg .ability-items .gear-org-list .item .item-controls a.toggle-ability-active:not(.active),
+.starwarsffg .ability-items .items-list .item .item-controls a.toggle-ability-active:not(.active),
+.starwarsffg .items .items-list .item .item-controls a.toggle-ability-active:not(.active) {
+  color: #8a8a8a;
+  opacity: 0.8;
 }
-.starwarsffg .ability-items .toggle-ability-active.active,
-.starwarsffg .items .items-list .item .toggle-ability-active.active {
-  color: #191813;
+.starwarsffg .ability-items .gear-org-list .item .item-controls a.toggle-ability-active:not(.active):hover,
+.starwarsffg .ability-items .items-list .item .item-controls a.toggle-ability-active:not(.active):hover,
+.starwarsffg .items .items-list .item .item-controls a.toggle-ability-active:not(.active):hover {
+  color: #b8b8b8;
+  opacity: 1;
 }
 .starwarsffg .ability-items .gear-org-item {
   cursor: grab;

@@ -3280,6 +3280,11 @@ export default class ImportHelpers {
     }
     CONFIG.logger.debug(`Transferring Active Effects from talents for specialization ${specialization.name}`);
     const toCreate = [];
+    // Never create a second effect for a modifier that already has one. This used to push blindly,
+    // so anything that had already built the tree's effects (a re-import over an existing entry, or
+    // the reconcile pass on create) ended up with two effects under one name - and since every
+    // consumer looks an effect up BY NAME, the duplicate is invisible while it doubles the modifier.
+    const existingNames = new Set(specialization.getEmbeddedCollection("ActiveEffect").map(e => e.name));
     // iterate over talents, find attributes on them, and create active effects
     for (const talentId of Object.keys(specialization.system.talents)) {
       const talent = specialization.system.talents[talentId];
@@ -3305,7 +3310,8 @@ export default class ImportHelpers {
             }
           }
 
-          if (changes.length) {
+          if (changes.length && !existingNames.has(attributeName)) {
+            existingNames.add(attributeName);
             toCreate.push({
               name: attributeName,
               img: talent.img,

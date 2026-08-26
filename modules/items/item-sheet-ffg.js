@@ -2311,14 +2311,15 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     ) {
       CONFIG.logger.debug(`Processing transferring AEs for drag-and-drop of ${droppedType} -> ${myType}`);
       for (const activeEffect of droppedItem.effects) {
-        // it appears that Foundry will use the source data over anything else if it's present, so update the source
-        //  data to match our updated information (if it exists)
-        try {
-          activeEffect._source.name = activeEffect.name;
-        } catch {
-          CONFIG.logger.debug("No source data found for AE (this is sometimes expected)");
-        }
-        toCreate.push(activeEffect);
+        // Build plain creation data instead of handing over the live document. Foundry serializes a
+        // created embedded document from its _source, which is why this used to write the renamed
+        // name straight into the source of whatever was dropped - a mutation of someone else's
+        // document that outlived the drop. Copying first means the only document touched here is
+        // the one being created. `name` is read off the instance so a rename applied by
+        // ItemHelpers.uniqueAttrs (which lives on the prepared field, not the source) survives.
+        const effectData = activeEffect.toObject?.() ?? foundry.utils.deepClone(activeEffect);
+        effectData.name = activeEffect.name;
+        toCreate.push(effectData);
       }
       CONFIG.logger.debug(toCreate);
       const createdEffects = await this.object.createEmbeddedDocuments("ActiveEffect", toCreate);

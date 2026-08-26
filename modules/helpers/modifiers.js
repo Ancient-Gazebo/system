@@ -1,5 +1,6 @@
 import PopoutModifiers from "../popout-modifiers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
+import TalentTree from "./talent-tree.js";
 
 export default class ModifierHelpers {
   /**
@@ -697,6 +698,133 @@ export default class ModifierHelpers {
       CONFIG.logger.debug(`Unknown mod type: ${modType}`);
       //ui.notifications.warn(`Unknown mod type: ${modType}`);
     }
+  }
+
+  /**
+   * Every place on an item that can hold user-created modifiers ("attr*" entries), as
+   * `{attrs, disabled}` scopes. A modifier on the item itself always applies; one on a
+   * specialization talent box or a Force power / signature ability upgrade box only applies once
+   * that box is learned.
+   *
+   * @param {Item} item
+   * @returns {Array<{attrs: object, learned: boolean}>}
+   */
+  static attributeScopes(item) {
+    const scopes = [];
+    const own = item?.system?.attributes;
+    if (own && typeof own === "object") scopes.push({attrs: own, learned: true});
+
+    const boxField = item?.type === "specialization" ? "talents"
+      : (["forcepower", "signatureability"].includes(item?.type) ? "upgrades" : null);
+    if (boxField) {
+      for (const box of Object.values(item.system?.[boxField] ?? {})) {
+        if (!box?.attributes || typeof box.attributes !== "object") continue;
+        scopes.push({attrs: box.attributes, learned: TalentTree._bool(box.islearned)});
+      }
+    }
+    return scopes;
+  }
+
+  /**
+   * Rebuild the Active Effects that back an item's user-created modifiers ("attr*" entries in
+   * `system.attributes`, and in each talent / upgrade box of a tree) from the modifiers themselves.
+   *
+   * Modifiers are bound to their effect BY NAME - the effect is named after the attribute key - and
+   * nothing but a save through the item sheet (applyActiveEffectOnUpdate, below) ever creates that
+   * pairing. Once the two drift apart, the item silently stops applying its modifiers: the effects
+   * it still carries answer to keys the item no longer has, and the keys it does have have no
+   * effect at all. A copy dragged onto an actor inherits the broken pairing verbatim, so the
+   * modifier only ever reappears after the copy happens to be edited and saved - which is why a
+   * ranked talent could show three ranks while applying two.
+   *
+   * This reconciles the item back to its own modifiers:
+   *   - an "attr*" modifier with no effect of that name gets one created;
+   *   - an "attr*" modifier whose effect exists but holds no changes gets those rebuilt;
+   *   - an "attr*" effect whose name matches no modifier AND which carries no changes is deleted,
+   *     since it is a provably inert leftover. Orphans that still hold changes are left alone -
+   *     they may be doing real work under a name this code does not own.
+   * Effects that already carry changes are never rewritten, so equip gating, learned state and the
+   * tree rules are untouched. A newly created box effect starts suspended unless some box holding
+   * that key is already learned; callers that own an actor should still re-run
+   * ItemHelpers.syncAEStatus afterwards, which owns the cross-tree duplicate rule.
+   *
+   * Safe to call repeatedly: on a healthy item it does nothing.
+   *
+   * @param {Item} item                      the item to reconcile
+   * @returns {Promise<{created: number, rebuilt: number, deleted: number}>} what it had to repair
+   */
+  static async reconcileAttributeEffects(item) {
+    const result = {created: 0, rebuilt: 0, deleted: 0};
+    const scopes = ModifierHelpers.attributeScopes(item);
+    if (!scopes.length) return result;
+
+    // One effect per key, not per box: several boxes of the same talent can share a key (a tree
+    // built in bulk does exactly that), and they are meant to share the single effect. It applies
+    // as soon as ANY box holding it is learned.
+    const wanted = new Map();
+    for (const scope of scopes) {
+      for (const [key, attribute] of Object.entries(scope.attrs)) {
+        if (!key.startsWith("attr")) continue; // inherent entries are owned by the "(inherent)" effect
+        const entry = wanted.get(key);
+        if (entry) entry.learned ||= scope.learned;
+        else wanted.set(key, {attribute, learned: scope.learned});
+      }
+    }
+    if (!wanted.size) return result;
+
+    const existing = item.getEmbeddedCollection("ActiveEffect");
+    const toCreate = [];
+    const toUpdate = [];
+    for (const [key, {attribute, learned}] of wanted.entries()) {
+      const match = existing.find(effect => effect.name === key);
+      // A healthy pairing is left completely alone. A matched effect that carries NO changes is the
+      // same failure wearing a different hat - the modifier is stored, the effect that should apply
+      // it is empty - so it gets its changes rebuilt. An effect that already has changes is never
+      // rewritten here; that is the item sheet's job.
+      if (match && (match._source.changes ?? []).length) continue;
+      const explodedMods = ModifierHelpers.explodeMod(attribute?.modtype, attribute?.mod, item.type) ?? [];
+      const changes = [];
+      for (const curMod of explodedMods) {
+        const changeKey = ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']);
+        // Weapon/armour/vehicle stat modifiers have no actor path; they are read off the item
+        // itself, so creating an effect for them would add a change with an undefined key.
+        if (changeKey) {
+          changes.push({
+            key: changeKey,
+            mode: AE_MODES.ADD,
+            value: attribute.value,
+          });
+        }
+      }
+      if (!changes.length) continue;
+      if (match) {
+        CONFIG.logger.debug(`Rebuilding empty Active Effect ${key} on ${item.name}`);
+        toUpdate.push({_id: match.id, changes: changes});
+      } else {
+        CONFIG.logger.debug(`Recreating missing Active Effect ${key} on ${item.name}`);
+        toCreate.push({name: key, img: item.img, changes: changes, disabled: !learned});
+      }
+    }
+
+    const toDelete = existing
+      .filter(effect => effect.name?.startsWith("attr")
+        && !wanted.has(effect.name)
+        && !(effect._source.changes ?? []).length)
+      .map(effect => effect.id);
+
+    if (toUpdate.length) {
+      await item.updateEmbeddedDocuments("ActiveEffect", toUpdate);
+      result.rebuilt = toUpdate.length;
+    }
+    if (toCreate.length) {
+      await item.createEmbeddedDocuments("ActiveEffect", toCreate);
+      result.created = toCreate.length;
+    }
+    if (toDelete.length) {
+      await item.deleteEmbeddedDocuments("ActiveEffect", toDelete);
+      result.deleted = toDelete.length;
+    }
+    return result;
   }
 
   static async applyActiveEffectOnUpdate(item, formData) {

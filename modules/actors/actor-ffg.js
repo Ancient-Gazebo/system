@@ -804,12 +804,15 @@ export class ActorFFG extends Actor {
                   actorData.system.skills[skillName][`${skillMod}source`] = [];
                 }
 
-                // this is an active effect modifying a skill, add the source
+                // this is an active effect modifying a skill, add the source. Scale it the same
+                // way the applied change is scaled (ranked talent Item rank, learned-box count of
+                // a ranked tree talent, status stack count), or the dice breakdown reports one
+                // rank's worth while the pool gets all of them.
                 actorData.system.skills[skillName][`${skillMod}source`].push({
                   modtype: modType,
                   key: "purchased",
                   name: effect.parent.type,
-                  value: change.value,
+                  value: effect.scaleChangeValue?.(change) ?? change.value,
                   type: effect.parent.name,
                 });
               }

@@ -1,4 +1,5 @@
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
+import TalentTree from "../helpers/talent-tree.js";
 
 function disablePushOnItem(options){
   // don't show push/animation if that's an effect from item
@@ -161,6 +162,50 @@ export class ActiveEffectFFG extends ActiveEffect {
   }
 
   /**
+   * A ranked talent inside a specialization tree takes its rank from the number of LEARNED boxes
+   * holding it, and the system applies that by giving each box its own Active Effect (one effect
+   * enabled per learned box - see ItemHelpers.syncAEStatus). That only works while every box owns a
+   * distinct modifier key: the effect is matched to the box by name, so two boxes sharing a key
+   * share a single effect, and the talent then applies exactly one rank's worth no matter how many
+   * boxes are learned.
+   *
+   * Boxes filled by the OggDude importer or by dropping a talent onto the tree do get distinct keys
+   * (ImportHelpers.processDieMod / ItemHelpers.uniqueAttrs re-key on every drop), but boxes whose
+   * modifiers were written in bulk - a hand-built tree, or the ffg-tree-sync add-on, which copies
+   * the source talent's keys verbatim onto every matching box - end up sharing one. That is the
+   * reported bug: dragging a ranked talent onto more boxes raised the displayed rank but never the
+   * modifier, while editing `ranks.current` on a standalone talent Item (getTalentRankMultiplier,
+   * above) did work.
+   *
+   * Counting the learned boxes that reference this effect's key is correct either way: with one key
+   * per box exactly one learned box matches (multiplier 1, unchanged), and with a shared key every
+   * learned box matches, restoring one rank each.
+   *
+   * Unranked talents never scale - an unranked talent learned in several boxes still applies once
+   * (the cross-tree rule is handled by ItemHelpers.isDuplicateUnrankedTreeTalent) - so a match on an
+   * unranked box short-circuits to 1. Force power / signature ability upgrades are deliberately left
+   * alone: multi-column upgrades store hidden placeholder boxes that would inflate the count.
+   *
+   * @returns {number} integer >= 1
+   */
+  getTreeTalentRankMultiplier() {
+    const item = this.parent;
+    if (!(item instanceof Item) || item.type !== "specialization") return 1;
+    const talents = item.system?.talents;
+    if (!talents || !this.name) return 1;
+    let learned = 0;
+    for (const talent of Object.values(talents)) {
+      const attributes = talent?.attributes;
+      if (!attributes || !Object.prototype.hasOwnProperty.call(attributes, this.name)) continue;
+      // Tree node flags are not schema-typed, so legacy/imported worlds hold "true"/"false"
+      // strings; coerce them the way the rest of the tree code does.
+      if (!TalentTree._bool(talent.isRanked)) return 1;
+      if (TalentTree._bool(talent.islearned)) learned += 1;
+    }
+    return learned > 1 ? learned : 1;
+  }
+
+  /**
    * Scale a single ADD-mode change's value by this effect's multipliers - the Status Icon Counters
    * stack count and, for a talent Item's effects, the talent's rank - so that N stacks of a "+1"
    * status (e.g. "Boost Next Check") contribute +N, and a rank-N ranked talent applies its modifier
@@ -174,9 +219,10 @@ export class ActiveEffectFFG extends ActiveEffect {
    * @returns {string|boolean} the (possibly scaled) value, as a string for consistency with stored data
    */
   scaleChangeValue(change) {
-    // Stack count (statuscounter) and talent rank are independent multipliers; a ranked talent is
-    // never a stackable status, so in practice exactly one of them is ever above 1.
-    const multiplier = this.getStackCount() * this.getTalentRankMultiplier();
+    // Stack count (statuscounter), a talent Item's rank, and the learned-box count of a ranked
+    // tree talent are independent multipliers; each applies to a different kind of parent, so in
+    // practice at most one of them is ever above 1.
+    const multiplier = this.getStackCount() * this.getTalentRankMultiplier() * this.getTreeTalentRankMultiplier();
     if (multiplier <= 1) return change?.value;
     // Only additive numeric changes scale. Read the V14 string `type` first so the deprecated
     // numeric `mode` accessor (removed in V16) is only touched on V13, where `type` is absent.

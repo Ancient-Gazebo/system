@@ -287,11 +287,20 @@ export default class ItemHelpers {
       CONFIG.logger.debug("specialization, or signature ability, looking through AEs to sync");
       for (const activeEffect of activeEffects) {
         if (["specialization"].includes(item.type)) {
+          // Resolve the state over EVERY box referencing this effect before writing it. Boxes are
+          // normally re-keyed per drop so exactly one references a given effect, but a hand-built
+          // tree (or a bulk modifier sync) can leave several boxes sharing one key - and updating
+          // per box made the last box in grid order win, so one unlearned box behind a learned one
+          // suspended a talent the character had actually bought. The effect belongs to the talent,
+          // not to a single box: it applies as soon as any non-duplicate box holding it is learned.
+          let found = false;
+          let learnedNonDuplicate = false;
           for (const talentKey of Object.keys(item.system.talents)) {
             const talent = item.system.talents[talentKey];
             try {
               const locatedMod = talent.attributes[activeEffect.name]; // this can throw an exception; best to handle it
               if (locatedMod) {
+                found = true;
                 if (TalentTree._bool(talent.islearned)) {
                   // an unranked talent learned in more than one tree (the cross-tree rule gives
                   // the later copies for free) must only apply its passive modifiers once; keep
@@ -301,16 +310,18 @@ export default class ItemHelpers {
                     CONFIG.logger.debug(`located attribute granting AE (${activeEffect.name}) for learned talent (${talent.name}), but it is a duplicate of an unranked talent learned elsewhere; keeping suspended`);
                   } else {
                     CONFIG.logger.debug(`located attribute granting AE (${activeEffect.name}) AND the talent (${talent.name}) is learned, unsuspending`);
+                    learnedNonDuplicate = true;
                   }
-                  await activeEffect.update({disabled: duplicate});
                 } else {
                   CONFIG.logger.debug(`located attribute granting AE (${activeEffect.name}), but the talent is not learned, suspending`);
-                  await activeEffect.update({disabled: true});
                 }
               }
             } catch {
               CONFIG.logger.debug("no attribute granting AE found");
             }
+          }
+          if (found) {
+            await activeEffect.update({disabled: !learnedNonDuplicate});
           }
         }
       }
@@ -403,12 +414,30 @@ export default class ItemHelpers {
    * Ensures unique attribute keys for a dropped item by checking and modifying its attributes, modifiers, and attachments
    * to avoid key collisions within the parent item. Also updates any matching active effects to align with the new attribute keys.
    *
+   * The re-keying happens on a DETACHED CLONE, never on the document that was dropped. `fromUuid`
+   * hands back the live world/compendium Item, and this function used to rewrite that document's
+   * attribute keys and Active Effect names in place. Neither write is persisted here - but the
+   * renamed keys sit in the live document for the rest of the session, so the next time anything
+   * saved that item (opening its sheet and submitting is enough) the NEW attribute keys were
+   * written to the database while the effect renames, which live only in memory, were not. The two
+   * then answer to different names, and since a modifier is bound to its effect BY NAME the item
+   * silently stops applying it - and hands the same broken pairing to every copy dragged from it.
+   * That is the drift behind ranked talents that showed three ranks and applied two. Cloning first
+   * keeps every mutation below on a throwaway copy, which is all the callers need.
+   *
    * @param {Object} droppedItem - The item being added or moved, whose attributes need to be checked and adjusted if necessary
    * @param {Object} parentItem - The target item that will contain the dropped item, used to determine existing keys for comparison
-   * @return {Object} - Returns the modified dropped item with updated attribute keys and effects
+   * @return {Object} - A detached copy of the dropped item with updated attribute keys and effects
    */
   static async uniqueAttrs(droppedItem, parentItem) {
     CONFIG.logger.debug(`Unique-ing attributes for dropped item ${droppedItem.name} on parent item ${parentItem.name}`);
+    // Detach before touching anything. `clone` keeps the pack and (with keepId) the id, so callers
+    // that read `.id` / `.pack` / `.effects` off the result see exactly what they saw before.
+    if (typeof droppedItem?.clone === "function") {
+      droppedItem = droppedItem.clone({}, {keepId: true});
+    } else {
+      droppedItem = foundry.utils.deepClone(droppedItem);
+    }
     // collect the existing attrs so we can determine if there's a collision
     let existingAttrs = Object.keys(parentItem.system.attributes || {}) || [];
     if (Object.keys(parentItem.system).includes("itemmodifier")) {

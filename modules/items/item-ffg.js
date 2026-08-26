@@ -70,6 +70,25 @@ export class ItemFFG extends ItemBaseFFG {
 
     await this._onCreateAEs(options, force);
 
+    // A modifier only reaches the actor through an Active Effect NAMED after its attribute key, and
+    // that pairing is created by an item-sheet save - never by a copy. An item whose effects have
+    // drifted from its attribute keys therefore hands every copy the same broken pairing: the copy
+    // carries inert effects answering to keys it no longer has, and its real modifiers apply only
+    // once someone happens to edit and save that copy. Dropping a ranked talent a second time then
+    // raised the rank while contributing no modifier. Rebuild the missing pairings here so a dropped
+    // copy behaves exactly like a saved one; it is a no-op on a healthy item.
+    // Not inside a compendium: the OggDude importer builds its effects itself, in bulk, right after
+    // the create, and reconciling underneath it would only duplicate that work. Copies dropped out
+    // of a compendium are reconciled when they land on the actor, which is what matters.
+    if (!this.pack) await ModifierHelpers.reconcileAttributeEffects(this);
+
+    // Tree boxes carry their own modifiers, and reconcile can only guess their suspension from the
+    // learned flags. syncAEStatus owns the real rule (learned state plus the cross-tree "an unranked
+    // talent applies once" check), so let it have the last word on a tree that just landed.
+    if (this.isEmbedded && this.actor && ["specialization", "forcepower", "signatureability"].includes(this.type)) {
+      await ItemHelpers.syncAEStatus(this, this.getEmbeddedCollection("ActiveEffect"));
+    }
+
     // On drop/create onto an actor, equippable items default to unequipped, but their Active Effects
     // can arrive enabled - the inherent soak/defence/encumbrance AE is created enabled, and a copy
     // dragged from another item/actor keeps whatever disabled state it had at the source. That made a

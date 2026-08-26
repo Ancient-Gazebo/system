@@ -13,6 +13,13 @@ export class AbilityItemModel extends FFGTypeModel {
         tags: new fields.ArrayField(new AnyField()),
         sources: new fields.ArrayField(new AnyField()),
       }),
+      // Abilities carry modifiers like any other item, but they have no equip slot to gate them
+      // with, so they get their own on/off switch: while it is off the ability's Active Effects are
+      // suspended (ItemHelpers.syncAEStatus) and it contributes nothing. `active` is the key
+      // ModifierHelpers.getCalculatedValueFromItems already tests for embedded modifications, so the
+      // aggregation path honours the toggle for free. Defaults to on, which is how every ability
+      // that predates the toggle behaves.
+      active: new fields.BooleanField({ initial: true }),
     };
   }
 }

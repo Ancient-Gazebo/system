@@ -1307,6 +1307,18 @@ img {
   top: 0;
   cursor: pointer;
 }
+/* Inline die/symbol glyphs are `position: relative` (their ::after markers hang
+   off them), so every symbol is lifted into the positioned-descendant paint
+   layer. Both edit affordances sit BEFORE the prose they overlay -- core's
+   `{{editor}}` helper emits `<a class="editor-edit">` ahead of `.editor-content`,
+   and `.popout-editor-button` is written ahead of its `{{{value}}}` -- and both
+   are positioned at `z-index: auto`, so a symbol landing under one paints and
+   HIT-TESTS above it, swallowing the click. Both containers clip with
+   `overflow: auto`, so an explicit stacking order cannot escape them. */
+.starwarsffg .editor .editor-edit,
+.starwarsffg .popout-editor .popout-editor-button {
+  z-index: 2;
+}
 .starwarsffg .popout-editor-window .sheet-body {
   height: 100%;
 }
@@ -3557,6 +3569,16 @@ img {
   text-align: left;
   display: flex;
   align-items: center;
+}
+/* On/off switch for an ability's modifiers. Mirrors the equip toggle's greyed /
+   inked treatment so "off" reads the same way an unequipped item does. */
+.starwarsffg .ability-items .toggle-ability-active,
+.starwarsffg .items .items-list .item .toggle-ability-active {
+  color: #888;
+}
+.starwarsffg .ability-items .toggle-ability-active.active,
+.starwarsffg .items .items-list .item .toggle-ability-active.active {
+  color: #191813;
 }
 .starwarsffg .ability-items .gear-org-item {
   cursor: grab;

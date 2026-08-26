@@ -447,6 +447,8 @@
   "SWFFG.ButtonRoll": "Roll",
   "SWFFG.Rolling": "Rolling",
   "SWFFG.RollingDefaultTitle": "Finalize your roll",
+  "SWFFG.ItemAbilityActive": "Active",
+  "SWFFG.ItemAbilityInactive": "Inactive",
   "SWFFG.Equipped": "Equipped",
   "SWFFG.Unequipped": "Unequipped",
   "SWFFG.Installed": "Installed",

@@ -375,6 +375,19 @@ export default class ItemHelpers {
           }
         }
       }
+    } else if (item.type === "ability") {
+      // Abilities have no learned state and no equip slot; their modifiers are gated purely by the
+      // on/off toggle on the ability itself, so every effect the ability carries follows
+      // `system.active`. Treat a missing value as on, so abilities created before the toggle
+      // existed keep applying their modifiers. Only write when the state actually differs - this
+      // runs after every sheet save, and an unconditional update would re-render for nothing.
+      const abilityActive = item.system?.active !== false;
+      CONFIG.logger.debug(`ability ${item.name} is ${abilityActive ? "active" : "inactive"}, syncing AE status`);
+      for (const activeEffect of activeEffects) {
+        if (activeEffect.disabled === abilityActive) {
+          await activeEffect.update({disabled: !abilityActive});
+        }
+      }
     } else {
       CONFIG.logger.debug(`'other' item type ${item.type}, no need to sync AE status'`);
     }

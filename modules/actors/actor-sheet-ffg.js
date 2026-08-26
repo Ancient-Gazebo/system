@@ -1218,6 +1218,23 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
     });
 
+    // Toggle an ability on / off. Abilities have no equip slot, so this is their equivalent of
+    // equipping: switching one off suspends its Active Effects (see ItemHelpers.syncAEStatus), so
+    // its modifiers stop applying without the ability having to be deleted and re-added.
+    html.find("a.toggle-ability-active").click(async (ev) => {
+      ev.preventDefault();
+      // the row itself opens the ability's details on click; this control has its own job
+      ev.stopPropagation();
+      if (!this.actor.verifyEditModeIsNotEnabled()) {
+        return;
+      }
+
+      const item = this.actor.items.get($(ev.currentTarget).data("itemId"));
+      if (item) {
+        await item.update({ "system.active": item.system?.active === false });
+      }
+    });
+
     // Toggle item details
     html.find(".items .item, .header-description-block .item, .injuries .item").click(async (ev) => {
       // A click on one of the row's control icons (roll, edit, refund, delete, split, give, ...)

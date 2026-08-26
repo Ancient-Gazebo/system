@@ -108,6 +108,15 @@ export class ItemFFG extends ItemBaseFFG {
       }
     }
 
+    // Abilities have no equip slot; their modifiers are gated by the ability's own on/off toggle
+    // instead. A copy arrives carrying whatever enabled state its source had (and effects rebuilt by
+    // reconcileAttributeEffects above are created enabled), so a switched-off ability dropped onto a
+    // character would apply its modifiers until the toggle was flipped twice. Sync to the real state
+    // here, for the same reason the equippable block above does.
+    if (this.type === "ability" && this.isEmbedded && this.actor) {
+      await ItemHelpers.syncAEStatus(this, this.getEmbeddedCollection("ActiveEffect"));
+    }
+
     // A species dragged onto an actor copies the source item's (inherent) AE verbatim. If that source
     // AE predates threshold baking (WT = Wounds + Brawn, ST = Strain + Willpower, Enc = Brawn + 5), the
     // copy lands on the actor short by the species' own characteristic (the off-by-one). Recompute the
@@ -335,6 +344,12 @@ export class ItemFFG extends ItemBaseFFG {
           });
         }
       }
+    }
+
+    // handle an ability being switched on / off - the equip toggle's equivalent for abilities
+    if (this.type === "ability" && foundry.utils.hasProperty(changed, "system.active")) {
+      CONFIG.logger.debug("caught ability activate / deactivate, syncing Active Effect state");
+      await ItemHelpers.syncAEStatus(this, this.getEmbeddedCollection("ActiveEffect"));
     }
 
     // handle equip / unequip by suspending / unsuspending AEs

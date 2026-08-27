@@ -432,7 +432,11 @@ export function get_dice_pool(actor_id, skill_name, incoming_roll) {
     triumph: (skill.triumph ?? 0) + incoming_roll.triumph,
     despair: (skill.despair ?? 0) + incoming_roll.despair,
     upgrades: (skill.upgrades ?? 0) - (skill.downgradeAbility ?? 0) + incoming_roll.upgrades,
-    remsetback: skill?.remsetback ? skill.remsetback : 0 + incoming_roll.remsetback,
+    // Parenthesised deliberately: written as `a ? a : 0 + b` the ternary binds looser than the
+    // addition, so ANY skill-side remove-setback silently discarded the incoming pool's own
+    // (a vehicle weapon's, an attachment's) instead of adding to it. Every sibling line here
+    // sums the two sources; this one now does too.
+    remsetback: (skill?.remsetback ?? 0) + (incoming_roll.remsetback ?? 0),
     difficulty: Math.max(0, +incoming_roll.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)),
     challenge: +incoming_roll.challenge,
   });

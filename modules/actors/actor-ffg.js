@@ -442,15 +442,28 @@ export class ActorFFG extends Actor {
     // _prepareSources has built the dice-source lists this appends to.
     this._applyEncumbrancePenalty(actor);
 
-    // Label for the Current encumbrance box. A manual offset is invisible once typed - the box just
-    // shows a total - so name it in the label ("Current (+8)"). Otherwise an offset set during one
-    // scene silently follows the character forever.
+    // Label and hover text for the Current encumbrance box. A manual offset is invisible once typed
+    // - the box just shows a total - so name it in the label ("Current (+8)"). Otherwise an offset
+    // set during one scene silently follows the character forever. The hint carries the words for
+    // the over-threshold state; the colour (encumbranceCssClass) carries the at-a-glance signal.
     if (ActorFFG.ENCUMBRANCE_ACTOR_TYPES.includes(actor.type)) {
       const adjustment = data.stats?.encumbranceAdjustment ?? 0;
       const current = game.i18n.localize("SWFFG.Current");
       data.stats.encumbranceCurrentLabel = adjustment
         ? `${current} (${adjustment > 0 ? "+" : ""}${adjustment})`
         : current;
+
+      const over = data.stats?.encumbranceOverThreshold ?? 0;
+      const hint = [game.i18n.localize("SWFFG.EncumbranceCurrentHint")];
+      if (over > 0) {
+        hint.unshift(game.i18n.format(
+          data.stats.encumbranceImmobilised
+            ? "SWFFG.EncumbranceImmobilisedHint"
+            : "SWFFG.EncumbranceOverThresholdHint",
+          { over }
+        ));
+      }
+      data.stats.encumbranceHint = hint.join(" ");
     }
   }
 
@@ -459,6 +472,12 @@ export class ActorFFG extends Actor {
    * penalty applies to Brawn- and Agility-based checks only.
    */
   static ENCUMBRANCE_PENALTY_CHARACTERISTICS = ["Brawn", "Agility"];
+
+  /**
+   * Carrying MORE than this many points over the encumbrance threshold immobilises a character.
+   * Flagged on the sheet only; nothing here restricts movement.
+   */
+  static ENCUMBRANCE_IMMOBILISED_OVER = 5;
 
   /**
    * Apply the over-encumbrance penalty: one setback die per point of encumbrance carried above
@@ -491,10 +510,19 @@ export class ActorFFG extends Actor {
     const threshold = parseInt(encumbrance.max, 10);
     const over = (Number.isFinite(carried) ? carried : 0) - (Number.isFinite(threshold) ? threshold : 0);
 
-    // Exposed as a derived, display-only stat alongside woundsOverThreshold/strainOverThreshold.
+    // Exposed as derived, display-only stats alongside woundsOverThreshold/strainOverThreshold.
     // Deliberately hung off `stats` rather than the schema-backed `stats.encumbrance`, so a sheet
-    // submit can never carry it into an update and have the DataModel prune it back out.
+    // submit can never carry them into an update and have the DataModel prune them back out.
+    //
+    // `immobilised` is a read-out, not a rule the system enforces: past 5 over the threshold the
+    // core rules immobilise a character outright, but movement, conditions and turn order stay the
+    // GM's call. The sheet only says so, in the same way the cybernetics tracker reddens when the
+    // installed count passes the cap (see _prepareCyberneticsData).
     data.stats.encumbranceOverThreshold = Math.max(0, over);
+    data.stats.encumbranceImmobilised = over > ActorFFG.ENCUMBRANCE_IMMOBILISED_OVER;
+    data.stats.encumbranceCssClass = over <= 0
+      ? ""
+      : (data.stats.encumbranceImmobilised ? "over-threshold immobilised" : "over-threshold");
     if (data.stats.encumbranceOverThreshold <= 0) return;
 
     const penalty = data.stats.encumbranceOverThreshold;

@@ -3669,6 +3669,19 @@ img {
   color: red;
 }
 
+/* Over-encumbrance read-out. Mirrors the cybernetics tracker's over-cap treatment: the derived
+   state class comes from ActorFFG#_applyEncumbrancePenalty, and only the Current value is
+   recoloured - amber once over the threshold, red past 5 over, where the core rules immobilise a
+   character. Nothing here enforces that; the hover text on the field spells out the state. */
+.starwarsffg .resource.over-threshold input[name="data.stats.encumbrance.value"] {
+  color: #b06000;
+  font-weight: bold;
+}
+.starwarsffg .resource.immobilised input[name="data.stats.encumbrance.value"] {
+  color: red;
+  font-weight: bold;
+}
+
 /* Languages section (Basic Information tab) */
 .starwarsffg .languages-block .language-list {
   list-style: none;

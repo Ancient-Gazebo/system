@@ -233,13 +233,34 @@ export class DicePoolFFG {
   }
 
   /**
+   * Resolve setback dice against "remove setback" modifiers the way the world is configured.
+   *
+   * With the ApplyRemoveSetbackMods setting off, removals are advisory: both are reported as-is and
+   * the player drops dice by hand in the roll dialog. With it on, each removal cancels one setback
+   * die, and any surplus removal is reported so it is visible that the capacity went unused.
+   *
+   * Shared by renderDiceExpression() and renderPreview() so what is shown and what is rolled cannot
+   * drift - previously only the expression netted, so a heavily encumbered character's skill row
+   * showed eight setback beside two removals while the roll actually used six.
+   *
+   * Read lazily, never at module scope: `game` does not exist when this module is imported.
+   *
+   * @returns {{setback: number, remsetback: number}}
+   */
+  resolveSetback() {
+    if (!game.settings.get("starwarsffg", "ApplyRemoveSetbackMods")) {
+      return { setback: this.setback, remsetback: this.remsetback };
+    }
+    const removed = Math.min(this.setback, this.remsetback);
+    return { setback: this.setback - removed, remsetback: this.remsetback - removed };
+  }
+
+  /**
    * Transform the dice pool into a rollable expression
    * @returns {string} a dice expression that can be used to roll the dice pool
    */
   renderDiceExpression() {
-    let setbackDice = game.settings.get("starwarsffg", "ApplyRemoveSetbackMods")
-      ? Math.max(0, this.setback - this.remsetback)
-      : this.setback;
+    const setbackDice = this.resolveSetback().setback;
 
     let dicePool = [
       this.proficiency + "dp",
@@ -268,7 +289,9 @@ export class DicePoolFFG {
       container.classList.add("dice-pool");
     }
 
-    const totalDice = +this.proficiency + +this.ability + +this.challenge + +this.difficulty + +this.boost + +this.setback + +this.force;
+    // Preview what will actually be rolled, not the raw counts (see resolveSetback).
+    const resolved = this.resolveSetback();
+    const totalDice = +this.proficiency + +this.ability + +this.challenge + +this.difficulty + +this.boost + +resolved.setback + +this.force;
 
     let height = 36;
     let width = 36;
@@ -286,8 +309,8 @@ export class DicePoolFFG {
     this._addIcons(container, CONFIG.FFG.CHALLENGE_ICON, this.challenge, height, width);
     this._addIcons(container, CONFIG.FFG.DIFFICULTY_ICON, this.difficulty, height, width);
     this._addIcons(container, CONFIG.FFG.BOOST_ICON, this.boost, height, width);
-    this._addIcons(container, CONFIG.FFG.SETBACK_ICON, this.setback, height, width);
-    this._addIcons(container, CONFIG.FFG.REMOVESETBACK_ICON, this.remsetback, height, width);
+    this._addIcons(container, CONFIG.FFG.SETBACK_ICON, resolved.setback, height, width);
+    this._addIcons(container, CONFIG.FFG.REMOVESETBACK_ICON, resolved.remsetback, height, width);
     this._addIcons(container, CONFIG.FFG.FORCE_ICON, this.force, height, width);
     this._addIcons(container, CONFIG.FFG.SUCCESS_ICON, this.success, height, width);
     this._addIcons(container, CONFIG.FFG.ADVANTAGE_ICON, this.advantage, height, width);

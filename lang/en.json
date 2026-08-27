@@ -50,6 +50,8 @@
   "SWFFG.EncumbranceMax": "Encumbrance (Max)",
   "SWFFG.EncumbranceOverThreshold": "Over Threshold",
   "SWFFG.EncumbranceCurrentHint": "Carried items, plus anything else you are hauling. Type the total you want and the difference is remembered; right-click to clear it.",
+  "SWFFG.EncumbranceOverThresholdHint": "{over} over threshold: +{over} setback on Brawn and Agility checks.",
+  "SWFFG.EncumbranceImmobilisedHint": "{over} over threshold: +{over} setback on Brawn and Agility checks, and immobilised (more than 5 over).",
   "SWFFG.EncumbranceAdjustmentCleared": "Manual encumbrance cleared; showing carried items only.",
   "SWFFG.TabCharacteristics": "Characteristics",
   "SWFFG.TabGear": "Gear & Equipment",

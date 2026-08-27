@@ -2297,14 +2297,46 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
     });
 
-    // Clear a manual encumbrance offset. Typing a Current encumbrance stores the difference from
-    // the carried item total (see ActorFFG#_convertEncumbranceEditToOffset) and the label reports
-    // it as "Current (+8)"; right-clicking the field drops it back to what the items alone weigh,
-    // which is otherwise a number the player would have to work out and re-type.
+    // Typing a Current encumbrance stores the difference from the carried item total as a manual
+    // offset. ActorFFG#_convertEncumbranceEditToOffset does that conversion for ANY write to the
+    // field (macros, modules), but the edit is handled here as a direct actor.update() rather than
+    // being left to the form submit, because the submit pipeline does not refresh the sheet for
+    // this change: the offset landed in the database while the rendered sheet kept showing the
+    // pre-edit state - no "(+6)" in the label, and skill rows still previewing their old dice pool -
+    // until the sheet was closed and reopened. A direct update is the pattern every other derived
+    // control on this sheet already uses (the cybernetics cap +/- buttons, the right-click clear
+    // below), and all of them refresh correctly.
+    //
+    // stopPropagation keeps this input's change out of the form-wide submit. If the world has the
+    // encumbrance derivation switched off there is no carried total to measure against, so the
+    // event is left to the normal pipeline and the typed value is stored verbatim, as before.
+    html.find('input[name="data.stats.encumbrance.value"]').on("change", async (event) => {
+      const carried = this.actor.system?.stats?.encumbranceCarried;
+      const total = parseInt(event.currentTarget.value, 10);
+      if (!Number.isFinite(carried) || !Number.isFinite(total)) return;
+      event.stopPropagation();
+
+      const offset = total - carried;
+      const currentOffset = this.actor.system?.stats?.encumbranceAdjustment ?? 0;
+      if (offset === currentOffset) return;
+      await this.actor.update({ "flags.starwarsffg.config.encumbranceAdjustment": offset });
+      // Render explicitly, AFTER the update has resolved. The automatic render that
+      // document.update() schedules builds its context before the actor has re-prepared against
+      // the new flag, so the sheet paints the PREVIOUS offset: type a total that lands you 3 over
+      // and the label still reads "(+6)" from the edit before it, with one setback die in the
+      // skill rows instead of three. Awaiting the update first means this pass reads the settled
+      // derived data.
+      await this.render(false);
+    });
+
+    // Clear a manual encumbrance offset. The label reports an offset as "Current (+8)";
+    // right-clicking the field drops it back to what the items alone weigh, which is otherwise a
+    // number the player would have to work out and re-type.
     html.find('input[name="data.stats.encumbrance.value"]').on("contextmenu", async (event) => {
       event.preventDefault();
       if (!this.actor.system?.stats?.encumbranceAdjustment) return;
       await this.actor.update({ "flags.starwarsffg.config.encumbranceAdjustment": 0 });
+      await this.render(false); // same ordering requirement as the change handler above
       ui.notifications.info(game.i18n.localize("SWFFG.EncumbranceAdjustmentCleared"));
     });
 

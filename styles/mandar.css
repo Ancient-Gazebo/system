@@ -4706,31 +4706,44 @@ img {
   color: #781428;
 }
 
-/* Embedded item editor (attachment / mod "Edit Modifications" popout): fill the window and resize
-   with it instead of sitting at a fixed small height. Scoped via .flat_editor.sheet so it targets
-   only this editor app - normal item sheets (.sheet, no .flat_editor) and the talent/force-power
-   editors (.flat_editor, no .sheet) are unaffected. */
-.starwarsffg.flat_editor.sheet .window-content {
-  display: flex;
-  flex-direction: column;
-}
-.starwarsffg.flat_editor.sheet .window-content > form {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.starwarsffg.flat_editor.sheet .window-content > form > .content {
-  flex: 1 1 auto;
-  min-height: 0;
+/* Embedded item editor (quality / attachment / talent / upgrade popouts): fill the window and
+   resize with it instead of sitting at a fixed small height, with the tab body scrolling.
+   Scoped via .flat_editor, which only these editor windows carry.
+   The `.sheet` qualifier this used to also require is never present: these are
+   ApplicationV2 windows whose classes are exactly ["starwarsffg", "flat_editor"], so the
+   whole block was dead and the modifications tab overflowed the window with no scrollbar.
+   `.window-content` IS the <form> (window.contentTag), and the root part's children are
+   hoisted into it -- the template's own <form> element does not survive -- so the old
+   `> form > .content` path could not match either. */
+.starwarsffg.flat_editor .window-content {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-.starwarsffg.flat_editor.sheet .window-content > form > .content > .tab.active {
+.starwarsffg.flat_editor .window-content > .tabs {
+  flex: 0 0 auto;
+}
+/* Kept for safety if a template's <form> ever survives as a real element; today the
+   root part's children are hoisted straight into the .window-content form. */
+.starwarsffg.flat_editor .window-content > form {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.starwarsffg.flat_editor .window-content .content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* An active ProseMirror editor is a flex column whose content area is `flex: 1` filled
+   by an absolutely-positioned `.editor-content`, so it needs a height from the `.editor`
+   box. `.starwarsffg .editor`'s `height: 100%` resolves to auto inside these auto-height
+   form groups, which collapsed the description editor to just its toolbar. Give it a floor. */
+.starwarsffg.flat_editor .editor.editor-active {
+  min-height: 12rem;
 }
 
 /* The modifications tab scrolls within the space the flex chain gives it (previously capped at a

@@ -76,7 +76,12 @@ export class itemEditor extends FFGFormApplication {
 
   /**
    * Render the type-specific template (ffg-embedded-<type>.html) as the root
-   * part, preserving the modifier list's scroll position across re-renders.
+   * part, preserving the tab body's scroll position across re-renders.
+   *
+   * `.content` is the scrolling element (see the .flat_editor block in the
+   * stylesheets); the previous `.modification_container` never scrolled, so a
+   * submit-on-change re-render mid-edit jumped a long modifications list back
+   * to the top.
    * @override
    */
   _configureRenderParts(_options) {
@@ -84,7 +89,7 @@ export class itemEditor extends FFGFormApplication {
       content: {
         root: true,
         template: this.template,
-        scrollable: [".modification_container"],
+        scrollable: [".content"],
       },
     };
   }

@@ -2297,6 +2297,17 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
     });
 
+    // Clear a manual encumbrance offset. Typing a Current encumbrance stores the difference from
+    // the carried item total (see ActorFFG#_convertEncumbranceEditToOffset) and the label reports
+    // it as "Current (+8)"; right-clicking the field drops it back to what the items alone weigh,
+    // which is otherwise a number the player would have to work out and re-type.
+    html.find('input[name="data.stats.encumbrance.value"]').on("contextmenu", async (event) => {
+      event.preventDefault();
+      if (!this.actor.system?.stats?.encumbranceAdjustment) return;
+      await this.actor.update({ "flags.starwarsffg.config.encumbranceAdjustment": 0 });
+      ui.notifications.info(game.i18n.localize("SWFFG.EncumbranceAdjustmentCleared"));
+    });
+
     // Add or Remove Attribute
     html.find(".attributes").on("click", ".attribute-control", ModifierHelpers.onClickAttributeControl.bind(this));
 

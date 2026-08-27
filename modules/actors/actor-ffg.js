@@ -124,6 +124,7 @@ export class ActorFFG extends Actor {
      */
 
     CONFIG.logger.debug(`Performing pre-update on ${this.name}`);
+    this._convertEncumbranceEditToOffset(changes);
     if (["character", "rival", "nemesis"].includes(this.type)) {
       const originalBrawn = this.system.characteristics.Brawn.value;
       const updatedBrawn = changes?.system?.characteristics?.Brawn?.value;
@@ -199,6 +200,62 @@ export class ActorFFG extends Actor {
       }
     }
     await super._preUpdate(changes, options, user);
+  }
+
+  /**
+   * Translate a hand-typed Current encumbrance into the manual offset that produces it.
+   *
+   * The Current box shows a derived total (owned items + offset), so a typed number is a statement
+   * about the TOTAL, not a value to store: writing it to `system.stats.encumbrance.value` would be
+   * overwritten by the next derivation pass, which is exactly why the field appeared editable on
+   * rivals and nemeses but never actually held anything. Store the difference instead, and the
+   * typed number survives while items keep adding and removing on top of it.
+   *
+   * Done here rather than in the sheet so macros and modules that write the field get the same
+   * behaviour as a typed edit.
+   *
+   * Two guards matter:
+   *  - A submit whose value already equals the derived total is a no-op resubmit (this sheet
+   *    submits every field on every change), so the offset is left alone rather than recomputed.
+   *  - When the derived carried total is unavailable the field is genuinely manual - the world has
+   *    the soak/encumbrance calculation switched off - so the write is passed through untouched.
+   *
+   * @param {object} changes the pending update, mutated in place
+   * @private
+   */
+  _convertEncumbranceEditToOffset(changes) {
+    if (!ActorFFG.ENCUMBRANCE_ACTOR_TYPES.includes(this.type)) return;
+
+    // Accept both the expanded shape a sheet submit produces and the dotted path an API caller
+    // is just as likely to use.
+    const dotted = "system.stats.encumbrance.value";
+    let typed;
+    let drop;
+    if (changes?.system?.stats?.encumbrance?.value !== undefined) {
+      typed = changes.system.stats.encumbrance.value;
+      drop = () => delete changes.system.stats.encumbrance.value;
+    } else if (changes?.[dotted] !== undefined) {
+      typed = changes[dotted];
+      drop = () => delete changes[dotted];
+    } else {
+      return;
+    }
+
+    const carried = this.system?.stats?.encumbranceCarried;
+    if (!Number.isFinite(carried)) return;
+
+    const total = parseInt(typed, 10);
+    if (!Number.isFinite(total)) {
+      drop();
+      return;
+    }
+    drop();
+
+    if (total === parseInt(this.system?.stats?.encumbrance?.value, 10)) return;
+
+    const offset = total - carried;
+    CONFIG.logger.debug(`Encumbrance typed as ${total} against ${carried} carried; storing offset ${offset}`);
+    foundry.utils.setProperty(changes, "flags.starwarsffg.config.encumbranceAdjustment", offset);
   }
 
   /**
@@ -384,6 +441,17 @@ export class ActorFFG extends Actor {
     // encumbrance has been totalled (_prepareSharedData -> _calculateDerivedValues) and after
     // _prepareSources has built the dice-source lists this appends to.
     this._applyEncumbrancePenalty(actor);
+
+    // Label for the Current encumbrance box. A manual offset is invisible once typed - the box just
+    // shows a total - so name it in the label ("Current (+8)"). Otherwise an offset set during one
+    // scene silently follows the character forever.
+    if (ActorFFG.ENCUMBRANCE_ACTOR_TYPES.includes(actor.type)) {
+      const adjustment = data.stats?.encumbranceAdjustment ?? 0;
+      const current = game.i18n.localize("SWFFG.Current");
+      data.stats.encumbranceCurrentLabel = adjustment
+        ? `${current} (${adjustment > 0 ? "+" : ""}${adjustment})`
+        : current;
+    }
   }
 
   /**
@@ -956,8 +1024,24 @@ export class ActorFFG extends Actor {
       }
     });
 
+    // Split the carried total into its two parts and expose both.
+    //
+    // `encumbranceCarried` is what the owned items add up to. `encumbranceAdjustment` is a signed
+    // manual offset: the load a character is carrying that no item on their sheet represents - an
+    // unconscious ally over the shoulder, a crate they just grabbed, a mid-scene ruling. Without it
+    // the Current box would be unusable at the table, because a fully derived number can only ever
+    // describe things that were first entered as items.
+    //
+    // Both are hung off `stats` rather than the schema-backed `stats.encumbrance`, so a sheet submit
+    // can never carry them into an update for the DataModel to prune back out. The offset itself is
+    // stored as a flag (like the cybernetics cap adjustment) for the same reason.
+    const rawAdjustment = parseInt(actorData.flags?.starwarsffg?.config?.encumbranceAdjustment, 10);
+    const adjustment = Number.isFinite(rawAdjustment) ? rawAdjustment : 0;
+    data.stats.encumbranceCarried = encum;
+    data.stats.encumbranceAdjustment = adjustment;
+
     // Set Encumbrance value on character.
-    data.stats.encumbrance.value = encum;
+    data.stats.encumbrance.value = encum + adjustment;
   }
 
   /**

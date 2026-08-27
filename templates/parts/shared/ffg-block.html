@@ -102,7 +102,7 @@
                 {{{ t.icon }}}
               </div>
             {{ else }}
-              <input type="text" name="{{name}}" value="{{value}}" data-dtype="{{type}}" {{#if disabled}}disabled{{/if}} />
+              <input type="text" name="{{name}}" value="{{value}}" data-dtype="{{type}}" {{#if hint}}title="{{hint}}"{{/if}} {{#if disabled}}disabled{{/if}} />
             {{/if}}
             </div>
           {{/each}}

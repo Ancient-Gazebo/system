@@ -168,7 +168,7 @@
           {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html"
             (object blocktype="split" title="SWFFG.Encumbrance" fields=(array
               (object name="data.stats.encumbrance.max" value=data.stats.encumbrance.max type="Number" label="SWFFG.Threshold" disabled=true)
-              (object name="data.stats.encumbrance.value" value=data.stats.encumbrance.value type="Number" label="SWFFG.Current")
+              (object name="data.stats.encumbrance.value" value=data.stats.encumbrance.value type="Number" label=data.stats.encumbranceCurrentLabel hint=(localize "SWFFG.EncumbranceCurrentHint"))
             ))
           }}
         {{!-- Currency --}}

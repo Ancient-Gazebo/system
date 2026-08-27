@@ -292,7 +292,18 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       // element, guarded by a dataset flag.
       if (!form.dataset.ffgListenersBound) {
         form.dataset.ffgListenersBound = "1";
-        form.addEventListener("submit", this._onSubmit.bind(this));
+        // Re-render after a form submit, for the same reason `_onChangeInput` does (see the long
+        // note there). Pressing Enter in a text field fires the form's `submit` event rather than
+        // `change`, and `_onSubmit` defaults `render` to false - so an Enter-committed edit saved
+        // the value but left everything DERIVED from it showing the previous state until the sheet
+        // was reopened: the encumbrance offset label, the skill rows' dice-pool previews, the vital
+        // track. Clicking away from the same field looked correct, which made it read as flaky
+        // rather than as a missing render.
+        //
+        // Only real DOM submits reach this listener; the internal callers that genuinely need a
+        // silent save (`_saveEditor`, the file-picker callback) invoke `_onSubmit` directly with
+        // their own render flag and are unaffected.
+        form.addEventListener("submit", (event) => this._onSubmit(event, { render: true }));
         form.addEventListener("change", this._onChangeInput.bind(this));
       }
     }

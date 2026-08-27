@@ -118,7 +118,7 @@ export class ItemFFG extends ItemBaseFFG {
     }
 
     // A species dragged onto an actor copies the source item's (inherent) AE verbatim. If that source
-    // AE predates threshold baking (WT = Wounds + Brawn, ST = Strain + Willpower, Enc = Brawn + 5), the
+    // AE predates threshold baking (WT = Wounds + Brawn, ST = Strain + Willpower), the
     // copy lands on the actor short by the species' own characteristic (the off-by-one). Recompute the
     // threshold changes from the species' raw attributes here so the actor is correct on drop regardless
     // of the source item's state. Idempotent - computed from the raw attribute, never incrementally - so
@@ -140,7 +140,9 @@ export class ItemFFG extends ItemBaseFFG {
           } else if (change.key === "system.stats.strain.max" && Number.isFinite(rawStrain)) {
             want = rawStrain + speciesWillpower;
           } else if (change.key === "system.stats.encumbrance.max") {
-            want = speciesBrawn + 5;
+            // The species contributes only its own Brawn here. The flat +5 baseline is derived on
+            // the actor (ActorFFG#_seedEncumbranceThreshold); adding it again would double it.
+            want = speciesBrawn;
           } else {
             continue;
           }
@@ -189,9 +191,9 @@ export class ItemFFG extends ItemBaseFFG {
               });
             }
           }
-          // The loop above stored each attribute's literal value, but the Wound/Strain/Encumbrance
-          // thresholds are derived: WT = species Wounds + species Brawn, ST = species Strain + species
-          // Willpower, Encumbrance = species Brawn + 5. The import and species-edit paths bake these in,
+          // The loop above stored each attribute's literal value, but the Wound/Strain thresholds are
+          // derived: WT = species Wounds + species Brawn, ST = species Strain + species
+          // Willpower. The import and species-edit paths bake these in,
           // but a species dragged directly onto an actor only hits this create path - leaving the
           // thresholds short by the species' own characteristic (the off-by-one). Fold them in here so a
           // dragged-on species is correct immediately, without having to open and re-save the species.
@@ -203,7 +205,8 @@ export class ItemFFG extends ItemBaseFFG {
             } else if (change.key === "system.stats.strain.max") {
               change.value = (parseInt(change.value, 10) || 0) + speciesWillpower;
             } else if (change.key === "system.stats.encumbrance.max") {
-              change.value = speciesBrawn + 5;
+              // Species Brawn only - the flat +5 encumbrance baseline is derived on the actor.
+              change.value = speciesBrawn;
             }
           }
         } else if (["gear", "weapon"].includes(this.type)) {

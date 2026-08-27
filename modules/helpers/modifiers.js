@@ -1055,7 +1055,9 @@ export default class ModifierHelpers {
         } else if (change.key === "system.stats.strain.max") {
           change.value = strain + newWillpower;
         } else if (change.key === "system.stats.encumbrance.max") {
-          change.value = newBrawn + 5;
+          // Species Brawn only - the flat +5 encumbrance baseline is derived on the actor
+          // (ActorFFG#_seedEncumbranceThreshold), so baking it in here would double it.
+          change.value = newBrawn;
         }
       }
       await itemEffect.update({changes: newChanges});

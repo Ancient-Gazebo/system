@@ -56,6 +56,14 @@ async function handleMigration(oldVersion, newVersion) {
   if (parseFloat(oldVersion) < 2.1) {
     await cleanupSpeciesTalentEffects();
   }
+  // 2.1.32 made the encumbrance threshold fully derived on the actor as 5 + Brawn. Species
+  // inherent effects used to carry that flat +5 themselves, so they must be rebuilt or the
+  // baseline is counted twice on every character with a species.
+  // Compared with isNewerVersion, not parseFloat: parseFloat("2.1.31") is 2.1, so a patch-level
+  // gate written the old way would never fire for a world already on a 2.1.x release.
+  if (!oldVersion || foundry.utils.isNewerVersion("2.1.32", oldVersion)) {
+    await migrateSpeciesInherentEffects();
+  }
   await warnTheme();
 }
 
@@ -473,8 +481,9 @@ async function migrateCreditsToGlass() {
  * and the stale state used to throw when the species was next edited.
  *
  * This rebuilds each species' inherent changes from its stored attributes using the same derivation
- * as the create path (characteristics, base Soak, and the derived Wound/Strain/Encumbrance
- * thresholds: WT = Wounds + Brawn, ST = Strain + Willpower, Enc = Brawn + 5). It is idempotent: a
+ * as the create path (characteristics, base Soak, and the derived Wound/Strain
+ * thresholds: WT = Wounds + Brawn, ST = Strain + Willpower). The encumbrance change carries the
+ * species' Brawn alone - the flat +5 baseline is derived on the actor. It is idempotent: a
  * species whose inherent effect already matches is left untouched, and one with no characteristics
  * stored is skipped. User modifiers live in their own separate Active Effects and are never touched.
  *
@@ -517,7 +526,7 @@ export async function migrateSpeciesInherentEffects() {
     for (const change of changes) {
       if (change.key === "system.stats.wounds.max") change.value = wounds + brawn;
       else if (change.key === "system.stats.strain.max") change.value = strain + willpower;
-      else if (change.key === "system.stats.encumbrance.max") change.value = brawn + 5;
+      else if (change.key === "system.stats.encumbrance.max") change.value = brawn;
     }
     return changes;
   };

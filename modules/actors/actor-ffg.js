@@ -165,21 +165,9 @@ export class ActorFFG extends Actor {
             }
           }
         );
-        // repeat the above process, but for encumbrance threshold. Read the persisted value (source),
-        // not the derived value, so derived modifiers such as Active Effects are not baked into the
-        // new stored value and compounded.
-        const originalEncumbrance = this._source.system.stats?.encumbrance.max;
-        const originalEncumbranceWithoutBrawn = originalEncumbrance - originalBrawn;
-        const updatedEncumbrance = originalEncumbranceWithoutBrawn + parseInt(updatedBrawn);
-        CONFIG.logger.debug(`The character sheet showed ${originalEncumbrance} encumbrance max, while that value without Brawn was ${originalEncumbranceWithoutBrawn}. Updating to be ${updatedEncumbrance}`);
-        changes.system.stats = foundry.utils.mergeObject(
-          changes.system.stats,
-          {
-            encumbrance: {
-              max: updatedEncumbrance,
-            }
-          }
-        );
+        // The encumbrance threshold is NOT adjusted here: it is derived on every prepare pass as
+        // 5 + Brawn (see _seedEncumbranceThreshold), so it already follows this edit and writing a
+        // stored value would only leave dead data behind.
       }
       const originalWillpower = this.system.characteristics.Willpower.value;
       const updatedWillpower = changes.system?.characteristics?.Willpower?.value;
@@ -249,6 +237,7 @@ export class ActorFFG extends Actor {
    */
   prepareBaseData() {
     super.prepareBaseData();
+    this._seedEncumbranceThreshold();
     const skills = this.system?.skills;
     if (!skills || typeof skills !== "object") return;
     for (const skill of Object.values(skills)) {
@@ -258,6 +247,45 @@ export class ActorFFG extends Actor {
         skill[field] = Number.isFinite(value) ? value : 0;
       }
     }
+  }
+
+  /**
+   * Personal-scale actor types that carry an encumbrance threshold.
+   */
+  static ENCUMBRANCE_ACTOR_TYPES = ["character", "minion", "rival", "nemesis"];
+
+  /**
+   * The flat portion of the encumbrance threshold. Per the core rules a character can carry
+   * 5 + Brawn encumbrance before becoming encumbered.
+   */
+  static ENCUMBRANCE_THRESHOLD_BASE = 5;
+
+  /**
+   * Seed the encumbrance threshold with its rules baseline: 5 + Brawn.
+   *
+   * This runs in prepareBaseData(), i.e. BEFORE applyActiveEffects(), and deliberately ignores
+   * whatever `system.stats.encumbrance.max` was persisted. The threshold is fully derived, which
+   * is what makes it reliable: a rival, nemesis or minion built by hand - none of which need a
+   * species item - used to sit at whatever the stored value happened to be (0 for a fresh actor),
+   * because the flat 5 was only ever contributed by a species' (inherent) Active Effect.
+   *
+   * Every source that raises Brawn also emits a matching `system.stats.encumbrance.max` change
+   * (ModifierHelpers.explodeMod maps Brawn -> EncumbranceMax, and the XP-purchase path in
+   * ActorSheetFFG#_spendXp does the same), so those land on top of this seed during
+   * applyActiveEffects() and the total stays 5 + the fully-resolved Brawn. Standalone
+   * "Threshold: Encumbrance (Max)" modifiers stack on top of that, which is the supported way to
+   * hand a character a larger pack.
+   *
+   * Reading Brawn here gets the stored (pre-effect) value on purpose - the effect-driven portion
+   * arrives via its own change - exactly as Soak is built up.
+   * @private
+   */
+  _seedEncumbranceThreshold() {
+    if (!ActorFFG.ENCUMBRANCE_ACTOR_TYPES.includes(this.type)) return;
+    const encumbrance = this.system?.stats?.encumbrance;
+    if (!encumbrance) return;
+    const brawn = parseInt(this.system?.characteristics?.Brawn?.value, 10);
+    encumbrance.max = ActorFFG.ENCUMBRANCE_THRESHOLD_BASE + (Number.isFinite(brawn) ? brawn : 0);
   }
 
   /**
@@ -350,6 +378,73 @@ export class ActorFFG extends Actor {
         if (parseInt(defence.melee, 10) > 4) defence.melee = 4;
         if (parseInt(defence.ranged, 10) > 4) defence.ranged = 4;
       }
+    }
+
+    // Being over the encumbrance threshold adds setback dice. Runs last, after the carried
+    // encumbrance has been totalled (_prepareSharedData -> _calculateDerivedValues) and after
+    // _prepareSources has built the dice-source lists this appends to.
+    this._applyEncumbrancePenalty(actor);
+  }
+
+  /**
+   * Characteristics whose checks suffer from being over-encumbered. Per the core rules the
+   * penalty applies to Brawn- and Agility-based checks only.
+   */
+  static ENCUMBRANCE_PENALTY_CHARACTERISTICS = ["Brawn", "Agility"];
+
+  /**
+   * Apply the over-encumbrance penalty: one setback die per point of encumbrance carried above
+   * the threshold, on every Brawn- and Agility-based check.
+   *
+   * The penalty is written straight onto the derived `system.skills.<skill>.setback`, which is the
+   * single field every roll path already reads (DiceHelpers.rollSkill / rollItem / rollSkillDirect
+   * and the sheet's dice-pool preview), so it needs no per-path plumbing. It is in-memory only -
+   * skills live in an ObjectField that initialize() deep-clones away from `_source` - so nothing
+   * here is ever persisted, and it is recomputed from scratch on every prepare pass rather than
+   * accumulating.
+   *
+   * A matching entry is pushed onto `setbacksource` so the dice-pool tooltip names the penalty
+   * instead of showing unexplained setback dice.
+   *
+   * This runs in prepareDerivedData(), after applyActiveEffects(), so `setback` already holds the
+   * effect-driven dice and the threshold already reflects every Brawn source.
+   *
+   * @param {Actor} actorData
+   * @private
+   */
+  _applyEncumbrancePenalty(actorData) {
+    if (!ActorFFG.ENCUMBRANCE_ACTOR_TYPES.includes(actorData.type)) return;
+    const data = actorData.system;
+    const encumbrance = data?.stats?.encumbrance;
+    const skills = data?.skills;
+    if (!encumbrance || !skills || typeof skills !== "object") return;
+
+    const carried = parseInt(encumbrance.value, 10);
+    const threshold = parseInt(encumbrance.max, 10);
+    const over = (Number.isFinite(carried) ? carried : 0) - (Number.isFinite(threshold) ? threshold : 0);
+
+    // Exposed as a derived, display-only stat alongside woundsOverThreshold/strainOverThreshold.
+    // Deliberately hung off `stats` rather than the schema-backed `stats.encumbrance`, so a sheet
+    // submit can never carry it into an update and have the DataModel prune it back out.
+    data.stats.encumbranceOverThreshold = Math.max(0, over);
+    if (data.stats.encumbranceOverThreshold <= 0) return;
+
+    const penalty = data.stats.encumbranceOverThreshold;
+    const label = game.i18n.localize("SWFFG.Encumbrance");
+    const type = game.i18n.localize("SWFFG.EncumbranceOverThreshold");
+    for (const skill of Object.values(skills)) {
+      if (!skill || typeof skill !== "object") continue;
+      if (!ActorFFG.ENCUMBRANCE_PENALTY_CHARACTERISTICS.includes(skill.characteristic)) continue;
+      const current = Number(skill.setback);
+      skill.setback = (Number.isFinite(current) ? current : 0) + penalty;
+      if (!Array.isArray(skill.setbacksource)) skill.setbacksource = [];
+      skill.setbacksource.push({
+        modtype: "Skill Setback",
+        key: "encumbrance",
+        name: label,
+        value: penalty,
+        type: type,
+      });
     }
   }
 

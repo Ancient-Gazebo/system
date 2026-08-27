@@ -26,6 +26,15 @@ export class itemEditor extends FFGFormApplication {
   constructor(data) {
     super();
     this.data = data;
+    // Detach the edited entry from the parent document's `_source`.
+    // `system.itemmodifier` / `system.itemattachment` are ArrayField(AnyField), and
+    // AnyField#initialize returns the source value BY REFERENCE -- so the entry the
+    // sheet handed us is literally `sourceObject._source.system.<type>[i]`. Editing it
+    // in place mutates `_source` ahead of the write, and Foundry's update diff
+    // (ArrayField#_updateDiff compares each element against `_source`) then sees no
+    // change: the update is dropped, so nothing is persisted and no sheet re-renders.
+    // It also leaked `enrichedDescription` (added by _enrichData) into stored data.
+    this.data.clickedObject = foundry.utils.deepClone(data.clickedObject);
     // Inline {{editor}} state, keyed by field name. FormDataExtended reads live
     // ProseMirror content from these on submit (see _getSubmitData).
     this.editors = {};
@@ -390,11 +399,15 @@ export class itemEditor extends FFGFormApplication {
     // if it's an attachment, locate the attachment to update
     let updateData;
     if (this.data.clickedObject.type === "itemattachment") {
-      updateData = this.data.sourceObject.system.itemattachment;
+      // Deep clone: the live array's entries alias `sourceObject._source`, and mutating
+      // those in place makes the update below diff to nothing (see the constructor).
+      updateData = foundry.utils.deepClone(this.data.sourceObject.system.itemattachment);
       for (let attachment of updateData) {
         if (attachment._id === this.data.clickedObject._id) {
+          if (!Array.isArray(attachment.system.itemmodifier)) attachment.system.itemmodifier = [];
+          attachment.system.itemmodifier.push(droppedObject.toObject());
           // update the local object so we can see the update in the editor
-          this.data.clickedObject.system.itemmodifier.push(droppedObject.toObject());
+          this.data.clickedObject = attachment;
         }
       }
       await this.data.sourceObject.update({system: {itemattachment: updateData}});
@@ -598,11 +611,22 @@ export class itemEditor extends FFGFormApplication {
 
     const existingActiveEffects = this.data.sourceObject.getEmbeddedCollection("ActiveEffect");
 
-    // if it's an attachment, locate the attachment to update
+    // if it's an attachment, locate the attachment to update. Standalone shipattachments
+    // take the same path: their editor template has the same attributes/modifications
+    // shape, and without this they matched no branch at all and never saved.
     let updateData;
-    if (this.data.clickedObject.type === "itemattachment") {
-      CONFIG.logger.debug("> Detected item type of itemattachment");
-      updateData = this.data.sourceObject.system.itemattachment;
+    if ((this.data.clickedObject.type === "itemattachment")
+      || (this.data.standalone && (this.data.clickedObject.type === "shipattachment"))) {
+      CONFIG.logger.debug(`> Detected item type of ${this.data.clickedObject.type}`);
+      // Standalone: the attachment IS the source document (opened from its own sheet's
+      // "edit modifications"), so it is not an entry in anyone's `system.itemattachment`
+      // -- searching that array found nothing and the edit was silently discarded. Feed
+      // the loop the attachment's own source instead; its `_id` matches clickedObject's.
+      // Otherwise deep clone (see the constructor): mutating the live entries would
+      // pre-apply the change to `_source` and make the update below a no-op.
+      updateData = this.data.standalone
+        ? [this.data.sourceObject.toObject()]
+        : foundry.utils.deepClone(this.data.sourceObject.system.itemattachment);
       for (let attachment of updateData) {
         if (attachment._id === this.data.clickedObject._id) {
           CONFIG.logger.debug(`>> Found relevant attachment: ${attachment.name} / ${attachment.id}, looking for removed keys`);
@@ -747,12 +771,19 @@ export class itemEditor extends FFGFormApplication {
           this.data.clickedObject = attachment;
         }
       }
-      await this.data.sourceObject.update({system: {itemattachment: updateData}});
+      if (this.data.standalone) {
+        const [self] = updateData;
+        await this.data.sourceObject.update({name: self.name, system: self.system});
+      } else {
+        await this.data.sourceObject.update({system: {itemattachment: updateData}});
+      }
     }
 
     // if it's a mod, locate the mod to update
     if (this.data.clickedObject.type === "itemmodifier") {
-      updateData = this.data.sourceObject.system.itemmodifier;
+      // Deep clone (see the constructor): mutating the live entries would pre-apply the
+      // change to `_source` and make the update at the end of this branch a no-op.
+      updateData = foundry.utils.deepClone(this.data.sourceObject.system.itemmodifier);
       for (let modifier of updateData) {
         // select based on names instead of IDs, as IDs are not present here
         if (modifier.name === this.data.clickedObject.name) {

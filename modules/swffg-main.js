@@ -1097,6 +1097,24 @@ Hooks.once("init", async function () {
       changes: [],
     });
 
+    // The Token HUD sorts its icons by `order` and only falls back to the localized
+    // title when two entries tie, so leaving every status at the default order 0 let
+    // core alphabetize the whole list and interleave the FFG statuses with the generic
+    // markers below. Stamp an ascending order on everything registered so far: the FFG
+    // statuses stay first, in the deliberate order above (next-check dice, then combat
+    // dice, then FFG conditions), instead of being scattered by name. The values are
+    // negative so the FFG block also stays ahead of any status a module registers
+    // without an order of its own, which core reads as 0.
+    const ffgStatusCount = CONFIG.statusEffects.length;
+    CONFIG.statusEffects.forEach((status, index) => {
+      status.order = index - ffgStatusCount;
+    });
+    // Everything that is not an FFG status sorts after them. The generic markers all
+    // share one order value so core's title tiebreak alphabetizes them among themselves;
+    // user-defined statuses sort last again, unless they declare their own order.
+    const GENERIC_STATUS_ORDER = 1000;
+    const CUSTOM_STATUS_ORDER = 2000;
+
     // Generic condition markers (Foundry-default / D&D-5e-style). These are cosmetic icon
     // markers only (no Active Effect changes) except where wired via specialStatusEffects below.
     // Icons reference Foundry's bundled core icon library (icons/svg/*, icons/magic/*).
@@ -1132,7 +1150,7 @@ Hooks.once("init", async function () {
       { id: "weakened",     img: "icons/svg/downgrade.svg",     name: "SWFFG.Status.Weakened" },
     ];
     for (const condition of genericConditions) {
-      CONFIG.statusEffects.push({ ...condition, changes: [] });
+      CONFIG.statusEffects.push({ ...condition, changes: [], order: GENERIC_STATUS_ORDER });
     }
 
     // Wire the only two conditions that have real effects: Blinded removes the token's vision,
@@ -1151,11 +1169,35 @@ Hooks.once("init", async function () {
     try {
       const addedStatuses = $.parseJSON(game.settings.get("starwarsffg", "additionalStatuses"));
       for (const status of addedStatuses) {
-        CONFIG.statusEffects.push(status);
+        // Spread last so a custom status may set its own `order` and place itself.
+        CONFIG.statusEffects.push({ order: CUSTOM_STATUS_ORDER, ...status });
       }
 
     } catch (e) {
       ui.notifications.warn("Failed to load custom statuses, likely bad JSON");
+    }
+
+    // `order` on a status effect is only honoured by the V14 Token HUD; V13 sorts the
+    // icons purely by localized title, which is exactly what interleaved the FFG
+    // statuses with the generic markers. Re-apply the same grouping there by re-sorting
+    // the HUD's own choices, so both generations show one ordering. Feature-detected at
+    // runtime (never at build time) so a single build serves V13 and V14.
+    if (game.release.generation < 14) {
+      const TokenHUDClass = foundry.applications?.hud?.TokenHUD;
+      const getChoices = TokenHUDClass?.prototype?._getStatusEffectChoices;
+      if (getChoices) {
+        TokenHUDClass.prototype._getStatusEffectChoices = function (...args) {
+          const choices = getChoices.apply(this, args);
+          const orders = new Map(CONFIG.statusEffects.map((status) => [status.id, status.order ?? 0]));
+          const compare = (a, b) =>
+            ((orders.get(a?.id) ?? 0) - (orders.get(b?.id) ?? 0)) ||
+            String(a?.title ?? "").localeCompare(String(b?.title ?? ""), game.i18n.lang);
+          // Core returns an id-keyed object (Handlebars renders it in insertion order);
+          // tolerate an array shape too rather than corrupting the keys if that changes.
+          if (Array.isArray(choices)) return choices.sort(compare);
+          return Object.fromEntries(Object.entries(choices).sort(([, a], [, b]) => compare(a, b)));
+        };
+      }
     }
 
   // Register sheet application classes

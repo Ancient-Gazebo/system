@@ -684,7 +684,12 @@ export async function repairEncumbranceThresholds() {
   const actors = game.actors.filter((a) => PERSONAL_TYPES.includes(a.type));
   for (const actor of actors) {
     try {
-      actor.prepareData();
+      // reset(), NEVER prepareData(). prepareData() does not re-initialize `system` from `_source`
+      // first, so calling it on an already-prepared actor runs applyActiveEffects() over data that
+      // already has those effects applied and every effect lands a second time - a species granting
+      // +1 Brawn reads as +2, and every characteristic, threshold and dice pool derived from it
+      // doubles. reset() re-initializes from source and re-prepares from a clean base.
+      actor.reset();
       if (actor.sheet?.rendered) actor.sheet.render(false);
     } catch (e) {
       CONFIG.logger.error(`Failed to refresh actor "${actor?.name}"`, e);

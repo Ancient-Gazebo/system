@@ -64,6 +64,12 @@ async function handleMigration(oldVersion, newVersion) {
   if (!oldVersion || foundry.utils.isNewerVersion("2.1.32", oldVersion)) {
     await migrateSpeciesInherentEffects();
   }
+  // Catches the species migrateSpeciesInherentEffects cannot rebuild (no stored characteristics to
+  // rebuild FROM) and refreshes actors still displaying a pre-repair threshold. Runs after it, so
+  // it only has the leftovers to deal with.
+  if (!oldVersion || foundry.utils.isNewerVersion("2.1.33", oldVersion)) {
+    await repairEncumbranceThresholds();
+  }
   await warnTheme();
 }
 
@@ -592,6 +598,118 @@ export async function migrateSpeciesInherentEffects() {
   ui.notifications.info(`Species inherent-effect repair complete: ${repaired} of ${scanned} species updated.`);
   CONFIG.logger.debug(`migrateSpeciesInherentEffects: scanned ${scanned}, repaired ${repaired}`);
   return { scanned, repaired };
+}
+
+/**
+ * Repair encumbrance thresholds on existing actors.
+ *
+ * The threshold is derived as 5 + Brawn (ActorFFG#_seedEncumbranceThreshold), with every Brawn
+ * source contributing its own matching `system.stats.encumbrance.max` change on top. Species built
+ * before that change carry the flat +5 inside their own (inherent) effect as well, which lands the
+ * character at roughly double the correct threshold - Brawn 1 showing 11 instead of 6.
+ *
+ * migrateSpeciesInherentEffects() already rebuilds a species' inherent changes, but only for a
+ * species that still has its characteristics stored in `system.attributes`; one that lost them (an
+ * old drag-and-drop copy, a hand-built species) is skipped and keeps the stale +5. This repair does
+ * not depend on those attributes at all. It enforces the invariant directly on the effect: within
+ * an (inherent) effect, the `system.stats.encumbrance.max` change must equal the Brawn that the
+ * SAME effect grants, because the flat 5 now comes from the actor.
+ *
+ * Only `(inherent)` effects on species are touched. A user's own modifiers live in separate effects
+ * and are left alone, so a talent or item deliberately granting extra encumbrance still applies.
+ *
+ * Every personal-scale actor is then re-prepared and re-rendered. That is the other half of the
+ * symptom: repairing an effect two levels down (actor -> species item -> effect) does not reliably
+ * force the actor to recompute, so a corrected character keeps showing the old threshold until
+ * something else edits it.
+ *
+ * Safe to run repeatedly; a species already satisfying the invariant is not written.
+ *
+ * Run as a GM via:
+ *   game.ffg.repairEncumbranceThresholds()
+ * @returns {Promise<{species: number, repaired: number, actors: number, review: string[]}>}
+ */
+export async function repairEncumbranceThresholds() {
+  if (!game.user?.isGM) {
+    ui.notifications.warn("The encumbrance repair must be run by a GM.");
+    return { species: 0, repaired: 0, actors: 0, review: [] };
+  }
+
+  const ENCUMBRANCE_KEY = "system.stats.encumbrance.max";
+  const BRAWN_KEY = "system.characteristics.Brawn.value";
+  const PERSONAL_TYPES = ["character", "minion", "rival", "nemesis"];
+
+  let species = 0;
+  let repaired = 0;
+
+  const repairSpecies = async (item) => {
+    const inherent = item.effects.find((e) => e.name === "(inherent)");
+    if (!inherent) return false;
+    const changes = foundry.utils.deepClone(inherent.changes);
+    // The Brawn this same effect grants is what the encumbrance change must mirror. Absent means
+    // the species grants no Brawn, so it must contribute no encumbrance either.
+    const want = parseInt(changes.find((c) => c.key === BRAWN_KEY)?.value, 10) || 0;
+
+    let dirty = false;
+    for (const change of changes) {
+      if (change.key !== ENCUMBRANCE_KEY) continue;
+      if ((parseInt(change.value, 10) || 0) === want) continue;
+      change.value = want;
+      dirty = true;
+    }
+    if (!dirty) return false;
+    await inherent.update({ changes });
+    return true;
+  };
+
+  for (const collection of [game.items, ...game.actors.map((a) => a.items)]) {
+    for (const item of collection) {
+      if (item.type !== "species") continue;
+      if (item.pack) continue; // never touch a locked compendium
+      species += 1;
+      try {
+        if (await repairSpecies(item)) {
+          repaired += 1;
+          CONFIG.logger.debug(`Repaired encumbrance on species "${item.name}" (${item.uuid})`);
+        }
+      } catch (e) {
+        CONFIG.logger.error(`Failed to repair encumbrance on species "${item?.name}"`, e);
+      }
+    }
+  }
+
+  // Re-prepare and re-render every personal-scale actor, not only the repaired ones: an actor whose
+  // species was fixed in an earlier run (or by migrateSpeciesInherentEffects) can still be showing
+  // the pre-repair threshold for the same reason.
+  const actors = game.actors.filter((a) => PERSONAL_TYPES.includes(a.type));
+  for (const actor of actors) {
+    try {
+      actor.prepareData();
+      if (actor.sheet?.rendered) actor.sheet.render(false);
+    } catch (e) {
+      CONFIG.logger.error(`Failed to refresh actor "${actor?.name}"`, e);
+    }
+  }
+
+  // Anything still off 5 + Brawn is reported rather than "fixed": a deliberate modifier (a talent,
+  // a species trait, an item granting extra capacity) is a legitimate reason to differ, and this
+  // repair must not silently undo one.
+  const review = [];
+  for (const actor of actors) {
+    const brawn = parseInt(actor.system?.characteristics?.Brawn?.value, 10) || 0;
+    const max = parseInt(actor.system?.stats?.encumbrance?.max, 10) || 0;
+    if (max !== 5 + brawn) review.push(`${actor.name}: threshold ${max}, 5 + Brawn ${brawn} = ${5 + brawn}`);
+  }
+
+  ui.notifications.info(
+    `Encumbrance repair: ${repaired} of ${species} species corrected, ${actors.length} actors refreshed` +
+    (review.length ? `, ${review.length} to review (see console)` : "")
+  );
+  if (review.length) {
+    CONFIG.logger.warn("Actors whose encumbrance threshold is not 5 + Brawn (a deliberate modifier is a valid reason):", review);
+  }
+  CONFIG.logger.debug(`repairEncumbranceThresholds: species ${species}, repaired ${repaired}, actors ${actors.length}`);
+  return { species, repaired, actors: actors.length, review };
 }
 
 /**

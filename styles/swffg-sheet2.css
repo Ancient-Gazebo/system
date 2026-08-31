@@ -790,3 +790,54 @@
 .starwarsffg.sheet .editor-content li::marker {
   color: inherit;
 }
+
+/* ---- Carried / equipped controls --------------------------------------- */
+/* The Equipped column carries TWO toggles now: carried (is it on your person at
+   all) and equipped (is it worn / in hand). They deliberately share one flex cell
+   rather than getting a column each -- these lists align by giving header and row
+   the same number of flex children, so adding a cell to a row means adding one to
+   every matching header or the columns drift apart. Nesting inside the existing
+   cell keeps the child count, and therefore the alignment, exactly as it was. */
+.starwarsffg .equip-controls {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+/* Carried is the normal state, so it inherits the row's own text colour and reads
+   as unremarkable in any theme; "left behind" is the exception and is greyed out.
+   Deliberately NOT the weapon list's red/green fist palette -- two red/green icons
+   side by side would be unreadable at a glance. */
+.starwarsffg .equip-controls .toggle-carried {
+  color: #888;
+  opacity: 0.75;
+}
+.starwarsffg .equip-controls .toggle-carried.active {
+  color: inherit;
+  opacity: 1;
+}
+/* State colour must never be a hover artefact: some themes (space-op) tint hovered
+   links, and a pseudo-class outranks the two plain rules above, so a stored item
+   lit up as if it had been picked up. Restate both states for :hover, !important
+   because the rule being beaten belongs to a third-party theme. */
+.starwarsffg .equip-controls .toggle-carried:hover {
+  color: #888 !important;
+  opacity: 0.75;
+}
+.starwarsffg .equip-controls .toggle-carried.active:hover {
+  color: inherit !important;
+  opacity: 1;
+}
+/* At-a-glance signal that a row is on the sheet but not being carried. Applied via
+   :has() on the row rather than a class on the <li>, so no template row markup
+   changes and nothing can shift the flex layout. Only the name dims -- the controls
+   stay at full contrast so the row is still usable. */
+.starwarsffg .items .item:has(.toggle-carried:not(.active)) .item-name {
+  opacity: 0.55;
+}
+/* The header label names both toggles ("Carry / Equip"). The gear column is a fixed
+   90px that the label fits inside; pin it to one line so it can never wrap and make
+   the header row taller than the rows beneath it. */
+.starwarsffg .gear-items .gear-col-equipped {
+  white-space: nowrap;
+}

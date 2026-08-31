@@ -31,6 +31,12 @@ export default class ModifierHelpers {
           // there is a mod or something, and it's not active - don't process it
           return;
         }
+        if (item.system?.equippable && item.system.equippable.carried === false) {
+          // an item the character left behind contributes nothing at all, whatever its equip flag
+          // says. The sheet keeps "equipped" false on anything set down, so this is belt-and-braces
+          // against an API/macro write that only touched the carried key.
+          return;
+        }
         if (item.type === "gear" && item.system?.equippable && !item.system.equippable.equipped) {
           // unequipped gear contributes no modifiers (dice pool bonuses, etc.)
           return;

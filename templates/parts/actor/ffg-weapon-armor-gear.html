@@ -3,7 +3,7 @@
 <ul class="items">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsWeapons"}}</div>
-    <div class="">{{localize "SWFFG.Equipped"}}</div>
+    <div class="">{{localize "SWFFG.CarriedEquipped"}}</div>
     <div class="">{{localize "SWFFG.ItemsDamage"}}</div>
     <div class="">{{localize "SWFFG.ItemsRange"}}</div>
     <div class="">{{localize "SWFFG.ItemsCrit"}}</div>
@@ -28,11 +28,18 @@
         </div>
       </div>
       <div>
-        {{#if item.system.equippable.equipped}}
-        <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-fist-raised"></i></a>
-        {{else}}
-        <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-fist-raised"></i></a>
-        {{/if}}
+        <span class="equip-controls">
+          {{#if item.system.equippable.carried}}
+          <a class="toggle-carried active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Carried" }}"><i class="fas fa-suitcase"></i></a>
+          {{else}}
+          <a class="toggle-carried" data-item-id="{{item._id}}" title="{{ localize "SWFFG.NotCarried" }}"><i class="fas fa-suitcase"></i></a>
+          {{/if}}
+          {{#if item.system.equippable.equipped}}
+          <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-fist-raised"></i></a>
+          {{else}}
+          <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-fist-raised"></i></a>
+          {{/if}}
+        </span>
       </div>
       <div>{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
       <div>{{localize item.system.range.label}}</div>
@@ -61,7 +68,7 @@
 <ul class="items">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsArmor"}}</div>
-    <div>{{localize "SWFFG.Equipped"}}</div>
+    <div>{{localize "SWFFG.CarriedEquipped"}}</div>
     <div>{{localize "SWFFG.ItemsDefense"}}</div>
     <div>{{localize "SWFFG.ItemsSoak"}}</div>
     <div>{{localize "SWFFG.ItemsHP"}}</div>
@@ -81,11 +88,18 @@
         </div>
       </div>
       <div>
-        {{#if item.system.equippable.equipped}}
-        <a class="toggle-equipped active" data-item-id="{{item._id}}" title="Equipped"><i class="fas fa-shield-alt"></i></a>
-        {{else}}
-        <a class="toggle-equipped" data-item-id="{{item._id}}" title="Equipped"><i class="fas fa-shield-alt"></i></a>
-        {{/if}}
+        <span class="equip-controls">
+          {{#if item.system.equippable.carried}}
+          <a class="toggle-carried active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Carried" }}"><i class="fas fa-suitcase"></i></a>
+          {{else}}
+          <a class="toggle-carried" data-item-id="{{item._id}}" title="{{ localize "SWFFG.NotCarried" }}"><i class="fas fa-suitcase"></i></a>
+          {{/if}}
+          {{#if item.system.equippable.equipped}}
+          <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-shield-alt"></i></a>
+          {{else}}
+          <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-shield-alt"></i></a>
+          {{/if}}
+        </span>
       </div>
       <div>{{item.system.defence.value}} {{#if (and (ne item.system.defence.value item.system.defence.adjusted) (or (gt item.system.defence.adjusted.length 0) (gt item.system.defence.adjusted 0)))}}({{item.system.defence.adjusted}}){{/if}}</div>
       <div>{{item.system.soak.value}} {{#if (and (ne item.system.soak.value item.system.soak.adjusted) (or (gt item.system.soak.adjusted.length 0) (gt item.system.soak.adjusted 0)))}}({{item.system.soak.adjusted}}){{/if}}</div>
@@ -106,7 +120,7 @@
 <ul class="items gear-items">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsGear"}}</div>
-    <div class="gear-col-equipped">{{localize "SWFFG.Equipped"}}</div>
+    <div class="gear-col-equipped">{{localize "SWFFG.CarriedEquipped"}}</div>
     <!-- <div>{{localize "SWFFG.ItemsPrice"}}</div>
     <div>{{localize "SWFFG.ItemsRarity"}}</div> -->
     <div class="gear-col-quantity">{{localize "SWFFG.ItemsQuantity"}}</div>
@@ -164,11 +178,18 @@
         </div>
       </div>
       <div class="gear-col-equipped">
-        {{#if item.system.equippable.equipped}}
-        <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-hand-paper"></i></a>
-        {{else}}
-        <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-hand-paper"></i></a>
-        {{/if}}
+        <span class="equip-controls">
+          {{#if item.system.equippable.carried}}
+          <a class="toggle-carried active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Carried" }}"><i class="fas fa-suitcase"></i></a>
+          {{else}}
+          <a class="toggle-carried" data-item-id="{{item._id}}" title="{{ localize "SWFFG.NotCarried" }}"><i class="fas fa-suitcase"></i></a>
+          {{/if}}
+          {{#if item.system.equippable.equipped}}
+          <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-hand-paper"></i></a>
+          {{else}}
+          <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-hand-paper"></i></a>
+          {{/if}}
+        </span>
       </div>
       <div class="item-quantity gear-col-quantity">
         <div class="quantity increase"><i class="far fa-plus-square"></i></div>
@@ -209,11 +230,18 @@
       <!-- <div>{{item.system.price.value}}</div>
       <div>{{item.system.rarity.value}}</div> -->
       <div class="gear-col-equipped">
-        {{#if item.system.equippable.equipped}}
-        <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-hand-paper"></i></a>
-        {{else}}
-        <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-hand-paper"></i></a>
-        {{/if}}
+        <span class="equip-controls">
+          {{#if item.system.equippable.carried}}
+          <a class="toggle-carried active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Carried" }}"><i class="fas fa-suitcase"></i></a>
+          {{else}}
+          <a class="toggle-carried" data-item-id="{{item._id}}" title="{{ localize "SWFFG.NotCarried" }}"><i class="fas fa-suitcase"></i></a>
+          {{/if}}
+          {{#if item.system.equippable.equipped}}
+          <a class="toggle-equipped active" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Equipped" }}"><i class="fas fa-hand-paper"></i></a>
+          {{else}}
+          <a class="toggle-equipped" data-item-id="{{item._id}}" title="{{ localize "SWFFG.Unequipped" }}"><i class="fas fa-hand-paper"></i></a>
+          {{/if}}
+        </span>
       </div>
       <div class="item-quantity gear-col-quantity">
         <div class="quantity increase"><i class="far fa-plus-square"></i></div>

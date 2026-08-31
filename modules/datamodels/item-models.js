@@ -77,6 +77,13 @@ export class ArmourItemModel extends FFGTypeModel {
         value: new fields.BooleanField({ initial: true }),
         type: new fields.StringField({ initial: "Boolean", blank: true, nullable: true }),
         equipped: new fields.BooleanField({ initial: false }),
+        // Whether the item is on the actor's person at all, independent of `equipped` (which means
+        // worn / in hand). The two are separate facts: an item can be carried but stowed - it
+        // counts encumbrance and applies no modifiers - or left behind entirely, counting nothing
+        // while staying on the sheet. Defaults to true so anything added starts counting, which is
+        // RAW. `equipped` implies `carried`; the sheet toggles maintain that invariant, and the
+        // encumbrance/Active Effect paths read the pair, never `equipped` alone.
+        carried: new fields.BooleanField({ initial: true }),
       }),
       itemattachment: new fields.ArrayField(new AnyField()),
       itemmodifier: new fields.ArrayField(new AnyField()),
@@ -222,6 +229,13 @@ export class GearItemModel extends FFGTypeModel {
         value: new fields.BooleanField({ initial: true }),
         type: new fields.StringField({ initial: "Boolean", blank: true, nullable: true }),
         equipped: new fields.BooleanField({ initial: false }),
+        // Whether the item is on the actor's person at all, independent of `equipped` (which means
+        // worn / in hand). The two are separate facts: an item can be carried but stowed - it
+        // counts encumbrance and applies no modifiers - or left behind entirely, counting nothing
+        // while staying on the sheet. Defaults to true so anything added starts counting, which is
+        // RAW. `equipped` implies `carried`; the sheet toggles maintain that invariant, and the
+        // encumbrance/Active Effect paths read the pair, never `equipped` alone.
+        carried: new fields.BooleanField({ initial: true }),
       }),
       itemattachment: new fields.ArrayField(new AnyField()),
       itemmodifier: new fields.ArrayField(new AnyField()),
@@ -382,6 +396,13 @@ export class ShipattachmentItemModel extends FFGTypeModel {
         value: new fields.BooleanField({ initial: true }),
         type: new fields.StringField({ initial: "Boolean", blank: true, nullable: true }),
         equipped: new fields.BooleanField({ initial: false }),
+        // Whether the item is on the actor's person at all, independent of `equipped` (which means
+        // worn / in hand). The two are separate facts: an item can be carried but stowed - it
+        // counts encumbrance and applies no modifiers - or left behind entirely, counting nothing
+        // while staying on the sheet. Defaults to true so anything added starts counting, which is
+        // RAW. `equipped` implies `carried`; the sheet toggles maintain that invariant, and the
+        // encumbrance/Active Effect paths read the pair, never `equipped` alone.
+        carried: new fields.BooleanField({ initial: true }),
       }),
       itemattachment: new fields.ArrayField(new AnyField()),
       itemmodifier: new fields.ArrayField(new AnyField()),
@@ -441,6 +462,13 @@ export class ShipweaponItemModel extends FFGTypeModel {
         value: new fields.BooleanField({ initial: true }),
         type: new fields.StringField({ initial: "Boolean", blank: true, nullable: true }),
         equipped: new fields.BooleanField({ initial: false }),
+        // Whether the item is on the actor's person at all, independent of `equipped` (which means
+        // worn / in hand). The two are separate facts: an item can be carried but stowed - it
+        // counts encumbrance and applies no modifiers - or left behind entirely, counting nothing
+        // while staying on the sheet. Defaults to true so anything added starts counting, which is
+        // RAW. `equipped` implies `carried`; the sheet toggles maintain that invariant, and the
+        // encumbrance/Active Effect paths read the pair, never `equipped` alone.
+        carried: new fields.BooleanField({ initial: true }),
       }),
       itemattachment: new fields.ArrayField(new AnyField()),
       itemmodifier: new fields.ArrayField(new AnyField()),
@@ -639,6 +667,13 @@ export class WeaponItemModel extends FFGTypeModel {
         value: new fields.BooleanField({ initial: true }),
         type: new fields.StringField({ initial: "Boolean", blank: true, nullable: true }),
         equipped: new fields.BooleanField({ initial: false }),
+        // Whether the item is on the actor's person at all, independent of `equipped` (which means
+        // worn / in hand). The two are separate facts: an item can be carried but stowed - it
+        // counts encumbrance and applies no modifiers - or left behind entirely, counting nothing
+        // while staying on the sheet. Defaults to true so anything added starts counting, which is
+        // RAW. `equipped` implies `carried`; the sheet toggles maintain that invariant, and the
+        // encumbrance/Active Effect paths read the pair, never `equipped` alone.
+        carried: new fields.BooleanField({ initial: true }),
       }),
       itemattachment: new fields.ArrayField(new AnyField()),
       itemmodifier: new fields.ArrayField(new AnyField()),

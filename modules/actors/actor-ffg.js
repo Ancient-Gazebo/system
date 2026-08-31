@@ -1022,6 +1022,18 @@ export class ActorFFG extends Actor {
     // Loop through all items
     items.forEach(function(item) {
       try {
+        // Anything the character has set aside weighs nothing. `carried` is the "is this on your
+        // person at all" axis, deliberately separate from `equipped` (worn / in hand): kit left at
+        // home, in a speeder, or stashed on a ship stays on the sheet without being carried, so it
+        // no longer has to be deleted to stop counting.
+        //
+        // Vehicles are exempt. Their cargo hold has no equip/carry UI, and everything in the hold
+        // counts against capacity by definition, so a personal item dragged into cargo keeps its
+        // weight. Item types with no `equippable` block have no toggle to have flipped and always
+        // count.
+        if (actorData.type !== "vehicle" && item.system?.equippable && !item.system.equippable.carried) {
+          return;
+        }
         // Calculate encumbrance, only if encumbrance value exists
         if (item.system?.encumbrance?.adjusted !== undefined || item.system?.encumbrance?.value !== undefined) {
           if (item.type === "armour" && item?.system?.equippable?.equipped) {
@@ -1034,12 +1046,10 @@ export class ActorFFG extends Actor {
             }
             encum += ((item.system?.encumbrance?.adjusted !== undefined) ? item.system?.encumbrance?.adjusted : item.system?.encumbrance?.value) * count;
           } else {
-            // Gear contributes to carried encumbrance only while equipped; unequipped
-            // gear is treated as set aside (mirrors how its modifiers are suspended).
-            // Vehicles have no equip UI on cargo, so their gear is unaffected.
-            if (item.type === "gear" && actorData.type !== "vehicle" && !item?.system?.equippable?.equipped) {
-              return;
-            }
+            // Gear (and everything else with a weight) counts its full value once carried. This
+            // used to require gear to be EQUIPPED, which under-counted a pack of stimpacks nobody
+            // was holding; the carried gate above now covers the "left behind" case that rule was
+            // standing in for, so gear follows the same one rule as the rest.
             let count = 0;
             if (item.system?.quantity?.value) {
               count = item.system.quantity.value;

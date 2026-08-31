@@ -1205,8 +1205,12 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
     });
 
-    // Toggle item equipped
+    // Toggle item equipped (worn / in hand). Equipping implies carrying, so both keys are written
+    // in ONE update: the invariant "equipped => carried" must never be observable as half-applied,
+    // or _onUpdate resolves the effect state against a combination that cannot exist.
     html.find(".items .item a.toggle-equipped").click((ev) => {
+      // the row itself opens the item's details on click; this control has its own job
+      ev.stopPropagation();
       if(!this.actor.verifyEditModeIsNotEnabled()) {
         return;
       }
@@ -1214,7 +1218,33 @@ export class ActorSheetFFG extends FFGActorSheet {
       const li = $(ev.currentTarget);
       const item = this.actor.items.get(li.data("itemId"));
       if (item) {
-        item.update({ ["system.equippable.equipped"]: !item.system.equippable.equipped });
+        const equipped = !item.system.equippable.equipped;
+        const update = { "system.equippable.equipped": equipped };
+        // Picking something up off the floor and putting it on is one action at the table; make it
+        // one click here too rather than rejecting the equip of an item flagged as left behind.
+        if (equipped) update["system.equippable.carried"] = true;
+        item.update(update);
+      }
+    });
+
+    // Toggle whether the item is carried at all. This is the "did you actually bring it" axis,
+    // separate from equipped: gear left at home, in a speeder, or stashed on a ship stops counting
+    // toward encumbrance without having to be deleted off the sheet. Setting an item down also
+    // unequips it (see the invariant above), which suspends its Active Effects through the normal
+    // equip path in ItemFFG._onUpdate.
+    html.find(".items .item a.toggle-carried").click((ev) => {
+      ev.stopPropagation();
+      if(!this.actor.verifyEditModeIsNotEnabled()) {
+        return;
+      }
+
+      const li = $(ev.currentTarget);
+      const item = this.actor.items.get(li.data("itemId"));
+      if (item) {
+        const carried = item.system.equippable.carried === false;
+        const update = { "system.equippable.carried": carried };
+        if (!carried) update["system.equippable.equipped"] = false;
+        item.update(update);
       }
     });
 

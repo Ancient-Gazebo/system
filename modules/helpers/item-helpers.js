@@ -395,6 +395,27 @@ export default class ItemHelpers {
   }
 
   /**
+   * Whether an item's modifiers should currently apply to its owner.
+   *
+   * Equip state is two independent facts: `carried` (is it on your person at all) and `equipped`
+   * (is it worn / in hand). Only an item that is BOTH counts as equipped for the purpose of Active
+   * Effects, so a blaster left on the ship applies nothing even if it was still flagged equipped
+   * when it was set down.
+   *
+   * Always read from the item document rather than from an update's `changed` payload: a write
+   * that touches only one of the two keys leaves the other undefined there, and treating that as
+   * false would silently suspend every effect on the item.
+   *
+   * @param {Item} item - the item to test
+   * @returns {boolean} true when the item is carried AND equipped
+   */
+  static isEffectivelyEquipped(item) {
+    const equippable = item?.system?.equippable;
+    if (!equippable) return false;
+    return !!equippable.equipped && equippable.carried !== false;
+  }
+
+  /**
    * Update the inherent Encumbrance Active Effect when armor is equipped/unequipped
    * (because the encumbrance is reduced by 3 when worn)
    * @param item - item being equipped
@@ -414,12 +435,21 @@ export default class ItemHelpers {
         updatedEncumbrance = realEncumbrance;
       }
       CONFIG.logger.debug(`Original encumbrance: ${realEncumbrance}, new encumbrance: ${updatedEncumbrance}`);
+      let dirty = false;
       for (const change of activeEffect.changes) {
         if (change.key === encumbranceModPath) {
-          change.value = updatedEncumbrance;
+          // Only write when the value actually moves. This runs for every effect on every equip
+          // state change, including the bulk pass the 2.1.34 carried-state migration puts every
+          // gear item through, where the value is already correct - an unconditional update there
+          // is one pointless document write per effect per item across the whole world.
+          if (String(change.value) !== String(updatedEncumbrance)) {
+            change.value = updatedEncumbrance;
+            dirty = true;
+          }
           break;
         }
       }
+      if (!dirty) return;
       await activeEffect.update({changes: activeEffect.changes});
     }
   }

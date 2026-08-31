@@ -120,12 +120,17 @@ export default class StackHelpers {
       (data?.system?.itemattachment?.length || 0) > 0 ||
       (data?.system?.itemmodifier?.length || 0) > 0;
     if (hasCustom(itemData)) return null;
+    // Carried state is part of the stack's identity. Merging across it would silently move items
+    // between "on my person" and "left at home" - fold five stimpacks into the stack stashed on the
+    // ship and they stop counting toward encumbrance without anything on screen saying so.
+    const carried = itemData?.system?.equippable?.carried !== false;
     return (
       actor.items.find(
         (i) =>
           i.type === "gear" &&
           i.name === itemData.name &&
           !i.system?.equippable?.equipped &&
+          (i.system?.equippable?.carried !== false) === carried &&
           !hasCustom(i)
       ) ?? null
     );

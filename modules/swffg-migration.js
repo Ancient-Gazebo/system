@@ -70,6 +70,12 @@ async function handleMigration(oldVersion, newVersion) {
   if (!oldVersion || foundry.utils.isNewerVersion("2.1.33", oldVersion)) {
     await repairEncumbranceThresholds();
   }
+  // 2.1.34 split "is it on your person" (carried) out of "is it worn / in hand" (equipped).
+  // Gear used to stand in for the first with the second, so existing sheets need their carried
+  // flag seeded from equipped or every unequipped item suddenly starts weighing something.
+  if (!oldVersion || foundry.utils.isNewerVersion("2.1.34", oldVersion)) {
+    await migrateGearCarriedState();
+  }
   await warnTheme();
 }
 
@@ -795,6 +801,53 @@ export async function cleanupSpeciesTalentEffects() {
   ui.notifications.info(`Species talent-effect cleanup complete: removed ${removed} duplicate effect(s) across ${scanned} species.`);
   CONFIG.logger.debug(`cleanupSpeciesTalentEffects: scanned ${scanned}, removed ${removed}`);
   return { scanned, removed };
+}
+
+/**
+ * Seed `system.equippable.carried` on gear already sitting on characters.
+ *
+ * Before 2.1.34 gear contributed encumbrance ONLY while equipped, which was the system standing in
+ * for "did you actually bring it" with the only flag it had. Carried is now its own axis and
+ * defaults to true, so without this pass every unequipped item on every sheet would start counting
+ * the moment the world loaded and characters would appear to have gained encumbrance overnight.
+ * Setting carried = equipped reproduces each character's current total exactly; gear added from
+ * here on gets the schema default (carried), which is what the rules actually say.
+ *
+ * Scope is deliberately narrow:
+ *  - Gear only. Weapons and armour always counted whether equipped or not, so the `true` default
+ *    already preserves their totals and touching them would change numbers rather than keep them.
+ *  - Owned gear only, on personal-scale actors. Unowned world/compendium items are templates with
+ *    no encumbrance total to preserve, and vehicles ignore the carried flag entirely (everything in
+ *    a cargo hold counts), so marking cargo "not carried" would only mislead the next person to
+ *    drag it onto a character.
+ *  - Only writes the items that actually need it (unequipped ones); equipped gear already resolves
+ *    to the correct default.
+ *
+ * @returns {Promise<{actors: number, items: number}>} counts of actors touched and items updated
+ */
+async function migrateGearCarriedState() {
+  const PERSONAL_TYPES = ["character", "minion", "rival", "nemesis"];
+  let actorsTouched = 0;
+  let itemsUpdated = 0;
+
+  for (const actor of game.actors) {
+    if (!PERSONAL_TYPES.includes(actor.type)) continue;
+    try {
+      const updates = actor.items
+        .filter((item) => item.type === "gear" && !item.system?.equippable?.equipped)
+        .map((item) => ({ _id: item.id, "system.equippable.carried": false }));
+      if (!updates.length) continue;
+      await actor.updateEmbeddedDocuments("Item", updates);
+      actorsTouched += 1;
+      itemsUpdated += updates.length;
+      CONFIG.logger.debug(`Seeded carried state on ${updates.length} gear item(s) for actor "${actor.name}"`);
+    } catch (e) {
+      CONFIG.logger.error(`Failed to seed gear carried state on actor "${actor?.name}"`, e);
+    }
+  }
+
+  CONFIG.logger.debug(`Gear carried-state migration: ${itemsUpdated} item(s) across ${actorsTouched} actor(s)`);
+  return { actors: actorsTouched, items: itemsUpdated };
 }
 
 async function warnUnsupportedWorld() {

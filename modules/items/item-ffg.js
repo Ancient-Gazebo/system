@@ -97,7 +97,7 @@ export class ItemFFG extends ItemBaseFFG {
     // equip-gated AE to the item's actual equipped state here, mirroring the equip-toggle branch of
     // _onUpdate, so nothing applies until the item is equipped.
     if (this.isEmbedded && this.actor && ["armour", "weapon", "gear"].includes(this.type)) {
-      const equipped = !!this.system?.equippable?.equipped;
+      const equipped = ItemHelpers.isEffectivelyEquipped(this);
       const effects = this.getEmbeddedCollection("ActiveEffect");
       await ItemHelpers.syncAEStatus(this, effects);
       for (const effect of effects) {
@@ -355,16 +355,26 @@ export class ItemFFG extends ItemBaseFFG {
       await ItemHelpers.syncAEStatus(this, this.getEmbeddedCollection("ActiveEffect"));
     }
 
-    // handle equip / unequip by suspending / unsuspending AEs
+    // handle equip / unequip / set down by suspending / unsuspending AEs
     const updatedExistingEffects = this.getEmbeddedCollection("ActiveEffect");
     if (changed?.system?.equippable && updatedExistingEffects) {
-      const equipped = changed.system.equippable.equipped;
+      // Resolve the state from the item itself, NOT from `changed.system.equippable.equipped`.
+      // This branch fires for any write inside `equippable`, and a carry-only write leaves
+      // `equipped` undefined in the payload - reading it there would disable every effect on the
+      // item and reset armour's encumbrance AE to its un-worn weight. `this` is already updated by
+      // the time _onUpdate runs, and isEffectivelyEquipped folds in the carried axis besides.
+      const equipped = ItemHelpers.isEffectivelyEquipped(this);
       CONFIG.logger.debug("caught equip / unequip, checking if Active Effect state should be synced");
       await ItemHelpers.syncAEStatus(this, updatedExistingEffects);
       for (const effect of updatedExistingEffects) {
         if (await ItemHelpers.shouldUpdateAEStatus(this, effect)) {
           await ItemHelpers.updateEncumbranceOnEquip(this, effect, equipped);
-          await effect.update({disabled: !equipped});
+          // Skip the write when the suspension state already matches, as the ability branch above
+          // does: this fires on every write inside `equippable`, and the carried-state migration
+          // walks every gear item on every actor, where the state is already correct.
+          if (effect.disabled !== !equipped) {
+            await effect.update({disabled: !equipped});
+          }
         }
       }
     }

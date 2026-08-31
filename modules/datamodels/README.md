@@ -7,8 +7,14 @@ This folder adds faithful Foundry V13 DataModels for every Actor and Item subtyp
 - `item-models.js` — the 20 item models.
 - `index.js` — `FFG_ACTOR_DATAMODELS` / `FFG_ITEM_DATAMODELS` registration maps.
 
-All three are **auto-generated** from `template.json`. Do not hand-edit; regenerate
-instead so the schemas stay a field-for-field mirror of the historical shapes.
+All three were **generated** from `template.json`. Prefer regenerating over hand-editing so
+the schemas stay a field-for-field mirror of the historical shapes.
+
+Caveat: `template.json` is now schema-only (the per-type field definitions were removed), so a
+regeneration run can no longer reproduce this folder on its own. Fields added since then exist
+only here and would be lost by a naive regenerate — currently `system.equippable.carried` on
+armour, gear, shipattachment, shipweapon and weapon (2.1.34). Any field a DataModel does not
+declare is pruned from every document on its next save, so check this list before regenerating.
 
 ## How it's wired
 `modules/swffg-main.js` (init hook) sets:

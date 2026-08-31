@@ -1,8 +1,30 @@
-import { MonteCarlo } from "../../lib/@swrpg-online/monte-carlo/dist/index.esm.js";
 import { getAdversaryLevel } from "../helpers/token.js";
 import { DicePoolFFG } from "./pool.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+/**
+ * MonteCarlo (~40 KB) is only reached by the odds readout in `_updateSimulationPreview`, so it is
+ * imported on first use rather than pulled into the system's boot graph, where every client paid
+ * for it before the loading bar appeared. `import()` caches the module, so this costs one fetch
+ * per client and nothing thereafter.
+ *
+ * @type {{ mod: ?object, pending: ?Promise<object> }}
+ */
+const _monteCarlo = { mod: null, pending: null };
+
+/**
+ * @returns {Promise<Function>} The `MonteCarlo` constructor.
+ */
+function loadMonteCarlo() {
+  if (_monteCarlo.mod) return Promise.resolve(_monteCarlo.mod);
+  if (!_monteCarlo.pending) {
+    _monteCarlo.pending = import("../../lib/@swrpg-online/monte-carlo/dist/index.esm.js")
+      .then((m) => (_monteCarlo.mod = m.MonteCarlo))
+      .finally(() => { _monteCarlo.pending = null; });
+  }
+  return _monteCarlo.pending;
+}
 
 export default class RollBuilderFFG extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(rollData, rollDicePool, rollDescription, rollSkillName, rollItem, rollAdditionalFlavor, rollSound) {
@@ -647,8 +669,15 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
    * Add the results of the dice simulation
    * @private
    */
-  _updateSimulationPreview(pool = this.dicePool) {
+  async _updateSimulationPreview(pool = this.dicePool) {
+    // Loading MonteCarlo lazily makes this method async, so a fast sequence of pool edits can now
+    // have several previews in flight at once. Stamp each one and let only the newest paint,
+    // otherwise a slower earlier run could overwrite the current odds with stale ones.
+    const seq = (this._simSeq = (this._simSeq ?? 0) + 1);
     try {
+      const MonteCarlo = await loadMonteCarlo();
+      if (seq !== this._simSeq) return;
+
       const simPool = new MonteCarlo({
         dicePool: {
           abilityDice: pool.ability,
@@ -673,6 +702,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         },
       });
       const simResults = simPool.simulate();
+      if (seq !== this._simSeq) return;
 
       let newClass = "";
       if (simResults.successProbability < .25) {

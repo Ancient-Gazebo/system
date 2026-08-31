@@ -23,22 +23,12 @@
   ],
   "esmodules": [
     "modules/dice-pool-ffg.js",
-    "modules/swffg-main.js",
-    "lib/slimselect/slimselect.js",
-    "lib/datatables/datatables.min.js",
-    "tools/datamodel-prune-scan.js"
+    "modules/swffg-main.js"
   ],
   "styles": [
     "styles/starwarsffg.css",
     "styles/swffg-sheet2.css",
-    "lib/pure/grids-min.css",
-    "lib/slimselect/slimselect.css",
-    "lib/datatables/datatables.min.css"
-  ],
-  "scripts": [
-    "lib/jszip/jszip.min.js",
-    "lib/jxon/jxon.min.js",
-    "lib/slimselect/slimselect.js"
+    "lib/pure/grids-min.css"
   ],
   "socket": true,
   "packs": [],

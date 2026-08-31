@@ -1,5 +1,6 @@
 import ItemBaseFFG from "../items/itembase-ffg.js";
 import ImportHelpers from "./import-helpers.js";
+import { loadImporterLibs } from "../helpers/lazy-libs.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -56,6 +57,9 @@ export default class SWAImporter extends HandlebarsApplicationMixin(ApplicationV
     const action = a.dataset.button;
 
     if (action === "import") {
+      // jszip/jxon are no longer boot scripts - the importer is the only thing that uses them.
+      await loadImporterLibs();
+
       CONFIG.logger.debug("Importing SW Adversaries Data Files");
       this._importLogger(`Starting SW Adversaries import`);
 

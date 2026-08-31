@@ -1616,6 +1616,12 @@ function isCurrentVersionNullOrBlank(currentVersion) {
 Hooks.once("ready", async () => {
   SettingsHelpers.readyLevelSetting();
 
+  // `tools/datamodel-prune-scan.js` is a read-only diagnostic that is run by hand, from a macro or
+  // the console, a handful of times in a system's life. It used to be a boot `esmodule`, so every
+  // client fetched and executed it on every load. It is now fetched on first call instead; the two
+  // documented entry points keep working unchanged.
+  registerPruneScanEntryPoint();
+
   // Forward Apply Damage / Apply Crit writes from non-owning players to the GM.
   registerGMBridge();
 
@@ -2635,4 +2641,30 @@ export function itemPillHover(event) {
   if (itemType !== undefined) {
     li.attr("data-tooltip", embeddedContent);
   }
+}
+
+/**
+ * Install lazy entry points for the DataModel prune scanner.
+ *
+ * `tools/datamodel-prune-scan.js` is an IIFE that publishes `globalThis.scanDataModelPruning` when
+ * it runs. Both documented invocations - `game.starwarsffg.scanDataModelPruning()` and the bare
+ * `scanDataModelPruning()` - are replaced here with a stub that imports the tool on first call and
+ * then hands off to the real implementation. The stub is async, so callers must await it; the tool
+ * logs its own report and shows a notification either way.
+ */
+function registerPruneScanEntryPoint() {
+  const runPruneScan = async (...args) => {
+    await import("../tools/datamodel-prune-scan.js");
+    const impl = globalThis.scanDataModelPruning;
+    // The IIFE overwrites the global with the real function; if it somehow did not, bail loudly
+    // rather than recursing into this stub forever.
+    if (impl === runPruneScan || typeof impl !== "function") {
+      throw new Error("starwarsffg | datamodel-prune-scan.js did not publish scanDataModelPruning");
+    }
+    return impl(...args);
+  };
+
+  globalThis.scanDataModelPruning = runPruneScan;
+  game.starwarsffg = game.starwarsffg ?? {};
+  game.starwarsffg.scanDataModelPruning = runPruneScan;
 }

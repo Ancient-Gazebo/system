@@ -7,10 +7,14 @@
  * HOW TO RUN
  *   1. Load a COPY of your world with this updated system installed.
  *   2. Create a Script macro (or open the browser console / F12) and paste/run:
- *        game.starwarsffg?.scanDataModelPruning?.() ?? scanDataModelPruning();
- *      (This file auto-registers `scanDataModelPruning` on `window` and, if the
- *       system API object exists, on `game.starwarsffg.scanDataModelPruning`.)
+ *        await game.starwarsffg.scanDataModelPruning();
  *   3. Read the console summary. Nothing is written to any document.
+ *
+ * This file is NOT loaded at boot - it is not in `system.json`. `swffg-main.js`
+ * installs an async stub on `game.starwarsffg.scanDataModelPruning` (and on
+ * `globalThis`) that imports this file on first call, so the invocation above
+ * works unchanged as long as it is awaited. Keeping a hand-run diagnostic out of
+ * the boot graph saves every client a fetch on every load.
  *
  * WHAT IT CHECKS
  *   For every world Actor/Item, each embedded Item on actors, and each synthetic

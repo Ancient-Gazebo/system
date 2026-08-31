@@ -1,5 +1,6 @@
 import ImportHelpers from "./import-helpers.js";
 import OggDude from "./oggdude/oggdude.js";
+import { loadImporterLibs } from "../helpers/lazy-libs.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
 
@@ -107,6 +108,9 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
   }
 
   static async _readFile(scope = document) {
+    // jszip/jxon are no longer boot scripts - the importer is the only thing that uses them.
+    await loadImporterLibs();
+
     let selectedFile, form, file, zip;
 
     const input = scope.querySelector("#import-file");

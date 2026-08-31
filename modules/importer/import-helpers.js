@@ -3,6 +3,7 @@ import {migrateDataToSystem} from "../helpers/migration.js";
 import {ItemFFG} from "../items/item-ffg.js";
 import ModifierHelpers from "../helpers/modifiers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
+import { loadImporterLibs } from "../helpers/lazy-libs.js";
 
 export default class ImportHelpers {
   /**
@@ -1490,6 +1491,9 @@ export default class ImportHelpers {
 
   static async npcImport(data)
   {
+    // Standalone entry point: it reaches JXON without passing through DataImporter._readFile.
+    await loadImporterLibs();
+
     try{
       $(".import-progress.current").toggleClass("import-hidden");
 
@@ -1527,6 +1531,9 @@ export default class ImportHelpers {
   }
 
   static async characterImport(data) {
+    // Standalone entry point: it reaches JXON without passing through DataImporter._readFile.
+    await loadImporterLibs();
+
     try {
       $(".import-progress.current").toggleClass("import-hidden");
 

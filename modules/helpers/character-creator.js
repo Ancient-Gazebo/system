@@ -4,6 +4,7 @@ import DiceHelpers from "./dice-helpers.js";
 import {sortDataBy, addIfNotExist} from "../actors/actor-sheet-ffg.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
+import { loadCharacterCreatorLibs } from "./lazy-libs.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
 
@@ -204,6 +205,11 @@ export class CharacterCreator extends HandlebarsApplicationMixin(ApplicationV2) 
      */
     await super._onRender(context, options);
     CONFIG.logger.debug("Rendering Character Creator");
+
+    // slimselect and datatables are the only libraries this window needs and the only window that
+    // needs them, so they are fetched here instead of during system boot. Cached after the first
+    // open; see helpers/lazy-libs.js.
+    await loadCharacterCreatorLibs();
 
     // backgrounds
     const cultureSelector = new SlimSelect({

@@ -1115,6 +1115,11 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     // form itself -- never an editor. Guard on the actual changed element.
     const input = event.target;
     if (input?.closest?.(".editor.prosemirror, .editor.tinymce")) return;
+    // V14's <secret-block> signals a Reveal/Hide click by dispatching a bubbling
+    // `change` event, which lands on this form-level listener. It is not a field
+    // edit: let _onRevealSecret own the write instead of firing a redundant
+    // whole-sheet submit + re-render behind it.
+    if (input?.closest?.("secret-block")) return;
 
     if (input?.type === "color" && input.dataset.edit && this.form?.elements[input.dataset.edit]) {
       this.form.elements[input.dataset.edit].value = input.value;
@@ -1139,6 +1144,33 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     // render per edit. Scroll position and the active tab are preserved across
     // re-renders by _preRender / the active-tab cache.
     if (this.options.submitOnChange) return this._onSubmit(event, { render: true });
+  }
+
+  /**
+   * Toggle a `<section class="secret">` block embedded in a legacy `{{editor}}` field.
+   *
+   * V13 resolved the owning document field from the secret's nearest `[data-edit]`
+   * ancestor -- exactly what the `{{editor}}` helper emits
+   * (`.editor-content[data-edit="system.biography"]`), so the Reveal button worked
+   * out of the box. V14 rebuilt this path around the `<prose-mirror name="...">`
+   * custom element: `DocumentSheetV2#_onRevealSecret` reads
+   * `event.target.closest("prose-mirror")?.name` and returns silently when there is
+   * none. No FFG template uses `<prose-mirror>`, so on V14 every Reveal button
+   * rendered by `<secret-block>` (biography, notes, item descriptions) was inert --
+   * no error, just nothing.
+   *
+   * Resolve the field name from `[data-edit]` first and fall back to core's
+   * `<prose-mirror>` lookup, so both markup styles work on either generation.
+   */
+  _onRevealSecret(event) {
+    const block = event.target;
+    if (typeof block?.toggleRevealed !== "function") return super._onRevealSecret?.(event);
+    const name = block.closest("[data-edit]")?.dataset?.edit ?? block.closest("prose-mirror")?.name;
+    if (!name) return super._onRevealSecret?.(event);
+    if (!this.document.isOwner) return;
+    const content = foundry.utils.getProperty(this.document, name);
+    if (typeof content !== "string") return;
+    return this.document.update({ [name]: block.toggleRevealed(content) });
   }
 
   async _onSubmit(event, options = {}) {

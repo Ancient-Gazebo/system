@@ -480,7 +480,10 @@ export class CombatFFG extends Combat {
                   pool.threat += +addPool.threat;
                   pool.boost += +addPool.boost;
                   pool.setback += +addPool.setback;
-                  pool.force = +addPool.force;
+                  // += , not =: the skill's own Force dice (a "Force Boost" modifier on Vigilance,
+                  // say) are part of the pool before the dialog's extras are folded in, and a bare
+                  // assignment discarded them whenever the user left the Force counter at 0.
+                  pool.force += +addPool.force;
                   pool.upgrade(addPool.upgrades)
 
                   // A RollFFG's `data` doubles as the "what was rolled" payload every downstream
@@ -1386,14 +1389,41 @@ function _findActorForInitiative(c) {
   return data;
 }
 
+/**
+ * Build the dice pool for an initiative check off a skill.
+ *
+ * Mirrors the field set DiceHelpers.rollSkill() reads, because every one of these is an Active
+ * Effect target on the skill (see ActorFFG.SKILL_DICE_FIELDS): "Force Boost" writes
+ * system.skills.<skill>.force, "Skill Setback" writes .setback, and so on. This used to read only
+ * ability/boost/advantage/success, so a talent or status that granted anything else - a Force die
+ * on Vigilance being the obvious one - was silently dropped when the check was rolled through the
+ * combat tracker, while the same modifier applied normally when the skill was rolled from the
+ * sheet.
+ *
+ * The difficulty-side fields (difficulty/decreaseDifficulty/upgradeDifficulty/downgradeDifficulty)
+ * are deliberately excluded: an initiative check is uncontested, so there is no difficulty pool for
+ * them to modify.
+ */
 function _buildInitiativePool(data, skill) {
+  const skillData = data.skills[skill];
+  const characteristic = data.characteristics[skillData.characteristic];
   const pool = new DicePoolFFG({
-    ability: Math.max(data.characteristics[data.skills[skill].characteristic].value, data.skills[skill].rank),
-    boost: data.skills[skill].boost,
-    advantage: data.skills[skill].advantage,
-    success: data.skills[skill].success,
+    ability: Math.max(characteristic.value, skillData.rank),
+    boost: skillData.boost ?? 0,
+    setback: skillData.setback ?? 0,
+    remsetback: skillData.remsetback ?? 0,
+    force: skillData.force ?? 0,
+    advantage: skillData.advantage ?? 0,
+    success: skillData.success ?? 0,
+    threat: skillData.threat ?? 0,
+    failure: skillData.failure ?? 0,
+    light: skillData.light ?? 0,
+    dark: skillData.dark ?? 0,
+    triumph: skillData.triumph ?? 0,
+    despair: skillData.despair ?? 0,
+    upgrades: (skillData.upgrades ?? 0) - (skillData.downgradeAbility ?? 0),
   });
-  pool.upgrade(Math.min(data.characteristics[data.skills[skill].characteristic].value, data.skills[skill].rank));
+  pool.upgrade(Math.min(characteristic.value, skillData.rank) + pool.upgrades);
 
   return pool;
 }

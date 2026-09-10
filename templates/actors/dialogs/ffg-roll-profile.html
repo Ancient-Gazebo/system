@@ -35,14 +35,6 @@
   </div>
 
   <div class="roll-profile-row">
-    <label for="roll-profile-expires">{{localize "SWFFG.RollProfile.Duration"}}</label>
-    <select id="roll-profile-expires" class="roll-profile-expires">
-      <option value="encounter" {{#if expiresEncounter}}selected{{/if}}>{{localize "SWFFG.RollProfile.UntilEncounterEnds"}}</option>
-      <option value="manual" {{#unless expiresEncounter}}selected{{/unless}}>{{localize "SWFFG.RollProfile.UntilCleared"}}</option>
-    </select>
-  </div>
-
-  <div class="roll-profile-row">
     <label for="roll-profile-save-as">{{localize "SWFFG.RollProfile.SaveAs"}}</label>
     <input type="text" id="roll-profile-save-as" class="roll-profile-save-as" placeholder="{{localize "SWFFG.RollProfile.SaveAsPlaceholder"}}" />
   </div>

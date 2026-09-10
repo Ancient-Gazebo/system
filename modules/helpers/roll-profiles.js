@@ -10,7 +10,7 @@ import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
  * instead, in three layers:
  *
  *  1. per-roll        - the two dropdowns in the roll dialog, stored nowhere.
- *  2. per-weapon      - `flags.starwarsffg.rollOverride`, optionally cleared when the encounter ends.
+ *  2. per-weapon      - `flags.starwarsffg.rollOverride`, in force until it is explicitly cleared.
  *  3. saved profiles  - `flags.starwarsffg.rollProfiles`, named (skill, characteristic) pairs the
  *                       user can re-apply with one click.
  *
@@ -42,13 +42,13 @@ export default class RollProfiles {
    * Explicit nulls are ordinary values and always land.
    */
   static get EMPTY_OVERRIDE() {
-    return { skill: null, characteristic: null, expires: null };
+    return { skill: null, characteristic: null };
   }
 
   /**
    * The override currently stored on an item, or null when there is none.
    * @param {Item|object} item
-   * @returns {?{skill: ?string, characteristic: ?string, expires: ?string}}
+   * @returns {?{skill: ?string, characteristic: ?string}}
    */
   static getOverride(item) {
     const override = item?.flags?.starwarsffg?.[this.OVERRIDE_FLAG];
@@ -60,12 +60,12 @@ export default class RollProfiles {
   /**
    * Store (or clear) an item's override.
    * @param {Item} item
-   * @param {{skill: ?string, characteristic: ?string, expires: ?string}} selection
+   * @param {{skill: ?string, characteristic: ?string}} selection
    */
-  static async setOverride(item, { skill = null, characteristic = null, expires = "encounter" } = {}) {
+  static async setOverride(item, { skill = null, characteristic = null } = {}) {
     if (!item?.setFlag) return;
     if (!skill && !characteristic) return this.clearOverride(item);
-    return item.setFlag("starwarsffg", this.OVERRIDE_FLAG, { skill: skill || null, characteristic: characteristic || null, expires });
+    return item.setFlag("starwarsffg", this.OVERRIDE_FLAG, { skill: skill || null, characteristic: characteristic || null });
   }
 
   /**
@@ -233,7 +233,6 @@ export default class RollProfiles {
           label: profile.label,
           summary: this.profileSummary(actorData, profile),
         })),
-        expiresEncounter: (stored.expires ?? "encounter") === "encounter",
       }
     );
 
@@ -242,7 +241,6 @@ export default class RollProfiles {
       return {
         skill: html.find(".roll-profile-skill").val() || null,
         characteristic: html.find(".roll-profile-characteristic").val() || null,
-        expires: html.find(".roll-profile-expires").val() || "encounter",
         saveAs: (html.find(".roll-profile-save-as").val() || "").trim(),
       };
     };
@@ -340,42 +338,5 @@ export default class RollProfiles {
     if (profile?.skill) parts.push(this.skillLabel(actorData, profile.skill));
     if (profile?.characteristic) parts.push(this.characteristicLabel(profile.characteristic));
     return parts.join(" / ");
-  }
-
-  /**
-   * Register the encounter-scoped expiry. An override set to last "until the end of the encounter"
-   * is cleared when the combat it was used in is deleted.
-   */
-  static registerHooks() {
-    Hooks.on("deleteCombat", async (combat) => {
-      // One client must own the cleanup: every owner of a combatant would otherwise issue the same
-      // update. The active GM can update every actor in the combat, so it does the work.
-      if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
-      try {
-        await this.clearEncounterOverrides(combat);
-      } catch (err) {
-        CONFIG.logger?.warn?.("Failed to clear encounter roll overrides", err);
-      }
-    });
-  }
-
-  /**
-   * Clear every "until the end of the encounter" override carried by the combat's participants.
-   * @param {Combat} combat
-   */
-  static async clearEncounterOverrides(combat) {
-    const actors = new Set();
-    for (const combatant of combat?.combatants ?? []) {
-      if (combatant?.actor) actors.add(combatant.actor);
-    }
-
-    for (const actor of actors) {
-      const updates = [];
-      for (const item of actor.items) {
-        if (this.getOverride(item)?.expires !== "encounter") continue;
-        updates.push({ _id: item.id, [`flags.starwarsffg.${this.OVERRIDE_FLAG}`]: this.EMPTY_OVERRIDE });
-      }
-      if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
-    }
   }
 }

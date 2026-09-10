@@ -532,13 +532,13 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
 
   /**
    * Persist the dialog's skill/characteristic selection onto the weapon when "keep for this weapon"
-   * is ticked, so an encounter-long substitution does not have to be re-picked on every roll.
+   * is ticked, so a substitution that lasts a while does not have to be re-picked on every roll.
+   * It stays in force until it is cleared from the badge on the row or the weapon's editor.
    */
   async _storeProfileSelection(html) {
     if (!this.profile?.canStore) return;
     if (!html.find(".roll-profile-remember").is(":checked")) return;
-    const expires = html.find(".roll-profile-expires").val() || "encounter";
-    await RollProfiles.setOverride(this.profile.item, { ...this._profileSelection, expires });
+    await RollProfiles.setOverride(this.profile.item, this._profileSelection);
   }
 
   _updatePreview(html) {

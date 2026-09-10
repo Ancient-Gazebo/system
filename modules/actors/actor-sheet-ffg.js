@@ -758,7 +758,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       );
     }
 
-    const skillContextMenu = new foundry.applications.ux.ContextMenu(
+    const skillContextMenu = this._bindContextMenuOnce(
         htmlElement,
         ".skillsGrid .skill",
         contextMenuOptions,
@@ -803,7 +803,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       await this._handleKillMinion(ev);
     });
 
-    new foundry.applications.ux.ContextMenu(htmlElement, "div.skillsHeader", [
+    this._bindContextMenuOnce(htmlElement, "div.skillsHeader", [
       {
         name: game.i18n.localize("SWFFG.SkillAddContextItem"),
         icon: '<i class="fas fa-plus-circle"></i>',
@@ -904,9 +904,9 @@ export class ActorSheetFFG extends FFGActorSheet {
       },
     };
 
-    new foundry.applications.ux.ContextMenu(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, duplicateItemContextItem], {jQuery: false});
-    new foundry.applications.ux.ContextMenu(htmlElement, "li.item.forcepower", [sendToChatContextItem, rollForceToChatContextItem], {jQuery: false});
-    new foundry.applications.ux.ContextMenu(htmlElement, "div.item", [sendToChatContextItem], {jQuery: false});
+    this._bindContextMenuOnce(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, duplicateItemContextItem], {jQuery: false});
+    this._bindContextMenuOnce(htmlElement, "li.item.forcepower", [sendToChatContextItem, rollForceToChatContextItem], {jQuery: false});
+    this._bindContextMenuOnce(htmlElement, "div.item", [sendToChatContextItem], {jQuery: false});
 
     if (["nemesis", "rival"].includes(this.actor.type)) {
       this.sheetoptions = new ActorOptions(this, html);
@@ -2086,15 +2086,6 @@ export class ActorSheetFFG extends FFGActorSheet {
       await RollProfiles.prompt(this.actor, item);
     });
 
-    // Delegated: the badge is painted after these listeners are wired, and repainted on every render.
-    html.on("click", ".roll-override-badge", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const itemId = $(event.currentTarget).parents(".item").data("itemId");
-      const item = this.actor.items.get(itemId);
-      if (item) await RollProfiles.prompt(this.actor, item);
-    });
-
     this._paintRollOverrides(html);
 
     // Use medical/repair item
@@ -2805,6 +2796,35 @@ export class ActorSheetFFG extends FFGActorSheet {
   }
 
   /**
+   * Construct a ContextMenu once per rendered root element, rather than once per render.
+   *
+   * ApplicationV2 keeps the same root element across re-renders, and ContextMenu binds its listener
+   * to that root inside its constructor with no public way to unbind it again. Building them
+   * unconditionally in activateListeners therefore stacked one more live instance per render, all
+   * bound to the same node. Right-clicking a row then ran every stale copy, and a copy that had
+   * never rendered a menu of its own threw out of `_animate` when asked to close - "Cannot read
+   * properties of undefined (reading 'getBoundingClientRect')", once per accumulated render.
+   *
+   * Rebinding is keyed off the root element, so a genuinely new root (the old one is detached, and
+   * its listeners go with it) still gets its menus.
+   *
+   * @param {HTMLElement} root     the element the menu listens on
+   * @param {string} selector      the row selector that activates it
+   * @param {Array} menuItems      the menu entries
+   * @param {object} [options]     ContextMenu options
+   * @returns {?foundry.applications.ux.ContextMenu} the menu, or null if this root already has one
+   */
+  _bindContextMenuOnce(root, selector, menuItems, options = {}) {
+    if (this._ffgContextMenuRoot !== root) {
+      this._ffgContextMenuRoot = root;
+      this._ffgContextMenuSelectors = new Set();
+    }
+    if (this._ffgContextMenuSelectors.has(selector)) return null;
+    this._ffgContextMenuSelectors.add(selector);
+    return new foundry.applications.ux.ContextMenu(root, selector, menuItems, options);
+  }
+
+  /**
    * Mark every item row whose checks are currently rolled with a substituted skill or
    * characteristic, so an encounter-long swap is visible at a glance rather than only inside the
    * roll dialog. Clicking the badge reopens the editor.
@@ -2831,7 +2851,17 @@ export class ActorSheetFFG extends FFGActorSheet {
       badge.className = "roll-override-badge";
       badge.title = game.i18n.format("SWFFG.RollProfile.BadgeTooltip", { profile: label });
       badge.textContent = label;
-      if (!existing) target.append(badge);
+      if (!existing) {
+        // Bound to the badge itself rather than delegated from the sheet root: the root survives
+        // re-renders, so a delegated handler would gain a duplicate copy on every one of them and
+        // open one editor per render (see _bindContextMenuOnce for the same trap).
+        badge.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          await RollProfiles.prompt(this.actor, item);
+        });
+        target.append(badge);
+      }
     });
   }
 

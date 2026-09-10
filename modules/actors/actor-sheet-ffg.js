@@ -18,6 +18,7 @@ import TalentOrganization from "../helpers/talent-organization.js";
 import GearOrganization from "../helpers/gear-organization.js";
 import WeaponOrganization from "../helpers/weapon-organization.js";
 import AbilityOrganization from "../helpers/ability-organization.js";
+import RollProfiles from "../helpers/roll-profiles.js";
 import {
   change_role,
   deregister_crew,
@@ -2072,6 +2073,30 @@ export class ActorSheetFFG extends FFGActorSheet {
         await DiceHelpers.rollSkill(this, event, upgradeType);
       });
 
+    // Right-click a weapon's roll button to substitute the skill or characteristic its checks use
+    // (see helpers/roll-profiles.js). Left-click rolls, and ctrl/shift-click already mean "upgrade",
+    // so the context menu is the gesture left for this.
+    html.find(".roll-button").on("contextmenu", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const itemId = $(event.currentTarget).parents(".item").data("itemId");
+      if (!itemId) return;
+      const item = this.actor.items.get(itemId);
+      if (!item || !["weapon", "shipweapon"].includes(item.type)) return;
+      await RollProfiles.prompt(this.actor, item);
+    });
+
+    // Delegated: the badge is painted after these listeners are wired, and repainted on every render.
+    html.on("click", ".roll-override-badge", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const itemId = $(event.currentTarget).parents(".item").data("itemId");
+      const item = this.actor.items.get(itemId);
+      if (item) await RollProfiles.prompt(this.actor, item);
+    });
+
+    this._paintRollOverrides(html);
+
     // Use medical/repair item
     html
       .find(".item-medical")
@@ -2209,7 +2234,8 @@ export class ActorSheetFFG extends FFGActorSheet {
             callback: async (html) => {
               const skill = raw_weapons[i].system.skill.value;
               let pool = new DicePoolFFG({'difficulty': 2});
-              pool = get_dice_pool(crew_id, skill, pool);
+              // the weapon is passed so a stored skill/characteristic override on it is honoured
+              pool = get_dice_pool(crew_id, skill, pool, raw_weapons[i]);
               pool = await DiceHelpers.getModifiers(pool, raw_weapons[i]);
               await DiceHelpers.displayRollDialog(
                 crewSheet,
@@ -2551,7 +2577,8 @@ export class ActorSheetFFG extends FFGActorSheet {
     // create the starting pool
     let pool = new DicePoolFFG(starting_pool);
     // update the pool with actor data
-    pool = get_dice_pool(selectedGunner.actor_id, weaponSkill, pool);
+    // the weapon is passed so a stored skill/characteristic override on it is honoured
+    pool = get_dice_pool(selectedGunner.actor_id, weaponSkill, pool, weapon);
     // generic dice/roll/result modifiers carried by the weapon and its attachments
     pool = await DiceHelpers.getModifiers(pool, weapon);
     // skill-targeted modifiers on the weapon and its attachments (e.g. a targeting array installed on
@@ -2775,6 +2802,37 @@ export class ActorSheetFFG extends FFGActorSheet {
       },
     };
     ChatMessage.create(messageData);
+  }
+
+  /**
+   * Mark every item row whose checks are currently rolled with a substituted skill or
+   * characteristic, so an encounter-long swap is visible at a glance rather than only inside the
+   * roll dialog. Clicking the badge reopens the editor.
+   *
+   * Painted in JS rather than added to each row template: the same weapon row exists in five
+   * template variants (flat lists, the gear/weapon organization tabs, vehicle attachments), and one
+   * insertion point here cannot drift from the others.
+   *
+   * @param {jQuery} html
+   */
+  _paintRollOverrides(html) {
+    const actorData = this.actor.system;
+    html.find("li.item[data-item-id]").each((index, row) => {
+      const item = this.actor.items.get(row.dataset.itemId);
+      const label = item ? RollProfiles.badgeLabel(actorData, item) : "";
+      const existing = row.querySelector(".roll-override-badge");
+      if (!label) {
+        existing?.remove();
+        return;
+      }
+      const target = row.querySelector(".item-name .hover") ?? row.querySelector(".item-name");
+      if (!target) return;
+      const badge = existing ?? document.createElement("span");
+      badge.className = "roll-override-badge";
+      badge.title = game.i18n.format("SWFFG.RollProfile.BadgeTooltip", { profile: label });
+      badge.textContent = label;
+      if (!existing) target.append(badge);
+    });
   }
 
   /**

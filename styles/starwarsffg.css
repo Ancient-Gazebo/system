@@ -4617,3 +4617,65 @@ body.system-starwarsffg #context-menu.theme-light button:hover {
 .starwarsffg .gear-items .gear-col-equipped {
   white-space: nowrap;
 }
+
+/* --- Temporary skill / characteristic substitution (helpers/roll-profiles.js) --- */
+
+/* The swap controls in the roll dialog. Collapsed by default so the dialog opens at the size it
+   always has, and forced open when a substitution is already in force -- an override that is in
+   effect must never be hidden behind a closed summary. */
+.starwarsffg .dice-pool-dialog .roll-profile-swap {
+  margin-top: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.25);
+}
+.starwarsffg .dice-pool-dialog .roll-profile-swap > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.roll-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.roll-profile-row > label {
+  flex: 0 0 auto;
+  min-width: 90px;
+}
+.roll-profile-row > select,
+.roll-profile-row > input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.roll-profile-row > .roll-profile-delete {
+  flex: 0 0 auto;
+}
+.roll-profile-row .roll-profile-remember-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.roll-profile-dialog .roll-profile-hint {
+  margin: 0 0 8px 0;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+/* Row badge naming the substitution currently in force. Sized down and set to not shrink the row:
+   it sits inside the existing name cell, so it must never push the controls out of the row. */
+.starwarsffg .roll-override-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.35);
+  font-size: 0.75em;
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+}

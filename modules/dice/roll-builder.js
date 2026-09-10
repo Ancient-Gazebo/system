@@ -1,5 +1,6 @@
 import { getAdversaryLevel } from "../helpers/token.js";
 import { DicePoolFFG } from "./pool.js";
+import RollProfiles from "../helpers/roll-profiles.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -27,7 +28,7 @@ function loadMonteCarlo() {
 }
 
 export default class RollBuilderFFG extends HandlebarsApplicationMixin(ApplicationV2) {
-  constructor(rollData, rollDicePool, rollDescription, rollSkillName, rollItem, rollAdditionalFlavor, rollSound) {
+  constructor(rollData, rollDicePool, rollDescription, rollSkillName, rollItem, rollAdditionalFlavor, rollSound, rollOptions = {}) {
     super();
     this.roll = {
       data: rollData,
@@ -38,6 +39,16 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
     };
     this.dicePool = rollDicePool;
     this.description = rollDescription;
+    /**
+     * Context for the skill / characteristic swap controls, or null when the caller did not offer
+     * them (a pool sent to a player, a vehicle role check). Built by
+     * DiceHelpers.buildProfileOptions; `rebuild` re-runs the pool assembly for a new pair.
+     */
+    this.profile = rollOptions?.profile ?? null;
+    /** The pair currently selected in the dialog; "" means "use the default". */
+    this._profileSelection = this.profile
+      ? { skill: this.profile.selectedSkill || null, characteristic: this.profile.selectedCharacteristic || null }
+      : null;
     this.adversaryRanks = RollBuilderFFG._computeAdversaryRanks();
     // Which pool the dialog shows/rolls when an Adversary is targeted. Defaults
     // to the Adversary pool so the upgrade is applied by default. Only takes
@@ -226,6 +237,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       diceSymbols,
       simDisplay: display,
       simCount: game.settings.get("starwarsffg", "rollSimulation"),
+      profile: this.profile,
     };
   }
 
@@ -243,6 +255,8 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       this._syncAdversaryButtons(html);
       this._updatePreview(html);
     });
+
+    this._activateProfileControls(html);
 
     this._refreshAdversary(html);
     this._adversaryHookId = Hooks.on("targetToken", (user) => {
@@ -373,6 +387,12 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         CONFIG.logger.warn(`Caught ammo error in roller: ${error}`);
       }
 
+      try {
+        await this._storeProfileSelection(html);
+      } catch (error) {
+        CONFIG.logger.warn(`Caught roll-profile error in roller: ${error}`);
+      }
+
       const sentToPlayer = html.find(".user-selection")?.[0]?.value;
       if (sentToPlayer) {
         let container = $(`<div class='dice-pool'></div>`)[0];
@@ -445,6 +465,80 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         $(selector).val("");
       }
     });
+  }
+
+  /**
+   * Wire the skill / characteristic swap controls.
+   *
+   * Changing either dropdown re-assembles the pool from scratch through the caller's `rebuild`
+   * rather than patching the dice already on screen: the rank, the characteristic, and every
+   * skill-scoped Active Effect all change together, and only a full rebuild gets all of them right.
+   *
+   * Manual dice adjustments made before a swap are reset by the rebuild, which is why the inputs are
+   * re-initialised from the new pool afterwards - the swap is the bigger decision, so it wins.
+   */
+  _activateProfileControls(html) {
+    if (!this.profile?.rebuild) return;
+
+    const skillSelect = html.find(".roll-profile-skill");
+    const characteristicSelect = html.find(".roll-profile-characteristic");
+
+    // The template selects from the stored override, which is also what _profileSelection starts as,
+    // so this is a no-op on first render. It matters if the dialog is ever re-rendered after a swap:
+    // without it the dropdowns would snap back to the stored pair while the pool kept the new one.
+    skillSelect.val(this._profileSelection?.skill ?? "");
+    characteristicSelect.val(this._profileSelection?.characteristic ?? "");
+
+    const onChange = async () => {
+      this._profileSelection = {
+        skill: skillSelect.val() || null,
+        characteristic: characteristicSelect.val() || null,
+      };
+      let rolled;
+      try {
+        rolled = await this.profile.rebuild(this._profileSelection);
+      } catch (err) {
+        CONFIG.logger?.warn?.("Failed to rebuild the dice pool for the selected skill/characteristic", err);
+        return;
+      }
+      this.dicePool = rolled.dicePool;
+      // Keep the chat card honest: the flavor line names the skill that was actually rolled.
+      this.roll.skillName = rolled.label ?? this.roll.skillName;
+      // The "(default - X)" characteristic option depends on the selected skill, so it is relabelled
+      // whenever the skill changes.
+      const defaultOption = characteristicSelect.find("option[value='']")[0];
+      if (defaultOption) {
+        defaultOption.textContent = game.i18n.format("SWFFG.RollProfile.DefaultCharacteristic", {
+          characteristic: RollProfiles.characteristicLabel(rolled.profile.characteristic),
+        });
+      }
+      this._initializeInputs(html);
+      this._syncAdversaryButtons(html);
+    };
+
+    skillSelect.on("change", onChange);
+    characteristicSelect.on("change", onChange);
+
+    // Picking a saved profile just fills the two dropdowns and rebuilds, so a profile is never a
+    // separate code path - it is a shortcut to a (skill, characteristic) pair.
+    html.find(".roll-profile-load").on("change", (event) => {
+      const option = event.currentTarget.selectedOptions?.[0];
+      if (!option?.value) return;
+      skillSelect.val(option.dataset.skill ?? "");
+      characteristicSelect.val(option.dataset.characteristic ?? "");
+      return onChange();
+    });
+  }
+
+  /**
+   * Persist the dialog's skill/characteristic selection onto the weapon when "keep for this weapon"
+   * is ticked, so an encounter-long substitution does not have to be re-picked on every roll.
+   */
+  async _storeProfileSelection(html) {
+    if (!this.profile?.canStore) return;
+    if (!html.find(".roll-profile-remember").is(":checked")) return;
+    const expires = html.find(".roll-profile-expires").val() || "encounter";
+    await RollProfiles.setOverride(this.profile.item, { ...this._profileSelection, expires });
   }
 
   _updatePreview(html) {

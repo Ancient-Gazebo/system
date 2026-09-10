@@ -1,0 +1,49 @@
+<div class="dialog-content roll-profile-dialog">
+  <p class="roll-profile-hint">{{localize "SWFFG.RollProfile.Hint"}}</p>
+
+  {{#if profiles.length}}
+  <div class="roll-profile-row">
+    <label for="roll-profile-load">{{localize "SWFFG.RollProfile.SavedProfiles"}}</label>
+    <select id="roll-profile-load" class="roll-profile-load">
+      <option value="">{{localize "SWFFG.RollProfile.NoProfile"}}</option>
+      {{#each profiles}}
+      <option value="{{this.id}}">{{this.label}}{{#if this.summary}} &mdash; {{this.summary}}{{/if}}</option>
+      {{/each}}
+    </select>
+    <a class="roll-profile-delete" title="{{localize "SWFFG.RollProfile.DeleteProfile"}}"><i class="fas fa-trash"></i></a>
+  </div>
+  {{/if}}
+
+  <div class="roll-profile-row">
+    <label for="roll-profile-skill">{{localize "SWFFG.RollProfile.Skill"}}</label>
+    <select id="roll-profile-skill" class="roll-profile-skill">
+      <option value="">{{autoSkillLabel}}</option>
+      {{#each skills}}
+      <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  <div class="roll-profile-row">
+    <label for="roll-profile-characteristic">{{localize "SWFFG.RollProfile.Characteristic"}}</label>
+    <select id="roll-profile-characteristic" class="roll-profile-characteristic">
+      <option value="">{{autoCharacteristicLabel}}</option>
+      {{#each characteristics}}
+      <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  <div class="roll-profile-row">
+    <label for="roll-profile-expires">{{localize "SWFFG.RollProfile.Duration"}}</label>
+    <select id="roll-profile-expires" class="roll-profile-expires">
+      <option value="encounter" {{#if expiresEncounter}}selected{{/if}}>{{localize "SWFFG.RollProfile.UntilEncounterEnds"}}</option>
+      <option value="manual" {{#unless expiresEncounter}}selected{{/unless}}>{{localize "SWFFG.RollProfile.UntilCleared"}}</option>
+    </select>
+  </div>
+
+  <div class="roll-profile-row">
+    <label for="roll-profile-save-as">{{localize "SWFFG.RollProfile.SaveAs"}}</label>
+    <input type="text" id="roll-profile-save-as" class="roll-profile-save-as" placeholder="{{localize "SWFFG.RollProfile.SaveAsPlaceholder"}}" />
+  </div>
+</div>

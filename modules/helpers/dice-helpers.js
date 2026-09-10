@@ -2,19 +2,152 @@ import PopoutEditor from "../popout-editor.js";
 import RollBuilderFFG from "../dice/roll-builder.js";
 import ModifierHelpers from "../helpers/modifiers.js";
 import ImportHelpers from "../importer/import-helpers.js";
+import RollProfiles from "../helpers/roll-profiles.js";
 
 export default class DiceHelpers {
-  static async rollSkill(obj, event, type, flavorText, sound) {
-    const data = await obj.getData();
-    const row = event.target.parentElement.parentElement;
-    let skillName = row.parentElement.dataset["ability"];
-    if (skillName === undefined) {
-      skillName = row.dataset["ability"];
-      if (skillName === undefined) {
-        skillName = row.parentElement.parentElement.parentElement.dataset["ability"];
-      }
+  /**
+   * The dice a (skill, characteristic) pair contributes, merged with any pool the caller already
+   * holds.
+   *
+   * This is the single implementation of the FFG pool formula - `max(rank, characteristic)` ability
+   * dice, of which `min(rank, characteristic)` are upgraded to proficiency - plus the skill-scoped
+   * modifier fields Active Effects write onto `system.skills.<skill>.*`. Every roll entry point used
+   * to carry its own copy of it, and they had drifted.
+   *
+   * @param {object}  opts
+   * @param {object}  opts.skill              the actor's skill entry (rank + skill-scoped modifiers)
+   * @param {object}  opts.characteristic     the governing characteristic entry (`{value}`)
+   * @param {?object} [opts.incoming]         a pool to merge into (the vehicle/crew path)
+   * @param {number}  [opts.baseDifficulty]   difficulty before any skill modifiers
+   * @param {number}  [opts.extraSetback]     setback from sources outside the skill (item status, defence)
+   * @param {number}  [opts.extraDifficulty]  difficulty from sources outside the skill (item status)
+   * @param {boolean} [opts.consumeUpgrades]  spend the pool's `upgrades` as ability upgrades
+   * @param {boolean} [opts.applyDifficulty]  compute a difficulty side at all
+   * @param {?object} [opts.source]           modifier provenance, for the dice-pool tooltip
+   * @returns {DicePoolFFG}
+   */
+  static buildSkillPool({
+    skill,
+    characteristic,
+    incoming = null,
+    baseDifficulty = 0,
+    extraSetback = 0,
+    extraDifficulty = 0,
+    consumeUpgrades = true,
+    applyDifficulty = true,
+    source = null,
+  }) {
+    const n = (value) => Number(value) || 0;
+    const inc = incoming ?? {};
+    const rank = n(skill?.rank);
+    const charValue = n(characteristic?.value);
+
+    const poolData = {
+      ability: Math.max(charValue, rank) + n(inc.ability),
+      boost: n(skill?.boost) + n(inc.boost),
+      setback: n(skill?.setback) + n(inc.setback) + n(extraSetback),
+      remsetback: n(skill?.remsetback) + n(inc.remsetback),
+      force: n(skill?.force) + n(inc.force),
+      advantage: n(skill?.advantage) + n(inc.advantage),
+      dark: n(skill?.dark) + n(inc.dark),
+      light: n(skill?.light) + n(inc.light),
+      failure: n(skill?.failure) + n(inc.failure),
+      threat: n(skill?.threat) + n(inc.threat),
+      success: n(skill?.success) + n(inc.success),
+      triumph: n(skill?.triumph) + n(inc.triumph),
+      despair: n(skill?.despair) + n(inc.despair),
+      upgrades: n(skill?.upgrades) - n(skill?.downgradeAbility) + n(inc.upgrades),
+      challenge: n(inc.challenge),
+    };
+    if (applyDifficulty) {
+      poolData.difficulty = Math.max(
+        0,
+        n(baseDifficulty) + n(inc.difficulty) + n(extraDifficulty) + n(skill?.difficulty) - n(skill?.decreaseDifficulty)
+      );
+    }
+    if (source) poolData.source = source;
+
+    const dicePool = new DicePoolFFG(poolData);
+    dicePool.upgrade(Math.min(charValue, rank) + n(inc.proficiency) + (consumeUpgrades ? dicePool.upgrades : 0));
+    if (applyDifficulty) {
+      dicePool.upgradeDifficulty(n(skill?.upgradeDifficulty) - n(skill?.downgradeDifficulty));
+    }
+    return dicePool;
+  }
+
+  /**
+   * Resolve which skill and characteristic a check actually rolls - honouring a per-roll override
+   * from the roll dialog, or one stored on the weapon (see helpers/roll-profiles.js) - and assemble
+   * the finished pool.
+   *
+   * Two things deliberately stay on the weapon's OWN skill rather than following an override:
+   *
+   *  - Defence dice. `getDefenseDice` decides ranged vs melee defence from the skill name, so
+   *    rolling a blaster with Mechanics would otherwise silently drop the target's ranged defence.
+   *  - Damage. Not touched here at all; `Actor#_applyCharacteristicDamage` keeps adding the weapon's
+   *    own `system.characteristic.value`, whatever the check is rolled with.
+   *
+   * Skill-scoped Active Effects (`system.skills.<skill>.boost` and friends) DO follow the override,
+   * because they are read off whichever skill entry is resolved here - if the character is rolling
+   * Mechanics, they get Mechanics' modifiers.
+   *
+   * @param {object} opts
+   * @param {object} opts.actorData        the actor's `system` data (or a sheet getData()'s `data`)
+   * @param {Item}   [opts.item]           the item being rolled, if any
+   * @param {?string} [opts.baseSkillKey]  the skill the roll started from, for non-item rolls
+   * @param {?object} [opts.overrides]     `{skill, characteristic}` chosen for this roll only
+   * @returns {Promise<{dicePool: DicePoolFFG, profile: object, skill: object, characteristic: object, label: string}>}
+   */
+  static async assemblePool({
+    actorData,
+    item = null,
+    baseSkillKey = null,
+    overrides = null,
+    baseDifficulty = 0,
+    extraSetback = 0,
+    extraDifficulty = 0,
+    upgradeType = null,
+    incoming = null,
+    consumeUpgrades = true,
+  }) {
+    const profile = RollProfiles.resolve(actorData, item, overrides, baseSkillKey);
+    const skill = actorData?.skills?.[profile.skill] ?? (await this.buildFallbackSkill(actorData, profile.skill));
+    const characteristic = actorData?.characteristics?.[profile.characteristic] ?? { value: 0 };
+    // getWeaponStatus/getDefenseDice/getModifiers all key off `type`; a plain skill row has no item.
+    const itemData = item ?? { type: "skill" };
+
+    // Defence is a property of how the weapon is USED, not of the skill it is rolled with: keep it
+    // on the weapon's own skill so an override cannot silently discard the target's defence.
+    const defenseDice = this.getDefenseDice({ value: profile.baseSkill ?? profile.skill }, itemData);
+
+    let dicePool = this.buildSkillPool({
+      skill,
+      characteristic,
+      incoming,
+      baseDifficulty,
+      extraSetback: extraSetback + defenseDice,
+      extraDifficulty,
+      consumeUpgrades,
+    });
+
+    if (upgradeType === "ability") {
+      dicePool.upgrade();
+    } else if (upgradeType === "difficulty") {
+      dicePool.upgradeDifficulty();
     }
 
+    dicePool = new DicePoolFFG(await this.getModifiers(dicePool, itemData));
+
+    return { dicePool, profile, skill, characteristic, label: skill.label };
+  }
+
+  /**
+   * A zeroed skill entry for a skill the actor does not carry (an adversary rolling a skill outside
+   * its list, a renamed skill theme). Labelled from the active skill theme where possible.
+   * @param {object} actorData
+   * @param {string} skillName
+   */
+  static async buildFallbackSkill(actorData, skillName) {
     let skills;
     const theme = await game.settings.get("starwarsffg", "skilltheme");
     try {
@@ -25,13 +158,9 @@ export default class DiceHelpers {
       CONFIG.logger.warn(`Unable to load skill theme ${theme}, defaulting to starwars skill theme`, err);
     }
 
-    let skillData = skills?.[skillName];
+    const skillData = skills?.[skillName] ?? actorData?.[skillName];
 
-    if (!skillData) {
-      skillData = data.data[skillName];
-    }
-
-    let skill = {
+    return {
       rank: 0,
       characteristic: "",
       boost: 0,
@@ -50,15 +179,17 @@ export default class DiceHelpers {
       label: skillData?.label ? game.i18n.localize(skillData.label) : game.i18n.localize(skillName),
       source: {},
     };
-    let characteristic = {
-      value: 0,
-    };
+  }
 
-    if (data?.data?.skills?.[skillName]) {
-      skill = data.data.skills[skillName];
-    }
-    if (data?.data?.characteristics?.[skill?.characteristic]) {
-      characteristic = data.data.characteristics[skill.characteristic];
+  static async rollSkill(obj, event, type, flavorText, sound) {
+    const data = await obj.getData();
+    const row = event.target.parentElement.parentElement;
+    let skillName = row.parentElement.dataset["ability"];
+    if (skillName === undefined) {
+      skillName = row.dataset["ability"];
+      if (skillName === undefined) {
+        skillName = row.parentElement.parentElement.parentElement.dataset["ability"];
+      }
     }
 
     const actor = await game.actors.get(data.actor._id);
@@ -84,45 +215,85 @@ export default class DiceHelpers {
       }
     }
 
-    const itemData = item || { name: game.i18n.localize(skill.label), type: "skill" };
-    const status = this.getWeaponStatus(itemData);
+    const status = this.getWeaponStatus(item ?? { type: "skill" });
     // getWeaponStatus returns null when the item is too damaged to use (Major); abort the
     // roll (the notification was already shown) rather than dereferencing undefined.
     if (!status) return;
-    let defenseDice = this.getDefenseDice(skill, itemData);
 
     // TODO: Get weapon specific modifiers from itemmodifiers and itemattachments
 
-    let dicePool = new DicePoolFFG({
-      ability: Math.max(characteristic.value, skill.rank),
-      boost: skill.boost ?? 0,
-      setback: (skill.setback ?? 0) + status.setback + defenseDice,
-      force: skill.force ?? 0,
-      advantage: skill.advantage ?? 0,
-      dark: skill.dark ?? 0,
-      light: skill.light ?? 0,
-      failure: skill.failure ?? 0,
-      threat: skill.threat ?? 0,
-      success: skill.success ?? 0,
-      triumph: skill.triumph ?? 0,
-      despair: skill.despair ?? 0,
-      upgrades: (skill.upgrades ?? 0) - (skill.downgradeAbility ?? 0),
-      remsetback: skill.remsetback ?? 0,
-      difficulty: Math.max(0, 2 + status.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)), // default average + status-effect difficulty dice, minus "Skill Decrease Difficulty"
-    });
+    // Re-assembled from scratch whenever the roll dialog's skill/characteristic dropdowns change, so
+    // the dice shown are always the dice that pair would really roll rather than a patched-up delta.
+    const assemble = async (overrides) =>
+      this.assemblePool({
+        actorData: data.data,
+        item,
+        baseSkillKey: skillName,
+        overrides,
+        baseDifficulty: 2, // default average
+        extraDifficulty: status.difficulty,
+        extraSetback: status.setback,
+        upgradeType: type,
+      });
 
-    dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
-    // status-effect difficulty upgrades (mirrors skill.upgrades for ability)
-    dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
+    const rolled = await assemble(null);
+    const itemData = item || { name: game.i18n.localize(rolled.label), type: "skill" };
 
-    if (type === "ability") {
-      dicePool.upgrade();
-    } else if (type === "difficulty") {
-      dicePool.upgradeDifficulty();
-    }
+    await this.displayRollDialog(
+      data,
+      rolled.dicePool,
+      `${game.i18n.localize("SWFFG.Rolling")} ${game.i18n.localize(rolled.label)}`,
+      rolled.label,
+      itemData,
+      flavorText,
+      sound,
+      { profile: this.buildProfileOptions(data.data, item, rolled, assemble) }
+    );
+  }
 
-    dicePool = new DicePoolFFG(await this.getModifiers(dicePool, itemData));
-    await this.displayRollDialog(data, dicePool, `${game.i18n.localize("SWFFG.Rolling")} ${game.i18n.localize(skill.label)}`, skill.label, itemData, flavorText, sound);
+  /**
+   * The context the roll dialog needs to offer (and re-apply) a skill/characteristic swap.
+   * Returns null when there is nothing to swap between.
+   *
+   * @param {object} actorData
+   * @param {?Item} item
+   * @param {object} rolled    the result of the initial {@link assemblePool}
+   * @param {Function} rebuild `async (overrides) => assemblePool(...)`
+   */
+  static buildProfileOptions(actorData, item, rolled, rebuild) {
+    if (!actorData?.skills || !Object.keys(actorData.skills).length) return null;
+    const stored = RollProfiles.getOverride(item) ?? {};
+    return {
+      rebuild,
+      item: item ?? null,
+      // Storing a per-weapon override only makes sense for a real, owned weapon: those are the
+      // rows that carry a roll button, and the only ones the stored override is ever read back for.
+      canStore: Boolean(item?.setFlag) && ["weapon", "shipweapon"].includes(item.type),
+      baseSkillKey: rolled.profile.baseSkill,
+      selectedSkill: stored.skill ?? "",
+      selectedCharacteristic: stored.characteristic ?? "",
+      // Open the control by default when a substitution is already in force, so it is never in
+      // effect while hidden behind a collapsed summary.
+      expanded: Boolean(stored.skill || stored.characteristic),
+      skills: RollProfiles.skillChoices(actorData, stored.skill ?? null),
+      characteristics: RollProfiles.characteristicChoices(stored.characteristic ?? null),
+      // Saved profiles are offered here as well as in the editor, so a lightsaber form (or any other
+      // pair used often enough to be worth naming) is one click away at roll time.
+      profiles: RollProfiles.getProfiles(item).map((profile) => ({
+        id: profile.id,
+        label: profile.label,
+        skill: profile.skill ?? "",
+        characteristic: profile.characteristic ?? "",
+        summary: RollProfiles.profileSummary(actorData, profile),
+      })),
+      defaultSkillLabel: game.i18n.format("SWFFG.RollProfile.DefaultSkill", {
+        skill: RollProfiles.skillLabel(actorData, rolled.profile.baseSkill),
+      }),
+      defaultCharacteristicLabel: game.i18n.format("SWFFG.RollProfile.DefaultCharacteristic", {
+        characteristic: RollProfiles.characteristicLabel(rolled.profile.characteristic),
+      }),
+      actorData,
+    };
   }
 
   static getDefenseDice(skill, itemData){
@@ -160,8 +331,8 @@ export default class DiceHelpers {
     return defenseDice;
   }
 
-  static async displayRollDialog(data, dicePool, description, skillName, item, flavorText, sound) {
-    return new RollBuilderFFG(data, dicePool, description, skillName, item, flavorText, sound).render(true);
+  static async displayRollDialog(data, dicePool, description, skillName, item, flavorText, sound, options = {}) {
+    return new RollBuilderFFG(data, dicePool, description, skillName, item, flavorText, sound, options).render(true);
   }
 
   static async addSkillDicePool(data, elem) {
@@ -170,21 +341,12 @@ export default class DiceHelpers {
       const skill = data.data.skills[skillName];
       const characteristic = data.data.characteristics[skill.characteristic];
 
-      const dicePool = new DicePoolFFG({
-        ability: Math.max(characteristic?.value ? characteristic.value : 0, skill?.rank ? skill.rank : 0),
-        boost: skill.boost,
-        setback: skill.setback,
-        force: skill.force,
-        advantage: skill.advantage,
-        dark: skill.dark,
-        light: skill.light,
-        failure: skill.failure,
-        threat: skill.threat,
-        success: skill.success,
-        triumph: skill?.triumph ? skill.triumph : 0,
-        despair: skill?.despair ? skill.despair : 0,
-        upgrades: (skill?.upgrades ?? 0) - (skill?.downgradeAbility ?? 0),
-        remsetback: skill?.remsetback ? skill.remsetback : 0,
+      // The hover preview shows the ability side only - no difficulty is involved - so the shared
+      // builder is asked to skip the difficulty side entirely rather than inventing one.
+      const dicePool = this.buildSkillPool({
+        skill,
+        characteristic,
+        applyDifficulty: false,
         source: {
           skill: skill?.ranksource?.length ? skill.ranksource : [],
           boost: skill?.boostsource?.length ? skill.boostsource : [],
@@ -201,7 +363,6 @@ export default class DiceHelpers {
           upgrades: skill?.upgradessource?.length ? skill.upgradessource : [],
         },
       });
-      dicePool.upgrade(Math.min(characteristic?.value ?? 0, skill?.rank ?? 0) + dicePool.upgrades);
 
       const rollButton = elem.querySelector(".roll-button");
       dicePool.renderPreview(rollButton);
@@ -213,7 +374,6 @@ export default class DiceHelpers {
     const actorSheet = await actor.sheet.getData();
 
     const item = actor.items.get(itemId);
-    const itemData = item.system;
     await item.setFlag("starwarsffg", "uuid", item.uuid);
 
     const status = this.getWeaponStatus(item);
@@ -221,57 +381,37 @@ export default class DiceHelpers {
     // roll (the notification was already shown) rather than dereferencing undefined.
     if (!status) return;
 
-    const skill = actor.system.skills[itemData.skill.value];
-    const characteristic = actor.system.characteristics[skill.characteristic];
-    let defenseDice = this.getDefenseDice(skill, itemData);
-    let dicePool = new DicePoolFFG({
-      ability: Math.max(characteristic.value, skill.rank),
-      boost: skill.boost,
-      setback: (skill.setback ?? 0) + status.setback + defenseDice,
-      force: skill.force,
-      advantage: skill.advantage,
-      dark: skill.dark,
-      light: skill.light,
-      failure: skill.failure,
-      threat: skill.threat,
-      success: skill.success,
-      triumph: skill?.triumph ? skill.triumph : 0,
-      despair: skill?.despair ? skill.despair : 0,
-      upgrades: (skill?.upgrades ?? 0) - (skill?.downgradeAbility ?? 0),
-      remsetback: skill?.remsetback ? skill.remsetback : 0,
-      difficulty: Math.max(0, 2 + status.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)), // default average + status-effect difficulty dice, minus "Skill Decrease Difficulty"
-    });
+    const assemble = async (overrides) =>
+      this.assemblePool({
+        actorData: actor.system,
+        item,
+        overrides,
+        baseDifficulty: 2, // default average
+        extraDifficulty: status.difficulty,
+        extraSetback: status.setback,
+      });
 
-    dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
-    dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
+    const rolled = await assemble(null);
 
-    dicePool = new DicePoolFFG(await this.getModifiers(dicePool, item));
-
-    this.displayRollDialog(actorSheet, dicePool, `${game.i18n.localize("SWFFG.Rolling")} ${skill.label}`, skill.label, item, flavorText, sound);
+    this.displayRollDialog(
+      actorSheet,
+      rolled.dicePool,
+      `${game.i18n.localize("SWFFG.Rolling")} ${game.i18n.localize(rolled.label)}`,
+      rolled.label,
+      item,
+      flavorText,
+      sound,
+      { profile: this.buildProfileOptions(actor.system, item, rolled, assemble) }
+    );
   }
 
   // Takes a skill object, characteristic object, difficulty number and ActorSheetFFG.getData() object and creates the appropriate roll dialog.
   static async rollSkillDirect(skill, characteristic, difficulty, sheet, flavorText, sound) {
-    const dicePool = new DicePoolFFG({
-      ability: Math.max(characteristic.value, skill.rank),
-      boost: skill.boost,
-      setback: skill.setback,
-      force: skill.force,
-      difficulty: Math.max(0, difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)),
-      advantage: skill.advantage,
-      dark: skill.dark,
-      light: skill.light,
-      failure: skill.failure,
-      threat: skill.threat,
-      success: skill.success,
-      triumph: skill?.triumph ? skill.triumph : 0,
-      despair: skill?.despair ? skill.despair : 0,
-      remsetback: skill?.remsetback ? skill.remsetback : 0,
-      upgrades: (skill?.upgrades ?? 0) - (skill?.downgradeAbility ?? 0),
+    const dicePool = this.buildSkillPool({
+      skill,
+      characteristic,
+      baseDifficulty: difficulty,
     });
-
-    dicePool.upgrade(Math.min(characteristic.value, skill.rank) + dicePool.upgrades);
-    dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
 
     this.displayRollDialog(sheet, dicePool, `${game.i18n.localize("SWFFG.Rolling")} ${skill.label}`, skill.label, { name: game.i18n.localize(skill.label), type: "skill" }, flavorText, sound);
   }
@@ -401,47 +541,39 @@ export default class DiceHelpers {
  * @param actor_id ID of the actor making the check
  * @param skill_name name of the string of the skill
  * @param incoming_roll existing dice, e.g. difficulty dice
+ * @param item optional weapon being rolled; a skill/characteristic override stored on it is honoured
  * @returns {DicePoolFFG}
  */
-export function get_dice_pool(actor_id, skill_name, incoming_roll) {
+export function get_dice_pool(actor_id, skill_name, incoming_roll, item = null) {
   const actor = game.actors.get(actor_id);
   const parsed_skill_name = convert_skill_name(skill_name);
-  const skill = actor?.system?.skills?.[parsed_skill_name];
-  const characteristic = skill ? actor?.system?.characteristics?.[skill.characteristic] : undefined;
+  // A stored override names its skill by key already, so it is used as-is; otherwise fall back to
+  // the caller's (localized or raw) skill name, resolved through convert_skill_name as before.
+  const override = RollProfiles.getOverride(item);
+  const resolved_skill_name = override?.skill ?? parsed_skill_name;
+  const skill = actor?.system?.skills?.[resolved_skill_name];
+  const characteristic = skill
+    ? actor?.system?.characteristics?.[override?.characteristic ?? skill.characteristic]
+    : undefined;
 
   // If the skill or its characteristic can't be resolved (e.g. a vehicle weapon with no
   // skill set, or an unknown skill name), degrade gracefully to the incoming pool instead
   // of throwing, so the roll dialog still opens and the user can adjust dice manually.
   if (!skill || !characteristic) {
-    CONFIG.logger?.warn?.(`get_dice_pool: unresolved skill '${skill_name}' (parsed '${parsed_skill_name}') or its characteristic for '${actor?.name}'; using unmodified pool.`);
+    CONFIG.logger?.warn?.(`get_dice_pool: unresolved skill '${skill_name}' (parsed '${resolved_skill_name}') or its characteristic for '${actor?.name}'; using unmodified pool.`);
     return new DicePoolFFG(incoming_roll);
   }
 
-  const dicePool = new DicePoolFFG({
-    ability: Math.max(characteristic.value, skill.rank) + incoming_roll.ability - (Math.min(characteristic.value, skill.rank) + incoming_roll.proficiency),
-    proficiency: Math.min(characteristic.value, skill.rank) + incoming_roll.proficiency,
-    boost: (skill.boost ?? 0) + incoming_roll.boost,
-    setback: (skill.setback ?? 0) + incoming_roll.setback,
-    force: (skill.force ?? 0) + incoming_roll.force,
-    advantage: (skill.advantage ?? 0) + incoming_roll.advantage,
-    dark: (skill.dark ?? 0) + incoming_roll.dark,
-    light: (skill.light ?? 0) + incoming_roll.light,
-    failure: (skill.failure ?? 0) + incoming_roll.failure,
-    threat: (skill.threat ?? 0) + incoming_roll.threat,
-    success: (skill.success ?? 0) + incoming_roll.success,
-    triumph: (skill.triumph ?? 0) + incoming_roll.triumph,
-    despair: (skill.despair ?? 0) + incoming_roll.despair,
-    upgrades: (skill.upgrades ?? 0) - (skill.downgradeAbility ?? 0) + incoming_roll.upgrades,
-    // Parenthesised deliberately: written as `a ? a : 0 + b` the ternary binds looser than the
-    // addition, so ANY skill-side remove-setback silently discarded the incoming pool's own
-    // (a vehicle weapon's, an attachment's) instead of adding to it. Every sibling line here
-    // sums the two sources; this one now does too.
-    remsetback: (skill?.remsetback ?? 0) + (incoming_roll.remsetback ?? 0),
-    difficulty: Math.max(0, +incoming_roll.difficulty + (skill.difficulty ?? 0) - (skill.decreaseDifficulty ?? 0)),
-    challenge: +incoming_roll.challenge,
+  // consumeUpgrades is off here alone: this path has never spent the skill's own "Skill Add
+  // Upgrade" total as ability upgrades (the crew/vehicle callers apply weapon-borne upgrades
+  // themselves via applySkillModifiers), and turning it on would silently change every vehicle
+  // roll. The field is still carried on the pool, exactly as before.
+  return DiceHelpers.buildSkillPool({
+    skill,
+    characteristic,
+    incoming: incoming_roll,
+    consumeUpgrades: false,
   });
-  dicePool.upgradeDifficulty((skill.upgradeDifficulty ?? 0) - (skill.downgradeDifficulty ?? 0));
-  return dicePool;
 }
 
 /**

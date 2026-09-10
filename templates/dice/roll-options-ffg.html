@@ -4,6 +4,52 @@
       <button type="button" class="adversary-mode-btn" data-mode="base">{{localize "SWFFG.Adversary.BasePool"}}</button>
       <button type="button" class="adversary-mode-btn" data-mode="adversary"><span class="adversary-pool-label"></span></button>
     </div>
+    {{#if profile}}
+    <details class="roll-profile-swap" {{#if profile.expanded}}open{{/if}}>
+      <summary>{{localize "SWFFG.RollProfile.Summary"}}</summary>
+      {{#if profile.profiles.length}}
+      <div class="roll-profile-row">
+        <label for="rb-roll-profile-load">{{localize "SWFFG.RollProfile.SavedProfiles"}}</label>
+        <select id="rb-roll-profile-load" class="roll-profile-load">
+          <option value="">{{localize "SWFFG.RollProfile.NoProfile"}}</option>
+          {{#each profile.profiles}}
+          <option value="{{this.id}}" data-skill="{{this.skill}}" data-characteristic="{{this.characteristic}}">{{this.label}}{{#if this.summary}} &mdash; {{this.summary}}{{/if}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{/if}}
+      <div class="roll-profile-row">
+        <label for="rb-roll-profile-skill">{{localize "SWFFG.RollProfile.Skill"}}</label>
+        <select id="rb-roll-profile-skill" class="roll-profile-skill">
+          <option value="">{{profile.defaultSkillLabel}}</option>
+          {{#each profile.skills}}
+          <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+          {{/each}}
+        </select>
+      </div>
+      <div class="roll-profile-row">
+        <label for="rb-roll-profile-characteristic">{{localize "SWFFG.RollProfile.Characteristic"}}</label>
+        <select id="rb-roll-profile-characteristic" class="roll-profile-characteristic">
+          <option value="">{{profile.defaultCharacteristicLabel}}</option>
+          {{#each profile.characteristics}}
+          <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+          {{/each}}
+        </select>
+      </div>
+      {{#if profile.canStore}}
+      <div class="roll-profile-row">
+        <label class="roll-profile-remember-label" for="rb-roll-profile-remember">
+          <input type="checkbox" id="rb-roll-profile-remember" class="roll-profile-remember" />
+          {{localize "SWFFG.RollProfile.Remember"}}
+        </label>
+        <select class="roll-profile-expires">
+          <option value="encounter">{{localize "SWFFG.RollProfile.UntilEncounterEnds"}}</option>
+          <option value="manual">{{localize "SWFFG.RollProfile.UntilCleared"}}</option>
+        </select>
+      </div>
+      {{/if}}
+    </details>
+    {{/if}}
     <div class="dice-pool"></div>
     <div class="simulation" {{#if simDisplay }} {{ else }}style="display: none"{{/if}}>
       Success chance: <span id="success_chance">{{ success }}</span>

@@ -2,6 +2,7 @@ import {DicePoolFFG, RollFFG} from "./dice-pool-ffg.js";
 import PopoutEditor from "./popout-editor.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
+import DiceHelpers from "./helpers/dice-helpers.js";
 
 /**
  * Extend the base Combat entity.
@@ -1406,26 +1407,12 @@ function _findActorForInitiative(c) {
  */
 function _buildInitiativePool(data, skill) {
   const skillData = data.skills[skill];
-  const characteristic = data.characteristics[skillData.characteristic];
-  const pool = new DicePoolFFG({
-    ability: Math.max(characteristic.value, skillData.rank),
-    boost: skillData.boost ?? 0,
-    setback: skillData.setback ?? 0,
-    remsetback: skillData.remsetback ?? 0,
-    force: skillData.force ?? 0,
-    advantage: skillData.advantage ?? 0,
-    success: skillData.success ?? 0,
-    threat: skillData.threat ?? 0,
-    failure: skillData.failure ?? 0,
-    light: skillData.light ?? 0,
-    dark: skillData.dark ?? 0,
-    triumph: skillData.triumph ?? 0,
-    despair: skillData.despair ?? 0,
-    upgrades: (skillData.upgrades ?? 0) - (skillData.downgradeAbility ?? 0),
+  return DiceHelpers.buildSkillPool({
+    skill: skillData,
+    characteristic: data.characteristics[skillData.characteristic],
+    // applyDifficulty: false is what excludes the difficulty-side fields described above.
+    applyDifficulty: false,
   });
-  pool.upgrade(Math.min(characteristic.value, skillData.rank) + pool.upgrades);
-
-  return pool;
 }
 
 export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTracker {

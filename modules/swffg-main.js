@@ -71,6 +71,7 @@ import TalentTree from "./helpers/talent-tree.js";
 import { AE_MODES } from "./config/ffg-active-effect-modes.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
+import RollProfiles from "./helpers/roll-profiles.js";
 
 /* -------------------------------------------- */
 /*  Foundry VTT Initialization                  */
@@ -1627,6 +1628,9 @@ Hooks.once("ready", async () => {
 
   // Log adversary-roll diagnostics forwarded from players on the GM machine.
   RollBuilderFFG.registerRollLogBridge();
+
+  // Clear "until the end of the encounter" skill/characteristic substitutions when a combat ends.
+  RollProfiles.registerHooks();
 
   // Stop core rendering "11m 364d ago" on chat messages when this client's
   // clock lags the server's. Self-disabling on builds that have been fixed.

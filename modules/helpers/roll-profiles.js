@@ -309,7 +309,13 @@ export default class RollProfiles {
     skillSelect.on("change", syncDefaultCharacteristic);
     syncDefaultCharacteristic();
 
-    html.find(".roll-profile-load").on("change", (event) => {
+    const profileSelect = html.find(".roll-profile-load");
+    const deleteButton = html.find(".roll-profile-delete");
+
+    profileSelect.on("change", (event) => {
+      // Delete acts on the selected profile, so it is only live while one is selected - "None" is a
+      // valid selection that means "leave the dropdowns alone", not a profile that can be deleted.
+      deleteButton.prop("disabled", !event.currentTarget.value);
       const profile = this.getProfiles(item).find((p) => p.id === event.currentTarget.value);
       if (!profile) return;
       skillSelect.val(profile.skill ?? "");
@@ -317,14 +323,26 @@ export default class RollProfiles {
       syncDefaultCharacteristic();
     });
 
-    html.find(".roll-profile-delete").on("click", async (event) => {
+    deleteButton.on("click", async (event) => {
+      // The button lives inside DialogV2's form; type="button" in the template keeps a click from
+      // submitting it, and preventDefault covers any browser that ignores that.
       event.preventDefault();
-      const id = html.find(".roll-profile-load").val();
+      const id = profileSelect.val();
       if (!id) return;
+      const profile = this.getProfiles(item).find((p) => p.id === id);
       await this.deleteProfile(item, id);
-      const option = html.find(".roll-profile-load option").filter((i, el) => el.value === id)[0];
-      if (option) option.remove();
-      html.find(".roll-profile-load").val("");
+      // The dialog is not re-rendered by the item update, so its own copy of the list is pruned by
+      // hand rather than left showing a profile that no longer exists.
+      profileSelect.find("option").filter((index, el) => el.value === id).remove();
+      profileSelect.val("");
+      deleteButton.prop("disabled", true);
+      if (profile?.label) {
+        ui.notifications.info(game.i18n.format("SWFFG.RollProfile.ProfileDeleted", { label: profile.label }));
+      }
+      // Nothing is left to pick from: drop the row so the dialog does not show an empty picker.
+      if (!profileSelect.find("option").filter((index, el) => !!el.value).length) {
+        profileSelect.closest(".roll-profile-row").remove();
+      }
     });
   }
 

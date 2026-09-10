@@ -4650,6 +4650,8 @@ body.system-starwarsffg #context-menu.theme-light button:hover {
 }
 .roll-profile-row > .roll-profile-delete {
   flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
 }
 .roll-profile-row .roll-profile-remember-label {
   display: flex;

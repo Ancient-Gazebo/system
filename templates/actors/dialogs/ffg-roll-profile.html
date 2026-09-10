@@ -10,7 +10,9 @@
       <option value="{{this.id}}">{{this.label}}{{#if this.summary}} &mdash; {{this.summary}}{{/if}}</option>
       {{/each}}
     </select>
-    <a class="roll-profile-delete" title="{{localize "SWFFG.RollProfile.DeleteProfile"}}"><i class="fas fa-trash"></i></a>
+    <button type="button" class="roll-profile-delete" title="{{localize "SWFFG.RollProfile.DeleteProfileHint"}}" disabled>
+      <i class="fas fa-trash"></i> {{localize "SWFFG.RollProfile.DeleteProfile"}}
+    </button>
   </div>
   {{/if}}
 

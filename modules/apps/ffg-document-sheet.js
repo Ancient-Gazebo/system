@@ -1233,6 +1233,23 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     }
   }
 
+  /**
+   * Programmatic submit, routed through the manual `_onSubmit` pipeline.
+   *
+   * `ApplicationV2#submit` throws unless `options.form.handler` is set, and this base neuters
+   * that handler. Core still calls `sheet.submit()` on any rendered sheet - notably
+   * `ClientDocument#sortRelative` (dragging an actor/item into another sidebar folder) passes
+   * the new `folder`/`sort` as `updateData` - so the drop threw and the move was lost.
+   * @param {object} [submitOptions]
+   * @param {object} [submitOptions.updateData]  Extra data merged over the form data
+   */
+  async submit(submitOptions = {}) {
+    const { updateData = null, preventClose = true, render = true } = submitOptions;
+    if (this.form && this.isEditable) return this._onSubmit(null, { updateData, preventClose, render });
+    // Nothing to flush from the form, but the caller's own changes must still land.
+    if (updateData) return this.document.update(updateData);
+  }
+
   _getSubmitData(updateData = {}) {
     if (!this.form) throw new Error("The sheet has no registered form element.");
     const fd = new foundry.applications.ux.FormDataExtended(this.form, { editors: this.editors });

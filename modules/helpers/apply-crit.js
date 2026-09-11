@@ -7,6 +7,7 @@
  * Crit-ing a minion kills one outright instead (RAW).
  */
 import { applyToTargetActor } from "./gm-bridge.js";
+import { isVehicleGroup } from "./minions.js";
 import { promptSetupCriticalTables } from "./crit-tables.js";
 import CriticalRollerFFG from "./critical-roller.js";
 
@@ -89,6 +90,19 @@ export class ApplyCrit {
     // Linked vs unlinked actor resolution (mirrors the macro).
     const isLinked = target.document.actorLink === true;
     const realActor = isLinked ? game.actors.get(a.id) : a;
+
+    // A vehicle minion group follows the minion rule too: a Critical Hit destroys one ship outright
+    // instead of rolling on the table.
+    if (type === "vehicle" && isVehicleGroup(realActor)) {
+      try {
+        const ok = await applyToTargetActor(realActor, { type: "destroy-ship" });
+        if (!ok) return;
+      } catch (err) {
+        CONFIG.logger?.warn?.("ApplyCrit: destroy ship failed", err);
+        ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
+      }
+      return;
+    }
 
     if (type === "minion") {
       try {

@@ -85,13 +85,45 @@
           {{!-- Speed Box (Current before Threshold, matching the vital blocks) --}}
           {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="split" title="SWFFG.VehicleSpeed" fields=(array (object name="data.stats.speed.value" value=data.stats.speed.value type="Number" label="SWFFG.Current") (object name="data.stats.speed.max" value=data.stats.speed.max type="Number" label="SWFFG.Threshold" disabled=disabled) ))}}
 
-          {{!-- Hull Trauma Box: Current / Threshold with steppers --}}
-          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.VehicleHullTrauma" stat="hullTrauma" value=data.stats.hullTrauma.value max=data.stats.hullTrauma.max disabled=disabled track=vitalTracks.hullTrauma)}}
+          {{!-- Hull Trauma Box: Current / Threshold with steppers (a minion group's threshold is derived, so it stays locked) --}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.VehicleHullTrauma" stat="hullTrauma" value=data.stats.hullTrauma.value max=data.stats.hullTrauma.max disabled=(or disabled data.group.enabled) track=vitalTracks.hullTrauma)}}
 
-          {{!-- System Strain Box: Current / Threshold with steppers --}}
-          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.VehicleHullStrain" stat="systemStrain" value=data.stats.systemStrain.value max=data.stats.systemStrain.max disabled=disabled track=vitalTracks.systemStrain)}}
+          {{!-- System Strain Box: Current / Threshold with steppers (a minion group's threshold is derived, so it stays locked) --}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.VehicleHullStrain" stat="systemStrain" value=data.stats.systemStrain.value max=data.stats.systemStrain.max disabled=(or disabled data.group.enabled) track=vitalTracks.systemStrain)}}
         </div>
       </div>
+
+      {{#if data.group.enabled}}
+      {{!-- Minion group: formation size, per-ship thresholds, losses, and destroy controls --}}
+      <div class="container flex-group-center vehicle-group">
+        <div class="grid grid-4col">
+          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html"
+            (object blocktype="split" title="SWFFG.VehicleGroup.Group" fields=(array
+              (object name="data.group.size" value=data.group.size type="Number" label="SWFFG.VehicleGroup.Total")
+              (object name="data.group.operational" value=data.group.operational type="Number" label="SWFFG.VehicleGroup.Operational" disabled=true)
+            ))
+          }}
+          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html"
+            (object blocktype="split" title="SWFFG.VehicleGroup.PerShip" fields=(array
+              (object name="data.group.unitHullTrauma" value=data.group.unitHullTrauma type="Number" label="SWFFG.VehicleHullTrauma" disabled=disabled)
+              (object name="data.group.unitSystemStrain" value=data.group.unitSystemStrain type="Number" label="SWFFG.VehicleHullStrain" disabled=disabled)
+            ))
+          }}
+          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html"
+            (object blocktype="split" title="SWFFG.VehicleGroup.Losses" fields=(array
+              (object name="data.group.destroyed" value=data.group.destroyed type="Number" label="SWFFG.VehicleGroup.Destroyed" disabled=true)
+              (object name="data.group.disabled" value=data.group.disabled type="Number" label="SWFFG.VehicleGroup.Disabled" disabled=true)
+            ))
+          }}
+          {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html"
+            (object blocktype="split" title="SWFFG.VehicleGroup.Destroy" fields=(array
+              (object name="vehicle-group-control destroy-ship" type="Button" icon='<a class="fa-solid fa-explosion"></a>' label="SWFFG.VehicleGroup.Ship")
+              (object name="vehicle-group-control destroy-group" type="Button" icon='<a><i class="fa-solid fa-explosion"></i><i class="fa-solid fa-jet-fighter"></i><i class="fa-solid fa-explosion"></i></a>' label="SWFFG.VehicleGroup.Group")
+            ))
+          }}
+        </div>
+      </div>
+      {{/if}}
      {{/if}}
     </div>
   </header>
@@ -137,6 +169,9 @@
 
         {{!-- Vehicle type box --}}
         {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="Space Vehicle" type="Boolean" name="data.spaceShip" value=data.spaceShip)}}
+
+        {{!-- Minion group box: run this vehicle as a formation under the minion rules --}}
+        {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html" (object blocktype="single" title="SWFFG.VehicleGroup.Toggle" type="Boolean" name="data.group.enabled" value=data.group.enabled)}}
       </div>
 
       {{!-- Crew List --}}

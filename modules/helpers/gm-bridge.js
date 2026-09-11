@@ -15,7 +15,7 @@
  * emit an event no one processes.
  */
 
-import { killMinion } from "./minions.js";
+import { destroyShip, killMinion } from "./minions.js";
 
 const FFG_SOCKET = "system.starwarsffg";
 const APPLY_EVENT = "ffgApplyToTarget";
@@ -25,7 +25,7 @@ const APPLY_EVENT = "ffgApplyToTarget";
  * is allowed to modify.
  * @param {Actor} actor
  * @param {object} op
- * @param {"damage"|"crit"|"kill-minion"} op.type
+ * @param {"damage"|"crit"|"kill-minion"|"destroy-ship"} op.type
  * @param {string} [op.path]    For "damage": the numeric system path to bump.
  * @param {number} [op.delta]   For "damage": the amount to add to the current value.
  * @param {{path: string, delta: number}[]} [op.deltas] For "damage": several paths to bump in a
@@ -52,6 +52,8 @@ async function performApply(actor, op) {
     await actor.createEmbeddedDocuments("Item", op.items);
   } else if (op.type === "kill-minion") {
     await killMinion(actor);
+  } else if (op.type === "destroy-ship") {
+    await destroyShip(actor);
   }
 }
 

@@ -994,7 +994,10 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       const event = new Event("submit", { cancelable: true });
       await this._onSubmit(event, { preventClose: true, render: false });
     } finally {
-      if (remove) this._destroyEditor(name);
+      // keepEngineClass: the render below replaces the container anyway, and
+      // stripping `.prosemirror` first un-styles the toolbar left in the DOM
+      // (destroy() does not remove it), flashing every dropdown open.
+      if (remove) this._destroyEditor(name, { keepEngineClass: true });
       else state._saving = false;
       // Awaited: until the re-render lands, the form still holds the torn-down
       // editor's markup, and any submit in that window would capture it.
@@ -1002,11 +1005,11 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
     }
   }
 
-  _destroyEditor(name) {
+  _destroyEditor(name, { keepEngineClass = false } = {}) {
     const state = this.editors[name];
     if (!state) return;
     try { state.instance?.destroy(); } catch (_e) { /* already torn down */ }
-    state.container?.classList.remove("editor-active", "prosemirror");
+    if (!keepEngineClass) state.container?.classList.remove("editor-active", "prosemirror");
     // Restore the edit button (hidden in _activateEditor). Harmless if this is
     // the now-detached pre-re-render button; required if teardown happens
     // without a re-render so the button doesn't stay hidden.

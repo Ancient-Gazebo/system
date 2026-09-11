@@ -125,6 +125,16 @@ export class ActorFFG extends Actor {
 
     CONFIG.logger.debug(`Performing pre-update on ${this.name}`);
     this._convertEncumbranceEditToOffset(changes);
+    // Turning a vehicle into a minion group: its current thresholds describe one ship, so carry them
+    // into the per-ship fields rather than leaving those at 0, which would zero the group totals.
+    if (this.type === "vehicle" && changes?.system?.group?.enabled === true && !this._source.system?.group?.enabled) {
+      for (const [stat, key] of [["hullTrauma", "unitHullTrauma"], ["systemStrain", "unitSystemStrain"]]) {
+        const perShip = changes.system.group[key] ?? this._source.system?.group?.[key];
+        if (Number(perShip) > 0) continue;
+        const threshold = changes.system?.stats?.[stat]?.max ?? this._source.system?.stats?.[stat]?.max;
+        foundry.utils.setProperty(changes, `system.group.${key}`, Number(threshold) || 0);
+      }
+    }
     if (["character", "rival", "nemesis"].includes(this.type)) {
       const originalBrawn = this.system.characteristics.Brawn.value;
       const updatedBrawn = changes?.system?.characteristics?.Brawn?.value;
@@ -395,6 +405,10 @@ export class ActorFFG extends Actor {
       });
     }
 
+    // A vehicle minion group's thresholds are derived group totals, so resolve them before anything
+    // below reads hullTrauma.max / systemStrain.max.
+    if (actor.type === "vehicle") this._prepareVehicleGroupData(actor);
+
     // add values for above threshold
     if (["character", "nemesis"].includes(actor.type)) {
       data.stats.woundsOverThreshold = data.stats.wounds.value - data.stats.wounds.max;
@@ -631,6 +645,39 @@ export class ActorFFG extends Actor {
     } else if (["vehicle"].includes(actorData.type)) {
       this._calculateDerivedValues(actorData);
     }
+  }
+
+  /**
+   * Prepare a vehicle minion group (a formation of ships run under the minion rules).
+   *
+   * The group shares one hull trauma and one system strain threshold, each the per-ship threshold
+   * times the group size. A ship is destroyed each time total hull trauma exceeds another ship's
+   * share, and disabled each time total system strain does. The two are counted independently, so a
+   * group can lose ships to both at once; `operational` is what is left to act.
+   */
+  _prepareVehicleGroupData(actorData) {
+    const data = actorData.system;
+    const group = data.group;
+    if (!group?.enabled) return;
+
+    const size = Math.max(Math.floor(Number(group.size) || 0), 1);
+    const source = actorData._source?.system?.stats ?? {};
+    const shipsLost = (stat, perShip) => {
+      const track = data.stats[stat];
+      // Active Effects (a hull attachment, a talent) modify the threshold field itself. That bonus
+      // belongs to every ship in the formation rather than once to the group, so take it as the
+      // difference between the effect-applied and stored threshold and add it to each ship's share.
+      const bonus = (Number(track.max) || 0) - (Number(source[stat]?.max) || 0);
+      const share = Math.max((Number(perShip) || 0) + bonus, 0);
+      track.max = share * size;
+      if (share <= 0) return 0;
+      return Math.clamp(Math.floor(((Number(track.value) || 0) - 1) / share), 0, size);
+    };
+
+    group.size = size;
+    group.destroyed = shipsLost("hullTrauma", group.unitHullTrauma);
+    group.disabled = shipsLost("systemStrain", group.unitSystemStrain);
+    group.operational = Math.max(size - group.destroyed - group.disabled, 0);
   }
 
   /**

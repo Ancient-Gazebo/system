@@ -29,6 +29,7 @@ import {
 } from "../helpers/crew.js";
 import {DicePoolFFG} from "../dice/pool.js";
 import {get_dice_pool} from "../helpers/dice-helpers.js";
+import { getDestroyShipGroupUpdate, getDestroyShipUpdate, isVehicleGroup } from "../helpers/minions.js";
 import { FFGActorSheet } from "../apps/ffg-actor-sheet.js";
 import {itemPillHover} from "../swffg-main.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
@@ -278,6 +279,21 @@ export class ActorSheetFFG extends FFGActorSheet {
   /* -------------------------------------------- */
 
   /** @override */
+  _activateCoreListeners(html) {
+    // With the Active Effects tab hidden, forget it as the remembered tab before
+    // Tabs binds. Otherwise a sheet left on it (e.g. the option was ticked while
+    // viewing it) reopens onto a tab with no button, and _restoreInjectedTab
+    // would re-select it even after a fallback.
+    if (this.actor?.type === "character" && this.actor.flags?.starwarsffg?.config?.hideEffectsTab) {
+      const cacheKey = this._activeTabCacheKey;
+      if (cacheKey && this.constructor._activeTabCache.get(cacheKey) === "effects") {
+        this.constructor._activeTabCache.delete(cacheKey);
+      }
+      if (this._sheetTab === "effects") this._sheetTab = null;
+    }
+    return super._activateCoreListeners(html);
+  }
+
   async getData(options) {
     const data = await super.getData();
     // The sheet templates branch on `contains classType "V2"` to render the V2
@@ -422,9 +438,9 @@ export class ActorSheetFFG extends FFGActorSheet {
               let roll;
               if (actor) {
                 if (crew[i].role !== "Pilot") {
-                  roll = build_crew_roll(this.actor.id, crew[i].actor_id, crew[i].role);
+                  roll = build_crew_roll(this.actor, crew[i].actor_id, crew[i].role);
                 } else {
-                  roll = (await buildPilotRoll(this.actor.id, crew[i].actor_id, 0)).renderPreview().innerHTML;
+                  roll = (await buildPilotRoll(this.actor, crew[i].actor_id, 0)).renderPreview().innerHTML;
                 }
               } else {
                 deregister_crew(this.actor, crew[i].actor_id, crew[i].role);
@@ -570,14 +586,15 @@ export class ActorSheetFFG extends FFGActorSheet {
     //
     // Minions are the exception: their alive count and every group-skill rank
     // are derived from wounds in prepareDerivedData, so they still need the
-    // render to stay correct.
+    // render to stay correct. Vehicle minion groups likewise derive their
+    // destroyed / disabled / active ship counts from hull trauma and strain.
     html.find('input[name^="data.stats."]').on("change", async (event) => {
       const input = event.currentTarget;
       const name = input.getAttribute("name") || "";
       if (!/\.(value|max)$/.test(name)) return;
       event.stopPropagation();
       this._paintVitalTrack(input);
-      await this._onSubmit(event, { render: this.actor?.type === "minion" });
+      await this._onSubmit(event, { render: this.actor?.type === "minion" || isVehicleGroup(this.actor) });
     });
 
     // Skill/characteristic edits drive values that are only rebuilt during
@@ -803,6 +820,10 @@ export class ActorSheetFFG extends FFGActorSheet {
       await this._handleKillMinion(ev);
     });
 
+    html.find(".vehicle-group-control").click(async (ev) => {
+      await this._handleDestroyShip(ev);
+    });
+
     this._bindContextMenuOnce(htmlElement, "div.skillsHeader", [
       {
         name: game.i18n.localize("SWFFG.SkillAddContextItem"),
@@ -979,6 +1000,14 @@ export class ActorSheetFFG extends FFGActorSheet {
         type: "Array",
         default: 0,
         options: [game.i18n.localize("SWFFG.UseGlobalSetting"), game.i18n.localize("SWFFG.OptionValueYes"), game.i18n.localize("SWFFG.OptionValueNo")],
+      });
+      // Only hides the tab button; the effects (and XP purchases, which are
+      // Active Effects) are untouched.
+      this.sheetoptions.register("hideEffectsTab", {
+        name: game.i18n.localize("SWFFG.HideEffectsTab"),
+        hint: game.i18n.localize("SWFFG.HideEffectsTabHint"),
+        type: "Boolean",
+        default: false,
       });
     }
 
@@ -1167,7 +1196,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       const input = ev.currentTarget
         .closest(".ffg2-vital-body")
         ?.querySelector(`[name="data.stats.${stat}.value"]`);
-      const needsRender = this.actor?.type === "minion";
+      const needsRender = this.actor?.type === "minion" || isVehicleGroup(this.actor);
       if (input && !needsRender) {
         input.value = String(val);
         this._paintVitalTrack(input);
@@ -2226,7 +2255,7 @@ export class ActorSheetFFG extends FFGActorSheet {
               const skill = raw_weapons[i].system.skill.value;
               let pool = new DicePoolFFG({'difficulty': 2});
               // the weapon is passed so a stored skill/characteristic override on it is honoured
-              pool = get_dice_pool(crew_id, skill, pool, raw_weapons[i]);
+              pool = get_dice_pool(crew_id, skill, pool, raw_weapons[i], ship);
               pool = await DiceHelpers.getModifiers(pool, raw_weapons[i]);
               await DiceHelpers.displayRollDialog(
                 crewSheet,
@@ -2257,7 +2286,7 @@ export class ActorSheetFFG extends FFGActorSheet {
         });
       } else {
         // update the pool with actor information
-        pool = get_dice_pool(crew_id, role_info[0].role_skill, pool);
+        pool = get_dice_pool(crew_id, role_info[0].role_skill, pool, null, ship);
         // open the roll dialog (skill name is already localized)
         await DiceHelpers.displayRollDialog(
           crewSheet,
@@ -2569,7 +2598,7 @@ export class ActorSheetFFG extends FFGActorSheet {
     let pool = new DicePoolFFG(starting_pool);
     // update the pool with actor data
     // the weapon is passed so a stored skill/characteristic override on it is honoured
-    pool = get_dice_pool(selectedGunner.actor_id, weaponSkill, pool, weapon);
+    pool = get_dice_pool(selectedGunner.actor_id, weaponSkill, pool, weapon, ship);
     // generic dice/roll/result modifiers carried by the weapon and its attachments
     pool = await DiceHelpers.getModifiers(pool, weapon);
     // skill-targeted modifiers on the weapon and its attachments (e.g. a targeting array installed on
@@ -4384,6 +4413,22 @@ export class ActorSheetFFG extends FFGActorSheet {
     } else if (target.hasClass("kill-group")) {
       await this.actor.update({'system.stats.wounds.value': this.actor.system.stats.wounds.max + 1});
     }
+  }
+
+  /**
+   * Destroy one ship, or the whole formation, of a vehicle minion group by pushing its shared hull
+   * trauma past the next ship's share (or past the group threshold).
+   */
+  async _handleDestroyShip(event) {
+    event.stopPropagation();
+    const target = $(event.currentTarget);
+    let update = null;
+    if (target.hasClass("destroy-ship")) {
+      update = getDestroyShipUpdate(this.actor);
+    } else if (target.hasClass("destroy-group")) {
+      update = getDestroyShipGroupUpdate(this.actor);
+    }
+    if (update) await this.actor.update(update);
   }
 
   async _xpAdjustment(event) {

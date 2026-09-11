@@ -3,6 +3,7 @@ import RollBuilderFFG from "../dice/roll-builder.js";
 import ModifierHelpers from "../helpers/modifiers.js";
 import ImportHelpers from "../importer/import-helpers.js";
 import RollProfiles from "../helpers/roll-profiles.js";
+import { getGroupSkillRank, isVehicleGroup } from "../helpers/minions.js";
 
 export default class DiceHelpers {
   /**
@@ -544,14 +545,20 @@ export default class DiceHelpers {
  * @param item optional weapon being rolled; a skill/characteristic override stored on it is honoured
  * @returns {DicePoolFFG}
  */
-export function get_dice_pool(actor_id, skill_name, incoming_roll, item = null) {
+export function get_dice_pool(actor_id, skill_name, incoming_roll, item = null, vehicle = null) {
   const actor = game.actors.get(actor_id);
   const parsed_skill_name = convert_skill_name(skill_name);
   // A stored override names its skill by key already, so it is used as-is; otherwise fall back to
   // the caller's (localized or raw) skill name, resolved through convert_skill_name as before.
   const override = RollProfiles.getOverride(item);
   const resolved_skill_name = override?.skill ?? parsed_skill_name;
-  const skill = actor?.system?.skills?.[resolved_skill_name];
+  let skill = actor?.system?.skills?.[resolved_skill_name];
+  // Minion crew of a vehicle minion group are the same minion group as its ships, and a pilot whose
+  // ship is destroyed or disabled can no longer contribute. Group skills therefore rank off the
+  // formation's operational ships (`vehicle`, the crewed actor), not the minion actor's own count.
+  if (skill?.groupskill && actor?.type === "minion" && isVehicleGroup(vehicle)) {
+    skill = { ...skill, rank: getGroupSkillRank(vehicle.system.group.operational) };
+  }
   const characteristic = skill
     ? actor?.system?.characteristics?.[override?.characteristic ?? skill.characteristic]
     : undefined;

@@ -1,3 +1,5 @@
+import { getGroupCount } from "./minions.js";
+
 export function registerTokenControls() {
   game.settings.register("starwarsffg", "showMinionCount", {
     name: game.i18n.localize("SWFFG.Settings.showMinionCount.Name"),
@@ -38,16 +40,21 @@ export function registerTokenControls() {
 }
 
 export function drawMinionCount(token) {
-  if (!game.settings.get("starwarsffg", "showMinionCount")) {
+  // Minion groups and vehicle minion groups. A vehicle can stop being a group, so clear any counter
+  // left from when it was one rather than only skipping the draw.
+  const counts = getGroupCount(token.actor);
+  if (!counts || !game.settings.get("starwarsffg", "showMinionCount")) {
+    token.minionCount?.destroy({ children: true });
+    token.minionCount = null;
     return;
   }
   const borderWidth = 0.35;
   const friendlyColor = "0x00A2E84D";
   const enemyColor = "0x8800154D";
   const overflowColor = "0xDAA520";
-  // calculate total and alive numbers of minions
-  const curCount = Math.max(token.actor.system.quantity.value, 0);
-  const maxCount = token.actor.system.quantity.max;
+  // calculate total and alive numbers of the group
+  const curCount = Math.max(counts.alive, 0);
+  const maxCount = counts.total;
   const maxRender = 6;
 
   // attempt to draw it on the token directly

@@ -420,6 +420,14 @@ export class VehicleActorModel extends FFGTypeModel {
       }),
       spaceShip: new fields.BooleanField({ initial: false }),
       silhouetteImage: new fields.StringField({ initial: "systems/starwarsffg/images/shipdefence.png", blank: true, nullable: true }),
+      // Vehicle minion group (a formation run under minion rules). The per-ship thresholds live here;
+      // while enabled, stats.hullTrauma.max / stats.systemStrain.max are the derived group totals.
+      group: new fields.SchemaField({
+        enabled: new fields.BooleanField({ initial: false }),
+        size: new SafeNumberField({ initial: 2, nullable: true }),
+        unitHullTrauma: new SafeNumberField({ initial: 0, nullable: true }),
+        unitSystemStrain: new SafeNumberField({ initial: 0, nullable: true }),
+      }),
     };
   }
 }

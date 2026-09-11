@@ -4604,13 +4604,6 @@ body.system-starwarsffg #context-menu.theme-light button:hover {
   color: inherit !important;
   opacity: 1;
 }
-/* At-a-glance signal that a row is on the sheet but not being carried. Applied via
-   :has() on the row rather than a class on the <li>, so no template row markup
-   changes and nothing can shift the flex layout. Only the name dims -- the controls
-   stay at full contrast so the row is still usable. */
-.starwarsffg .items .item:has(.toggle-carried:not(.active)) .item-name {
-  opacity: 0.55;
-}
 /* The header label names both toggles ("Carry / Equip"). The gear column is a fixed
    90px that the label fits inside; pin it to one line so it can never wrap and make
    the header row taller than the rows beneath it. */

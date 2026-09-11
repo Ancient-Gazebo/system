@@ -2110,9 +2110,10 @@ Hooks.once("ready", async () => {
 
   Hooks.on("refreshToken", (token) => {
     /*
-    Used to render minion count
+    Used to render minion count (minion groups and vehicle minion groups; drawMinionCount clears the
+    counter off a vehicle that is no longer a group)
     */
-    if (token?.actor?.type === "minion") {
+    if (["minion", "vehicle"].includes(token?.actor?.type)) {
       drawMinionCount(token);
     }
     if (["character", "nemesis", "rival"].includes(token?.actor?.type)) {

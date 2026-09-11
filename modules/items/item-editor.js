@@ -322,7 +322,9 @@ export class itemEditor extends FFGFormApplication {
       // live editor) and routes through _updateObject -> embedded write-back.
       await this._onSubmit(new Event("submit", { cancelable: true }));
     } finally {
-      if (remove) this._destroyEditor(name);
+      // keepEngineClass: see FFGDocumentSheet#_saveEditor -- stripping
+      // `.prosemirror` before the render un-styles the leftover toolbar.
+      if (remove) this._destroyEditor(name, { keepEngineClass: true });
       else state._saving = false;
       // Awaited: until the render lands, the form still holds the torn-down
       // editor's markup, and a submit in that window would capture it.
@@ -330,11 +332,11 @@ export class itemEditor extends FFGFormApplication {
     }
   }
 
-  _destroyEditor(name) {
+  _destroyEditor(name, { keepEngineClass = false } = {}) {
     const state = this.editors[name];
     if (!state) return;
     try { state.instance?.destroy(); } catch (_e) { /* already torn down */ }
-    state.container?.classList.remove("editor-active", "prosemirror");
+    if (!keepEngineClass) state.container?.classList.remove("editor-active", "prosemirror");
     if (state.button) state.button.style.display = "";
     // Keep a null-instance placeholder rather than dropping the record, so the
     // field stays shielded from the innerHTML write-back while it is closed.

@@ -13,7 +13,8 @@ the schemas stay a field-for-field mirror of the historical shapes.
 Caveat: `template.json` is now schema-only (the per-type field definitions were removed), so a
 regeneration run can no longer reproduce this folder on its own. Fields added since then exist
 only here and would be lost by a naive regenerate — currently `system.equippable.carried` on
-armour, gear, shipattachment, shipweapon and weapon (2.1.34). Any field a DataModel does not
+armour, gear, shipattachment, shipweapon and weapon (2.1.34), and `system.group` on vehicle
+(vehicle minion groups). Any field a DataModel does not
 declare is pruned from every document on its next save, so check this list before regenerating.
 
 ## How it's wired

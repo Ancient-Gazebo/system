@@ -155,7 +155,7 @@ export async function updateRoles(vehicle_actor, crew_member_id, new_crew_roles)
 export function build_crew_roll(vehicle, crew_id, crew_role) {
   // look up the sheet for passing to the roller
   const crew_member = game.actors.get(crew_id);
-  const vehicle_actor = game.actors.get(vehicle);
+  const vehicle_actor = resolveVehicle(vehicle);
   if (crew_member === undefined) {
     ui.notifications.warn(game.i18n.localize("SWFFG.Crew.Actor.Removed"));
     deregister_crew(vehicle_actor, crew_id, crew_role);
@@ -191,8 +191,19 @@ export function build_crew_roll(vehicle, crew_id, crew_role) {
     }
   }
   let pool = new DicePoolFFG(starting_pool);
-  pool = get_dice_pool(crew_id, role_info[0].role_skill, pool);
+  pool = get_dice_pool(crew_id, role_info[0].role_skill, pool, null, vehicle_actor);
   return pool.renderPreview().innerHTML;
+}
+
+/**
+ * Resolve a vehicle passed either as the actor itself or as a world actor id. Sheets pass the actor:
+ * an unlinked token's hull trauma and system strain live on its synthetic actor, which a world-actor
+ * lookup by id would miss.
+ * @param {Actor|string} vehicle
+ * @returns {Actor|undefined}
+ */
+function resolveVehicle(vehicle) {
+  return typeof vehicle === "string" ? game.actors.get(vehicle) : vehicle;
 }
 
 /**
@@ -204,7 +215,7 @@ export function build_crew_roll(vehicle, crew_id, crew_role) {
  */
 export async function buildPilotRoll(vehicle_id, pilot_id, difficulty = 2) {
   const starting_pool = {'difficulty': difficulty};
-  const vehicle = game.actors.get(vehicle_id);
+  const vehicle = resolveVehicle(vehicle_id);
   const skillTheme = game.settings.get("starwarsffg", "skilltheme");
 
   // add modifiers from the vehicle handling
@@ -235,7 +246,7 @@ export async function buildPilotRoll(vehicle_id, pilot_id, difficulty = 2) {
   }
 
   // update the pool with actor information
-  return get_dice_pool(pilot_id, skill, pool);
+  return get_dice_pool(pilot_id, skill, pool, null, vehicle);
 }
 
 /**
@@ -246,7 +257,7 @@ export async function buildPilotRoll(vehicle_id, pilot_id, difficulty = 2) {
  */
 export async function handlePilotCheck(vehicle, pilot_id) {
   const crewSheet = game.actors.get(pilot_id)?.sheet;
-  const pool = await buildPilotRoll(vehicle.id, pilot_id);
+  const pool = await buildPilotRoll(vehicle, pilot_id);
 
   // create chat card data
   const card_data = {

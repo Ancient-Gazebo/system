@@ -3,6 +3,7 @@ import PopoutEditor from "./popout-editor.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 import DiceHelpers from "./helpers/dice-helpers.js";
+import { getGroupSkillRank, isVehicleGroup } from "./helpers/minions.js";
 
 /**
  * Extend the base Combat entity.
@@ -1380,6 +1381,16 @@ function _findActorForInitiative(c) {
         const realActor = game.actors.get(initiativeCrew.actor_id);
         if (realActor?.system) {
           data = realActor.system;
+          // Minion pilots of a vehicle minion group rank their group skills off the formation's
+          // operational ships (see get_dice_pool). Layer the adjusted skills over the pilot's data
+          // instead of copying it, so everything else still reads through to the live system.
+          if (realActor.type === "minion" && isVehicleGroup(c.actor)) {
+            const rank = getGroupSkillRank(c.actor.system.group.operational);
+            const skills = Object.fromEntries(Object.entries(data.skills ?? {}).map(
+              ([key, skill]) => [key, skill?.groupskill ? { ...skill, rank } : skill]
+            ));
+            data = Object.create(data, { skills: { value: skills, enumerable: true } });
+          }
         }
       }
     } else {

@@ -29,7 +29,13 @@ import {
 } from "../helpers/crew.js";
 import {DicePoolFFG} from "../dice/pool.js";
 import {get_dice_pool} from "../helpers/dice-helpers.js";
-import { getDestroyShipGroupUpdate, getDestroyShipUpdate, isVehicleGroup } from "../helpers/minions.js";
+import {
+  getDestroyShipGroupUpdate,
+  getDestroyShipUpdate,
+  getKillMinionGroupUpdate,
+  getKillMinionUpdate,
+  isVehicleGroup,
+} from "../helpers/minions.js";
 import { FFGActorSheet } from "../apps/ffg-actor-sheet.js";
 import {itemPillHover} from "../swffg-main.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
@@ -4405,13 +4411,11 @@ export class ActorSheetFFG extends FFGActorSheet {
   async _handleKillMinion(event) {
     event.stopPropagation();
     const target = $(event.currentTarget);
-    const minionHealth = this.actor.system.unit_wounds.value;
-    const currentHealth = this.actor.system.stats.wounds.value;
     if (target.hasClass("kill-minion")) {
-      let damageAmount = minionHealth - (currentHealth % minionHealth) + 1;
-      await this.actor.update({'system.stats.wounds.value': currentHealth + damageAmount});
+      const update = getKillMinionUpdate(this.actor);
+      if (update) await this.actor.update(update);
     } else if (target.hasClass("kill-group")) {
-      await this.actor.update({'system.stats.wounds.value': this.actor.system.stats.wounds.max + 1});
+      await this.actor.update(getKillMinionGroupUpdate(this.actor));
     }
   }
 

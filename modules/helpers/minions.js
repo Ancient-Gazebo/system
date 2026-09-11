@@ -8,8 +8,18 @@ export function getKillMinionUpdate(actor) {
   const minionHealth = Number(actor?.system?.unit_wounds?.value) || 0;
   if (minionHealth <= 0) return null;
 
+  // RAW: a group that suffers a crit takes one minion's worth of wounds. With
+  // _prepareMinionData counting floor((w - 1) / unit) dead, adding exactly one unit
+  // always drops exactly one more minion and keeps damage already on the next one.
+  // The old unit + 1 killed two from a boundary (4 at unit 4 -> 9). A fresh group is
+  // the exception: the first minion only falls once wounds exceed its share, so
+  // count from at least 1.
   const currentHealth = Number(actor?.system?.stats?.wounds?.value) || 0;
-  return { "system.stats.wounds.value": currentHealth + minionHealth + 1 };
+  const killed = Math.max(Math.floor((currentHealth - 1) / minionHealth), 0);
+  const groupSize = Number(actor?.system?.quantity?.max) || 0;
+  if (killed >= groupSize) return null;
+
+  return { "system.stats.wounds.value": Math.max(currentHealth, 1) + minionHealth };
 }
 
 export function getKillMinionGroupUpdate(actor) {

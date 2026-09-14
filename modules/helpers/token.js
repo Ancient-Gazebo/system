@@ -39,6 +39,14 @@ export function registerTokenControls() {
   });
 }
 
+/**
+ * Ratio of the current scene's grid size to the 100px grid the token overlays were designed on.
+ * @returns {number}
+ */
+function getGridScale() {
+  return (canvas?.dimensions?.size || 100) / 100;
+}
+
 export function drawMinionCount(token) {
   // Minion groups and vehicle minion groups. A vehicle can stop being a group, so clear any counter
   // left from when it was one rather than only skipping the draw.
@@ -48,7 +56,9 @@ export function drawMinionCount(token) {
     token.minionCount = null;
     return;
   }
-  const borderWidth = 0.35;
+  // every dimension below was tuned for a 100px grid; scale it to this scene's grid
+  const gridScale = getGridScale();
+  const borderWidth = 0.35 * gridScale;
   const friendlyColor = "0x00A2E84D";
   const enemyColor = "0x8800154D";
   const overflowColor = "0xDAA520";
@@ -68,9 +78,9 @@ export function drawMinionCount(token) {
   }
 
   const tokenWidth = token.w;
-  const markerWidth = 7;
-  const markerHeight = 15;
-  const insideGap = 5;
+  const markerWidth = 7 * gridScale;
+  const markerHeight = 15 * gridScale;
+  const insideGap = 5 * gridScale;
   const availableSpace = tokenWidth - ((markerWidth * maxCount) + (insideGap * (maxCount - 1)));
   const outsideGap = availableSpace / 2;
 
@@ -79,7 +89,7 @@ export function drawMinionCount(token) {
       "∞",
       {
         fontFamily: "Arial",
-        fontSize: 48,
+        fontSize: 48 * gridScale,
         fill: overflowColor,
         align: "center",
         stroke: "0x000000",
@@ -89,7 +99,7 @@ export function drawMinionCount(token) {
     );
     text.anchor.set(0.5);
     text.x = tokenWidth / 2;
-    text.y = token.h - 12;
+    text.y = token.h - (12 * gridScale);
     token.minionCount.addChild(text);
   } else {
     for (let i = 0; i < curCount; i++) {
@@ -98,12 +108,11 @@ export function drawMinionCount(token) {
       element.lineStyle(borderWidth, "0x000000", 1);
       // draw the rectangle
       element.beginFill(friendlyColor);
-      element.drawRoundedRect(0, 0, markerWidth, markerHeight, 2);
-      element.endFill();
+      element.drawRoundedRect(0, 0, markerWidth, markerHeight, 2 * gridScale);
       element.endFill();
       // position it
       element.x = (i * (markerWidth + insideGap)) + outsideGap;
-      element.y = token.h - markerHeight - 2;
+      element.y = token.h - markerHeight - (2 * gridScale);
       // add it to the container
       token.minionCount.addChild(element);
     }
@@ -114,11 +123,11 @@ export function drawMinionCount(token) {
       element.lineStyle(borderWidth, "0x000000", 1);
       // draw the rectangle
       element.beginFill(enemyColor);
-      element.drawRoundedRect(0, 0, markerWidth, markerHeight, 2);
+      element.drawRoundedRect(0, 0, markerWidth, markerHeight, 2 * gridScale);
       element.endFill();
       // position it
       element.x = ((i + curCount) * (markerWidth + insideGap)) + outsideGap;
-      element.y = token.h - markerHeight - 2;
+      element.y = token.h - markerHeight - (2 * gridScale);
       // add it to the container
       token.minionCount.addChild(element);
     }
@@ -162,9 +171,11 @@ export function drawAdversaryCount(token) {
       token.adversaryLevel.removeChildren().forEach(i => i.destroy());
     }
     const sprite = PIXI.Sprite.from(`systems/starwarsffg/images/adversary/adversary-${adversaryLevel}.png`);
-    sprite.scale.set(0.15, 0.15);
-    sprite.x = (token.w / 2) - 20;
-    sprite.y = token.h / 2 + 15;
+    // tuned for a 100px grid; scale it to this scene's grid
+    const gridScale = getGridScale();
+    sprite.scale.set(0.15 * gridScale, 0.15 * gridScale);
+    sprite.x = (token.w / 2) - (20 * gridScale);
+    sprite.y = token.h / 2 + (15 * gridScale);
     if (adversaryLevel > 5) {
       sprite.tint = overflowColor;
       adversaryLevel = 6;

@@ -616,6 +616,14 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       // Fire while the form is still in the DOM so legacy listeners can inspect it.
       const form = this.form;
       if (form) this._callLegacyCloseHook($(form));
+      // Tear down any editor still mounted. Core's <prosemirror> element does
+      // this for itself in disconnectedCallback, but the legacy `{{editor}}`
+      // path we use calls ProseMirrorEditor.create directly, and that registers
+      // the instance in a static Map keyed by a random uuid which ONLY
+      // `destroy()` removes. Closing with an editor open therefore strands the
+      // EditorView and its detached DOM in core for the rest of the session,
+      // once per open, forever.
+      this._destroyOpenEditors();
       return await super.close(options);
     } catch (err) {
       console.error("starwarsffg | sheet failed to close (super.close threw)", err);
@@ -1002,6 +1010,21 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
       // Awaited: until the re-render lands, the form still holds the torn-down
       // editor's markup, and any submit in that window would capture it.
       await this.render(true);
+    }
+  }
+
+  /**
+   * Destroy every mounted editor on this sheet. Safe to call when none are
+   * open: `_destroyEditor` already no-ops on a missing or torn-down record.
+   */
+  _destroyOpenEditors() {
+    for (const name of Object.keys(this.editors ?? {})) {
+      try {
+        this._destroyEditor(name);
+      } catch (err) {
+        // A failed teardown must never block close(); the user clicked ×.
+        console.error(`starwarsffg | failed to destroy editor "${name}" on close`, err);
+      }
     }
   }
 

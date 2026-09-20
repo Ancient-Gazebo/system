@@ -146,6 +146,34 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     "full": 4
   }
 
+  /**
+   * Ensure every slot of a fixed-size talent/upgrade grid exists.
+   *
+   * The tree loops below address `${prefix}${i}` across the whole grid and read `.description`
+   * and `.size` straight off each node, so a tree missing a slot throws and the sheet never
+   * opens. New items get their slots from the DataModel (`treeNodes` in item-models.js); this
+   * covers documents stored before that default existed and partially populated imports.
+   *
+   * An empty slot is the historical shape - `SIZE_TO_INT[undefined]` is `undefined`, which makes
+   * the connection loops no-op, and `enrichHTML(undefined)` returns "" - so a restored slot
+   * renders as a blank tree cell rather than changing any existing tree's appearance.
+   *
+   * Mutates the sheet's display copy (`preparedSystemCopy` deep-clones per key), never the
+   * document, so nothing here is persisted.
+   *
+   * @param {object|undefined} tree the grid to normalize
+   * @param {string} prefix key prefix, e.g. "talent"
+   * @param {number} count number of slots in the grid
+   * @returns {object} the same grid, with every slot present
+   */
+  static ensureTreeNodes(tree, prefix, count) {
+    const grid = tree ?? {};
+    for (let i = 0; i < count; i++) {
+      if (!grid[`${prefix}${i}`]) grid[`${prefix}${i}`] = {};
+    }
+    return grid;
+  }
+
   /** @override */
   async getData(options) {
     let data = super.getData(options);
@@ -290,6 +318,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           data.isEditing = false;
           data.isReadOnly = true;
         }
+        data.data.upgrades = ItemSheetFFG.ensureTreeNodes(data.data.upgrades, "upgrade", 16);
         for (let x = 0; x < 16; x++) {
           data.data.upgrades[`upgrade${x}`].enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(data.data.upgrades[`upgrade${x}`].description);
           let upgradeSize = ItemSheetFFG.SIZE_TO_INT[data.data.upgrades[`upgrade${x}`].size];
@@ -337,6 +366,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           }
           this.item.flags.starwarsffg.loaded = true;
         }
+        data.data.talents = ItemSheetFFG.ensureTreeNodes(data.data.talents, "talent", 20);
         for (let x = 0; x < 20; x++) {
           data.data.talents[`talent${x}`].enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(data.data.talents[`talent${x}`].description);
 
@@ -446,6 +476,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           data.data.isEditing = false;
           data.data.isReadOnly = true;
         }
+        data.data.upgrades = ItemSheetFFG.ensureTreeNodes(data.data.upgrades, "upgrade", 8);
         for (let x = 0; x < 8; x++) {
           data.data.upgrades[`upgrade${x}`].enrichedDescription = await foundry.applications.ux.TextEditor.enrichHTML(data.data.upgrades[`upgrade${x}`].description);
           let upgradeSize = ItemSheetFFG.SIZE_TO_INT[data.data.upgrades[`upgrade${x}`].size];

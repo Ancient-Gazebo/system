@@ -3,6 +3,36 @@
  */
 import { AnyField, FFGTypeModel, SafeNumberField } from "./actor-models.js";
 
+/**
+ * Build the default node map for a fixed-size talent/upgrade grid.
+ *
+ * The trees are addressed by index (`talent0..talent19`, `upgrade0..upgrade15`,
+ * `upgrade0..upgrade7`) and the item sheet walks every index unguarded. The
+ * pre-migration `template.json` shipped these slots as empty objects, so
+ * `talent0` existed and reading `.description` off it merely gave `undefined`.
+ * When the field definitions moved into the DataModels the trees became bare
+ * `ObjectField()`s defaulting to `{}`, so a freshly created specialization /
+ * force power / signature ability had no slots at all and its sheet threw on
+ * `talent0` before rendering.
+ *
+ * They stay `ObjectField`s rather than becoming `SchemaField`s so arbitrary keys
+ * inside a node still survive a save; this only restores the empty slots.
+ *
+ * Returns a factory, not an object: each document must get its own copy, or they
+ * would all share one mutable default.
+ *
+ * @param {string} prefix key prefix, e.g. "talent"
+ * @param {number} count  number of slots in the grid
+ * @returns {() => Record<string, object>}
+ */
+function treeNodes(prefix, count) {
+  return () => {
+    const nodes = {};
+    for (let i = 0; i < count; i++) nodes[`${prefix}${i}`] = {};
+    return nodes;
+  };
+}
+
 export class AbilityItemModel extends FFGTypeModel {
   static defineSchema() {
     const fields = foundry.data.fields;
@@ -179,7 +209,7 @@ export class ForcepowerItemModel extends FFGTypeModel {
         tags: new fields.ArrayField(new AnyField()),
         sources: new fields.ArrayField(new AnyField()),
       }),
-      upgrades: new fields.ObjectField(),
+      upgrades: new fields.ObjectField({ initial: treeNodes("upgrade", 16) }),
       required_force_rating: new SafeNumberField({ initial: 0, nullable: true }),
       base_cost: new SafeNumberField({ initial: 0, nullable: true }),
     };
@@ -564,7 +594,7 @@ export class SignatureabilityItemModel extends FFGTypeModel {
         tags: new fields.ArrayField(new AnyField()),
         sources: new fields.ArrayField(new AnyField()),
       }),
-      upgrades: new fields.ObjectField(),
+      upgrades: new fields.ObjectField({ initial: treeNodes("upgrade", 8) }),
       base_cost: new SafeNumberField({ initial: 0, nullable: true }),
       uplink_nodes: new fields.SchemaField({
         uplink0: new fields.BooleanField({ initial: false }),
@@ -586,7 +616,7 @@ export class SpecializationItemModel extends FFGTypeModel {
         tags: new fields.ArrayField(new AnyField()),
         sources: new fields.ArrayField(new AnyField()),
       }),
-      talents: new fields.ObjectField(),
+      talents: new fields.ObjectField({ initial: treeNodes("talent", 20) }),
       careerSkills: new fields.SchemaField({
         careerSkill0: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
         careerSkill1: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),

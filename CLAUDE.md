@@ -6,8 +6,11 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `2.1.0`, compatibility minimum 13 /
-verified 14 — it runs on **both V13 and V14**). This is a maintained fork
+(`system.json`: id `starwarsffg`, version `2.1.35`, compatibility minimum 13 /
+verified `"14.368"` — it runs on **both V13 and V14**). Note `verified` is a full
+build string, not a bare generation: Foundry only compares generations when the
+value is an integer, so a build string must be bumped on each core patch release
+or the launcher starts warning that the system is unverified. This is a maintained fork
 descended from Jaxxa's implementation; upstream lives at
 `StarWarsFoundryVTT/StarWarsFFG`.
 

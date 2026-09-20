@@ -17,6 +17,14 @@ armour, gear, shipattachment, shipweapon and weapon (2.1.34), and `system.group`
 (vehicle minion groups). Any field a DataModel does not
 declare is pruned from every document on its next save, so check this list before regenerating.
 
+The same applies to the **talent/upgrade tree defaults** (`treeNodes` in `item-models.js`):
+specialization `talents` (20 slots), forcepower `upgrades` (16) and signatureability `upgrades`
+(8) each seed their grid with empty slots via `initial`. The original `template.json` shipped
+those slots; the first generated models dropped them, which left newly created items with an
+empty `{}` tree and threw in `ItemSheetFFG.getData` before the sheet could render. Keep the
+`initial` factories on any regenerate. Note `SpeciesItemModel.talents` is a free-form map, not
+an indexed grid — it must stay a bare `ObjectField()`.
+
 ## How it's wired
 `modules/swffg-main.js` (init hook) sets:
 ```js

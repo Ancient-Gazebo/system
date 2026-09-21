@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `2.1.36`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `2.1.37`, compatibility minimum 13 /
 verified `"14.368"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -105,6 +105,13 @@ npx eslint modules
 - **The V2 render pipeline assigns `innerHTML`, which never runs inline
   `<script>` in a template.** Several dialogs used to wire themselves that way;
   wire listeners in JS (or call `executeInlineScripts`) instead.
+- **`DialogV2` sanitizes `content`.** V14 pushes it through
+  `foundry.utils.cleanHTML`, which silently drops anything outside
+  `CONST.ALLOWED_HTML_TAGS` — a `<style>` block vanishes without a warning, so
+  per-dialog CSS has to ride on the `style` *attribute* (that one survives, via
+  the `*` entry in `ALLOWED_HTML_ATTRIBUTES`). Note also that `content` is
+  already wrapped in DialogV2's own `<form>`: a `<form>` of your own nested
+  inside it is discarded by the HTML parser, taking any class hook on it along.
 - **`render` intent is explicit.** V1 re-rendered on every submit; the V2
   pipeline threads a `render` flag through `_onSubmit` → `_updateObject` →
   `document.update`. Anything shown that is computed in `getData` goes stale

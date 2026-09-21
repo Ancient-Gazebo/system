@@ -50,6 +50,7 @@ import CrewSettings from "./settings/crew-settings.js";
 import LanguageSettings from "./settings/language-settings.js";
 import {register_dice_enricher, register_oggdude_tag_enricher, register_roll_tag_enricher} from "./helpers/journal.js";
 import {drawAdversaryCount, drawMinionCount, registerTokenControls} from "./helpers/token.js";
+import {promptDispositionChange, registerDispositionControls, setTokenDisposition} from "./helpers/token-disposition.js";
 import {handleUpdate, migrateSpeciesInherentEffects, cleanupSpeciesTalentEffects, repairEncumbranceThresholds} from "./swffg-migration.js";
 import SWAImporter from "./importer/swa-importer.js";
 import {CharacterCreator} from "./helpers/character-creator.js";
@@ -137,7 +138,14 @@ Hooks.once("init", async function () {
     repairEncumbranceThresholds,
     setupCriticalTables,
     migrateLegacyScope,
+    // Bulk token disposition, for a hotbar macro: `game.ffg.promptDispositionChange()`.
+    promptDispositionChange,
+    setTokenDisposition,
   };
+
+  // The Token scene controls are built once, before the `ready` hook, so this has to be registered
+  // during init or the button never appears.
+  registerDispositionControls();
 
   // Define custom log prefix and logger
   CONFIG.module = "Starwars FFG";

@@ -2781,11 +2781,27 @@ img {
   flex: 0 0 4rem;
   text-align: center;
 }
+/* 64px, not 56: with the add-talent control the header carries three items (add-tab + list toggle
+   + add-talent, 57px), which the old basis did not fit. The rows' two controls measure 57.4px and
+   were already overflowing 56px, so the wider basis suits both; the column is shared, which keeps
+   the header and the rows aligned. */
 .starwarsffg .talent-list .talent-col-actions {
-  flex: 0 0 56px;
+  flex: 0 0 64px;
 }
 .starwarsffg .talent-list .talents-header .talent-org-controls.talent-col-actions {
-  flex: 0 0 56px;
+  flex: 0 0 64px;
+}
+/* Every .item-add is a clickable control rendered as a plain <div>, so none of them picked up a
+   pointer cursor the way the organization links beside them do. */
+.starwarsffg .item-add {
+  cursor: pointer;
+}
+/* The add control is a <div>, so it also misses the `.talent-org-controls a` colour rule that
+   styles the two organization links beside it. */
+.starwarsffg .talent-list .talents-header .talent-org-controls .item-add {
+  color: white;
+  display: flex;
+  align-items: center;
 }
 /* Beat the generic `.items .items-list .item-controls { width:20px; margin:auto }` rule
    (the talents tab carries the `.items` class), whose auto margin would otherwise steal
@@ -2793,7 +2809,7 @@ img {
    alignment in the flat list. */
 .starwarsffg .items .talent-list .item-controls.talent-col-actions,
 .starwarsffg .talent-list .item-controls.talent-col-actions {
-  flex: 0 0 56px;
+  flex: 0 0 64px;
   width: auto;
   margin: 0;
   text-align: right;

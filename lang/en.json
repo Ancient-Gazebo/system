@@ -1367,6 +1367,8 @@
   "SWFFG.TalentOrganization.DefaultTab": "Talents",
   "SWFFG.TalentOrganization.NewTab": "New Tab",
   "SWFFG.TalentOrganization.AddTab": "Add a talent tab",
+  "SWFFG.AddBlankTalent": "Add a blank talent",
+  "SWFFG.AddBlankAbility": "Add a blank ability",
   "SWFFG.TalentOrganization.Enable": "Organize talents into tabs",
   "SWFFG.TalentOrganization.Disable": "Return to the default talent list",
   "SWFFG.TalentOrganization.Collapse": "Collapse or expand this tab",

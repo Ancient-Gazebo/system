@@ -2108,6 +2108,21 @@ Hooks.once("ready", async () => {
 
   }
 
+  Hooks.on("updateActor", (actor, changed, options, userId) => {
+    /*
+    Vital stats (wounds / strain / hull trauma / system strain) are saved with `render: false` to
+    keep the sheet responsive - the editing client repaints just the damage track instead of paying
+    for a full re-render. But `render` is part of the update options, so it is broadcast: it
+    suppresses the re-render for every client, and only the one that made the edit repaints. A
+    second client with the same sheet open was left showing the old number, and since actor sheets
+    submit on close, closing it wrote that stale value back over the change (the token bar visibly
+    snapping back to it). Re-sync those inputs here instead, for remote updates only - the local
+    client has already painted its own.
+    */
+    if (options?.render !== false || userId === game.user.id) return;
+    for (const app of Object.values(actor.apps ?? {})) app.syncVitalInputs?.();
+  });
+
   Hooks.on("refreshToken", (token) => {
     /*
     Used to render minion count (minion groups and vehicle minion groups; drawMinionCount clears the

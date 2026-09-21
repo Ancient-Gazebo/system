@@ -183,30 +183,31 @@ export default class DiceHelpers {
   }
 
   static async rollSkill(obj, event, type, flavorText, sound) {
-    const data = await obj.getData();
-    const row = event.target.parentElement.parentElement;
-    let skillName = row.parentElement.dataset["ability"];
-    if (skillName === undefined) {
-      skillName = row.dataset["ability"];
-      if (skillName === undefined) {
-        skillName = row.parentElement.parentElement.parentElement.dataset["ability"];
-      }
-    }
+    // Resolve the clicked row by walking UP from the element the handler is bound to, rather than
+    // by counting a fixed number of parentElement hops from event.target. Weapon rows nest a
+    // second `.roll-button` (the item icon) inside the `.roll-button` wrapper and BOTH are bound,
+    // so event.target sat at one of two different depths depending on where inside the button the
+    // pointer landed: the icon itself, or the wrapper - its 5px right margin, and the strip above
+    // and below the 24px icon in lists whose `.item-name` stretches instead of centring. Only the
+    // icon put the `<li class="item">` at `row.parentElement`; a click on the wrapper resolved one
+    // level higher (the `<ul>`), the item lookup below silently found nothing, and the weapon
+    // attack went out as a bare skill check - no weapon name, damage or crit on the card. This is
+    // read synchronously, before the first await, because jQuery only keeps `currentTarget` set
+    // for the duration of its dispatch.
+    const origin = event.currentTarget ?? event.target;
+    const itemRow = origin?.closest?.(".item[data-item-id]") ?? null;
+    const abilityRow = origin?.closest?.("[data-ability]") ?? null;
+    const skillName = abilityRow?.dataset?.ability ?? itemRow?.dataset?.ability;
 
-    const actor = await game.actors.get(data.actor._id);
+    const data = await obj.getData();
+    const actor = game.actors.get(data.actor._id);
 
     // Determine if this roll is triggered by an item.
     let item;
-    if ($(row.parentElement).hasClass("item")) {
-      //Check if token is linked to actor
-      if (obj.actor.token === null) {
-        let itemID = row.parentElement.dataset["itemId"];
-        item = actor.items.get(itemID);
-      } else {
-        //Rolls this if unlinked
-        let itemID = row.parentElement.dataset["itemId"];
-        item = obj.actor.token.actor.items.get(itemID);
-      }
+    if (itemRow) {
+      const itemID = itemRow.dataset["itemId"];
+      // Unlinked tokens carry their own item collection; linked ones read from the world actor.
+      item = obj.actor.token === null ? actor?.items?.get(itemID) : obj.actor.token.actor.items.get(itemID);
     }
 
     if (item && item.type === "weapon") {

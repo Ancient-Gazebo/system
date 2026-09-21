@@ -1416,37 +1416,26 @@ export class ActorSheetFFG extends FFGActorSheet {
     });
 
     // Add Inventory Item
-    html.find(".item-add").click((ev) => {
+    html.find(".item-add").click(async (ev) => {
       if(!this.actor.verifyEditModeIsNotEnabled()) {
         return;
       }
 
-      let itemType = "";
-      switch (ev.currentTarget.classList[1]) {
-        case "armour":
-          itemType = game.i18n.localize("TYPES.Item.armour");
-          break;
-        case "weapon":
-          itemType = game.i18n.localize("TYPES.Item.weapon");
-          break;
-        case "shipattachment":
-          itemType = game.i18n.localize("TYPES.Item.shipattachment");
-          break;
-        case "shipweapon":
-          itemType = game.i18n.localize("TYPES.Item.shipweapon");
-          break;
-
-        default:
-          itemType = game.i18n.localize("TYPES.Item.gear");
-          break;
-      }
+      // The type is the second class on the control ("item-add weapon"), and it is also the type
+      // the blank document is created as. The label used to come from a switch that listed four
+      // types and fell through to "Gear" for everything else, so a new homestead upgrade arrived
+      // named "Gear"; TYPES.Item.<type> is defined for every item type, so read it directly and
+      // only fall back when a control carries a type the system does not know.
+      const itemType = ev.currentTarget.classList[1];
+      if (!itemType) return;
+      const label = game.i18n.localize(`TYPES.Item.${itemType}`);
 
       let itemdata = {
-        name: itemType,
-        type: ev.currentTarget.classList[1]
+        name: label === `TYPES.Item.${itemType}` ? game.i18n.localize("TYPES.Item.gear") : label,
+        type: itemType
       };
 
-      this.actor.createEmbeddedDocuments("Item", [itemdata]);
+      await this.actor.createEmbeddedDocuments("Item", [itemdata]);
     });
 
     // Delete Inventory Item
@@ -2099,6 +2088,12 @@ export class ActorSheetFFG extends FFGActorSheet {
       .find(".roll-button")
       .on("click", async (event) => {
         event.stopPropagation();
+        // Vehicle weapon rows nest the crew-aware `.roll-button-weapon` icon inside a plain
+        // `.roll-button` wrapper, and the wrapper is matched by this binding too. Clicking the
+        // wrapper rather than the icon must not fall through to the generic roller, or the same
+        // row rolls the gunner's pool or the vehicle's own depending on which pixel was hit.
+        const crewWeapon = event.currentTarget?.querySelector?.(".roll-button-weapon");
+        if (crewWeapon && crewWeapon !== event.currentTarget) return crewWeapon.click();
         let upgradeType = null;
         if (event.ctrlKey && !event.shiftKey) {
           upgradeType = "ability";
@@ -4644,6 +4639,36 @@ export class ActorSheetFFG extends FFGActorSheet {
     const { pct, color } = ActorSheetFFG.computeVitalTrack(read("value"), read("max"));
     fill.style.width = `${pct}%`;
     fill.style.background = color;
+  }
+
+  /**
+   * Re-read every wounds/strain style input from the document and repaint its track.
+   *
+   * These fields are saved with `{ render: false }` so that a stepper click or a typed edit does
+   * not rebuild the whole sheet (see the handlers in activateListeners). That option travels with
+   * the update, though: it suppresses the re-render on EVERY connected client, while only the
+   * client that made the edit compensates by repainting its own track. Any other copy of the sheet
+   * that happened to be open was therefore left displaying the pre-edit number - and because actor
+   * sheets submit on close, closing that stale sheet wrote the old value straight back over the
+   * change that had just landed, snapping the token bar back with it. Called from the `updateActor`
+   * hook for updates that came from another client with the re-render suppressed.
+   */
+  syncVitalInputs() {
+    const form = this.form;
+    if (!form) return;
+    for (const input of form.querySelectorAll('input[name^="data.stats."]')) {
+      const name = input.getAttribute("name") || "";
+      if (!/\.(value|max)$/.test(name)) continue;
+      // Never overwrite the field the user currently has the caret in: they are part-way through
+      // typing a value that has not been committed yet.
+      if (input === document.activeElement) continue;
+      // Sheet inputs are still named with the pre-v10 `data.` prefix; the submit pipeline maps
+      // that to `system.` (migrateDataToSystem), so do the same to read the value back.
+      const current = foundry.utils.getProperty(this.actor, name.replace(/^data\./, "system."));
+      if (current === undefined || current === null) continue;
+      if (String(input.value) !== String(current)) input.value = String(current);
+      this._paintVitalTrack(input);
+    }
   }
 
   // _handleSourceControl / _handleTagControl: the V1 Dialog overrides that used

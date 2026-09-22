@@ -21,8 +21,10 @@ export default class ForcePowers {
       const base = JXON.xmlToJs(abilityXml);
       const abilities = base?.ForceAbilities?.ForceAbility;
 
+      // Records superseded by a replacement in the same export, if that option was ticked.
+      const excluded = CONFIG.temporary?.excludedFiles;
       const files = Object.values(zip.files).filter((file) => {
-        return !file.dir && file.name.split(".").pop() === "xml" && file.name.includes("/Force Powers/");
+        return !file.dir && file.name.split(".").pop() === "xml" && file.name.includes("/Force Powers/") && !excluded?.has(file.name);
       });
       let totalCount = files.length;
       let currentCount = 0;

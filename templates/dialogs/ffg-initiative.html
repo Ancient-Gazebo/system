@@ -12,17 +12,11 @@
       <label for="{{../id}}-{{key}}">{{localize p.label}}</label>
     {{/each}}
   </div>
-  <div id="Vigilancepool" class="hidden-content">
-    {{#each vigilanceDicePool as |attr key|}}
-    <input type="button" name="{{key}}" min="0" value="{{attr}}" />
-    {{/each}}
-  </div>
-
-  <div id="Coolpool" class="hidden-content">
-    {{#each coolDicePool as |attr key|}}
-    <input type="button" name="{{key}}" min="0" value="{{attr}}" />
-    {{/each}}
-  </div>
+  {{!-- Two hidden per-skill pool divs used to sit here, hardcoded for Vigilance and Cool. They
+        iterated `vigilanceDicePool` / `coolDicePool`, which this template has not been passed
+        for some time, so both rendered empty, and nothing referenced them by id. The selectable
+        skills come from `dicePools` above; the pool that is actually rolled is rebuilt per
+        combatant in CombatFFG#rollInitiative's callback. --}}
 
   <div style="text-align: center;"><span>{{localize "SWFFG.InitiativePoolAddsHint"}}</span></div>
 

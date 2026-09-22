@@ -356,8 +356,14 @@ export class CombatFFG extends Combat {
 
       let whosInitiative = initiative.combatant?.name;
       let dicePools = [];
-      let vigilanceDicePool = new DicePoolFFG({});
-      let coolDicePool = new DicePoolFFG({});
+      // Offered on every combatant whether or not the skill is flagged useForInitiative, so the
+      // skills the rules reach for by default need no per-actor setup. Listed in the order the
+      // radio buttons appear; anything flagged on the actor is offered ahead of these.
+      const baselineSkills = ["Vigilance", "Cool", "Stealth"];
+      const baselinePools = Object.fromEntries(baselineSkills.map((skill) => [skill, new DicePoolFFG({})]));
+      // Null until a single combatant resolves to an actor, which is the only case where we know
+      // which skills exist - see the push loop below.
+      let actorSkills = null;
       let addDicePool = new DicePoolFFG({});
 
       const defaultInitiativeFormula = formula || initiative._getInitiativeFormula();
@@ -371,15 +377,20 @@ export class CombatFFG extends Combat {
           // The id no longer resolves to a combatant with an actor (removed mid-roll, or its token
           // left the scene). This used to throw here, and a throw inside an async Promise executor
           // is never surfaced as a rejection - the dialog never opened and the caller's await hung
-          // forever. Fall through to the generic Vigilance/Cool pools built below, which is exactly
+          // forever. Fall through to the generic baseline pools built below, which is exactly
           // what the multi-combatant branch above does.
           CONFIG.logger.warn(`Unable to resolve combatant '${ids[0]}' for initiative; falling back to default dice pools.`);
         } else {
           const data = _findActorForInitiative(c);
           whosInitiative = c.actor.name;
 
-          vigilanceDicePool = _buildInitiativePool(data, "Vigilance");
-          coolDicePool = _buildInitiativePool(data, "Cool");
+          actorSkills = data.skills;
+          for (const skill of baselineSkills) {
+            // A custom skill theme need not define all three, and _buildInitiativePool reads
+            // .characteristic straight off the skill - so skip rather than throw in here, where
+            // the error would never surface as a rejection of the promise being built.
+            if (actorSkills[skill]) baselinePools[skill] = _buildInitiativePool(data, skill);
+          }
 
           const initSkills = Object.keys(data.skills).filter((skill) => data.skills[skill].useForInitiative);
 
@@ -394,15 +405,15 @@ export class CombatFFG extends Combat {
         }
       }
 
-      if (dicePools.findIndex((p) => p.name === "Vigilance") < 0) {
-        vigilanceDicePool.label = "SWFFG.SkillsNameVigilance";
-        vigilanceDicePool.name = "Vigilance";
-        dicePools.push(vigilanceDicePool);
-      }
-      if (dicePools.findIndex((p) => p.name === "Cool") < 0) {
-        coolDicePool.label = "SWFFG.SkillsNameCool";
-        coolDicePool.name = "Cool";
-        dicePools.push(coolDicePool);
+      for (const skill of baselineSkills) {
+        if (dicePools.findIndex((p) => p.name === skill) >= 0) continue;
+        // Once an actor is known, only offer what it actually has: picking a skill it lacks would
+        // throw when the callback rebuilds the pool at roll time. With no actor resolved (multiple
+        // combatants, or one that went away) offer all three, as the pool is rebuilt per combatant.
+        if (actorSkills && !actorSkills[skill]) continue;
+        baselinePools[skill].label = `SWFFG.SkillsName${skill}`;
+        baselinePools[skill].name = skill;
+        dicePools.push(baselinePools[skill]);
       }
 
       const diceSymbols = {

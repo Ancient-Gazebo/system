@@ -1,5 +1,6 @@
 import ImportHelpers from "./import-helpers.js";
 import OggDude from "./oggdude/oggdude.js";
+import SupersededFilter from "./oggdude/superseded-filter.js";
 import { loadImporterLibs } from "../helpers/lazy-libs.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
@@ -217,6 +218,16 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
       for (const itemType of importFiles) {
         await this._deleteCompendium(itemType);
       }
+    }
+
+    // Work out which records this export supersedes before any phase runs, so the specialization
+    // and Force power importers can skip them. Stashed on CONFIG.temporary for the same reason the
+    // skills cache is: it is the only channel the per-type importers share.
+    if (!CONFIG?.temporary) CONFIG.temporary = {};
+    CONFIG.temporary.excludedFiles = new Set();
+    if (scope.querySelector("#skipSuperseded")?.checked) {
+      CONFIG.temporary.excludedFiles = await SupersededFilter.compute(zip);
+      this._importLogger(`Skipping ${CONFIG.temporary.excludedFiles.size} superseded file(s): ${[...CONFIG.temporary.excludedFiles].join(", ")}`);
     }
 
     // If skills are not selected for import, pre-populate the skills cache so other importers

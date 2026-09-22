@@ -27,6 +27,12 @@
     </div>
     <div style="display: flex;">
       <div style="white-space: nowrap;">
+        <input type="checkbox" id="skipSuperseded" name="skipSuperseded" checked />
+        <label for="skipSuperseded" title="{{localize "SWFFG.SkipSupersededHint"}}"> {{localize "SWFFG.SkipSuperseded"}}</label><br />
+      </div>
+    </div>
+    <div style="display: flex;">
+      <div style="white-space: nowrap;">
         <button type="button" id="importAll" data-action="selectAll" disabled>
           <i class="fa-solid fa-lasso"></i>
           {{ localize "SWFFG.CheckAll" }}

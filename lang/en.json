@@ -521,6 +521,8 @@
   "SWFFG.ImportFile": "Start Import",
   "SWFFG.CheckAll": "Select All",
   "SWFFG.DeleteExisting": "Delete Existing Compendiums",
+  "SWFFG.SkipSuperseded": "Skip Superseded Originals",
+  "SWFFG.SkipSupersededHint": "Skip stock specializations and Force powers that this data set replaces with its own version. A stock specialization is skipped only when no career still lists it and it is not universal, so this has no effect on an unmodified data set.",
   "SWFFG.Cost": "COST:",
   "SWFFG.EnableSoakCalc": "Enable Soak Auto-Calculation",
   "SWFFG.EnableSoakCalcHint": "Enable soak auto-calculation and unload field for manual entry",

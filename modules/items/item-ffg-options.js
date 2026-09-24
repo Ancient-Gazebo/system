@@ -168,12 +168,14 @@ export default class ItemOptions {
     if (!this.options[optionName]) {
       this.options[optionName] = { ...options };
     }
-    if (typeof this.data.object.flags?.starwarsffg?.config == "undefined") {
-      await this.data.object.setFlag("starwarsffg", "config", {});
-    }
-
-    if (typeof this.data.object.flags?.starwarsffg?.config[optionName] !== "undefined") {
-      this.options[optionName].value = this.data.object.flags?.starwarsffg?.config[optionName];
+    // Read-only. This used to seed an empty `flags.starwarsffg.config` on the item first, which cost
+    // a document write per registered option (registerMany does not await, so they raced) the first
+    // time any gear/armour/weapon sheet was opened - by players too, on their own items. Nothing
+    // needs the empty object: an absent config simply means every option is at its default, and
+    // the Sheet Options dialog creates the flag when it saves.
+    const stored = this.data.object.flags?.starwarsffg?.config?.[optionName];
+    if (typeof stored !== "undefined") {
+      this.options[optionName].value = stored;
     } else {
       this.options[optionName].value = this.options[optionName].default;
     }

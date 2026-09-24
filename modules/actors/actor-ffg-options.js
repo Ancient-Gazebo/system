@@ -205,12 +205,11 @@ export default class ActorOptions {
     if (!this.options[optionName]) {
       this.options[optionName] = { ...options };
     }
-    if (typeof this.data.object.flags?.starwarsffg?.config == "undefined") {
-      await this.data.object.setFlag("starwarsffg", "config", {});
-    }
-
-    if (typeof this.data.object.flags?.starwarsffg?.config[optionName] !== "undefined") {
-      this.options[optionName].value = this.data.object.flags?.starwarsffg?.config[optionName];
+    // Read-only; an absent config means every option is at its default. Seeding an empty one here
+    // cost a racing document write per option on the first open of each actor (see ItemOptions).
+    const stored = this.data.object.flags?.starwarsffg?.config?.[optionName];
+    if (typeof stored !== "undefined") {
+      this.options[optionName].value = stored;
     } else {
       this.options[optionName].value = this.options[optionName].default;
     }

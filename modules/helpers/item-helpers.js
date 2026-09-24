@@ -106,7 +106,7 @@ export default class ItemHelpers {
         });
       }
       if (itemEffect) {
-        await itemEffect.update({changes: changes});
+        await ModifierHelpers.updateEffectChanges(itemEffect, changes);
       }
     } else if (this.object.type === "specialization") {
       // apply career skills from Careers
@@ -128,9 +128,78 @@ export default class ItemHelpers {
         });
       }
       if (itemEffect) {
-        await itemEffect.update({changes: changes});
+        await ModifierHelpers.updateEffectChanges(itemEffect, changes);
       }
     }
+  }
+
+  /**
+   * Bring an item's (inherent) effect back in line with the item's own stats, for the parts of that
+   * effect that are nothing but a copy of them:
+   *   - armour: soak and defence (melee + ranged). Encumbrance is left alone - the equip state owns
+   *     it (updateEncumbranceOnEquip), and the actor derives encumbrance from its items anyway.
+   *   - career / specialization: the career-skill changes.
+   *
+   * The OggDude importer only copies these into the effect if the effect already exists, after a
+   * fixed wait for _onCreate to build it. When it lost that race the effect kept the zeroes it was
+   * created with: 99 of 112 imported armours gave no soak or defence when worn, and most imported
+   * careers and specializations granted no career skills - until someone happened to save the
+   * item's sheet. Every copy dragged out of them inherited the same broken effect.
+   *
+   * Safe to call repeatedly: it writes only when something actually differs.
+   * @param {Item} item
+   * @returns {Promise<boolean>} whether the effect was updated
+   */
+  static async syncInherentStatEffect(item) {
+    if (!["armour", "career", "specialization"].includes(item?.type)) return false;
+    // Adversaries (minion / rival / nemesis) come from stat blocks whose soak, defence and skills
+    // already include their gear, and the adversary importer deliberately leaves these effects at
+    // zero so the armour is not counted twice. Only player characters derive their stats from their
+    // items, so only their copies - and unowned items, which apply to nobody - are rebuilt.
+    if (item.actor && item.actor.type !== "character") return false;
+    const inherent = item.effects?.find((e) => e.name === "(inherent)");
+    if (!inherent) return false;
+
+    let changes;
+    if (item.type === "armour") {
+      changes = foundry.utils.deepClone(inherent._source.changes ?? []);
+      const wanted = [
+        ["Defence", Number(item.system?.defence?.value) || 0],
+        ["Soak", Number(item.system?.soak?.value) || 0],
+      ];
+      for (const [stat, value] of wanted) {
+        for (const mod of ModifierHelpers.explodeMod("Stat", stat)) {
+          const key = ModifierHelpers.getModKeyPath(mod.modType, mod.mod);
+          if (!key) continue;
+          const existing = changes.find((c) => c.key === key);
+          if (existing) existing.value = value;
+          else changes.push({ key, mode: AE_MODES.ADD, value });
+        }
+      }
+    } else {
+      // An item predating careerSkills has nothing to rebuild from; leave its effect alone.
+      if (!item.system?.careerSkills) return false;
+      // Same shape the item sheet writes (see itemUpdate): one change per slot, "(none)" if empty.
+      const slots = item.type === "career" ? 8 : 5;
+      changes = [];
+      for (let i = 0; i < slots; i++) {
+        const skill = item.system.careerSkills[`careerSkill${i}`];
+        changes.push({
+          key: skill && skill !== "(none)" ? `system.skills.${skill}.careerskill` : "(none)",
+          mode: AE_MODES.ADD,
+          value: true,
+        });
+      }
+    }
+    const updated = await ModifierHelpers.updateEffectChanges(inherent, changes);
+    // Armour that is not worn must not apply. Imported armour often arrives with its effect switched
+    // on while unequipped - harmless while it held zeroes, but with its real values it would add soak
+    // and defence from armour nobody is wearing.
+    if (updated && item.type === "armour" && item.actor) {
+      const equipped = ItemHelpers.isEffectivelyEquipped(item);
+      if (inherent.disabled === equipped) await inherent.update({ disabled: !equipped });
+    }
+    return updated;
   }
 
   /**
@@ -194,26 +263,73 @@ export default class ItemHelpers {
   static async shouldUpdateAEStatus(item, activeEffect) {
     CONFIG.logger.debug(`Checking if ${activeEffect.name} from ${item.name} should be applied`);
     if (["armour", "weapon", "shipweapon"].includes(item.type)) {
-      for (const attachment of item.system.itemattachment) {
-        for (const modification of attachment.system.itemmodifier) {
-          try {
-            const foundMod = modification.system.attributes[activeEffect.name];
-            CONFIG.logger.debug(`Located mod ${activeEffect.name}, checking if it's active or not`);
-            if (foundMod && !modification.system.active) {
-              CONFIG.logger.debug(`Mod ${activeEffect.name} is not active, not syncing AE status`);
-              return false;
-            } else {
-              CONFIG.logger.debug(`Mod ${activeEffect.name} is active, syncing AE status`);
-              return true;
-            }
-          } catch {
-            CONFIG.logger.debug(`No mod located, continuing search...`);
+      // Find the modification that owns this effect and follow its installed state. This used to
+      // return from inside the loop on the FIRST modification examined - "true" whenever that one
+      // did not own the effect - so only the first modification of the first attachment was ever
+      // checked, and equipping the item switched on the effects of optional modifications that
+      // were never installed.
+      for (const attachment of item.system.itemattachment ?? []) {
+        for (const modification of attachment?.system?.itemmodifier ?? []) {
+          if (modification?.system?.attributes?.[activeEffect.name] === undefined) continue;
+          if (!modification.system.active) {
+            CONFIG.logger.debug(`Mod ${activeEffect.name} is not active, not syncing AE status`);
+            return false;
           }
+          CONFIG.logger.debug(`Mod ${activeEffect.name} is active, syncing AE status`);
+          return true;
         }
       }
     }
     CONFIG.logger.debug(`No reason to avoid updating status found, syncing AE status`);
     return true;
+  }
+
+  /**
+   * Create the Active Effects a weapon, armour or ship weapon is missing for the actor-level
+   * modifiers of what is installed on it: the attachments' own modifiers and their modifications,
+   * and the qualities.
+   *
+   * A modifier only reaches the actor through an effect on the host item named after it. Items
+   * built through their sheets get those effects from the modifications editor, but imported
+   * attachments carry modifier rows and no effects at all, and installing one (a drag onto the
+   * weapon or armour) only copied the effects it already had - so e.g. a Portable Plasma Shield
+   * gave its wearer no melee defence until someone opened and saved the attachment's editor.
+   *
+   * Only modifiers with an actor path get an effect: weapon/armour stat modifiers are computed by
+   * the item itself, and the actor derives encumbrance from its items. New effects follow the same
+   * gating as the editor's: the host's equipped state, and for a modification whether it is
+   * installed. Safe to call repeatedly - an existing effect is never touched.
+   * @param {Item} host
+   * @param {object[]} [sources] installed attachments/qualities to cover; defaults to all of them
+   * @returns {Promise<number>} the number of effects created
+   */
+  static async createMissingModifierEffects(host, sources) {
+    if (!["weapon", "armour", "shipweapon"].includes(host?.type)) return 0;
+    sources ??= [...(host.system?.itemattachment ?? []), ...(host.system?.itemmodifier ?? [])];
+    // Items without an equip slot (ship weapons) are always in use.
+    const equipped = host.system?.equippable ? ItemHelpers.isEffectivelyEquipped(host) : true;
+    const existing = new Set(host.effects.map((e) => e.name));
+    const toCreate = [];
+    const collect = (attributes, active, img) => {
+      for (const [key, attr] of Object.entries(attributes ?? {})) {
+        if (!attr || typeof attr !== "object" || existing.has(key)) continue;
+        const changes = (ModifierHelpers.explodeMod(attr.modtype, attr.mod, host.type) ?? [])
+          .map((m) => ({ key: ModifierHelpers.getModKeyPath(m.modType, m.mod), mode: AE_MODES.ADD, value: attr.value }))
+          .filter((c) => c.key && c.key !== "system.stats.encumbrance.value");
+        if (!changes.length) continue;
+        existing.add(key);
+        toCreate.push({ name: key, img: img ?? host.img, changes, disabled: !(equipped && active) });
+      }
+    };
+    for (const source of sources) {
+      collect(source?.system?.attributes, true, source?.img);
+      for (const mod of source?.system?.itemmodifier ?? []) collect(mod?.system?.attributes, !!mod?.system?.active, mod?.img ?? source?.img);
+    }
+    if (!toCreate.length) return 0;
+    const created = await host.createEmbeddedDocuments("ActiveEffect", toCreate);
+    // scale quality effects by their ranks, as a drop or rank change does
+    await ItemHelpers.syncAEStatus(host, created);
+    return created.length;
   }
 
   /**

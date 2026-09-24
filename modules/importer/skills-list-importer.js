@@ -58,10 +58,13 @@ export default class SkillListImporter extends HandlebarsApplicationMixin(Applic
       event.preventDefault();
       event.stopPropagation();
 
-      game.settings.set("starwarsffg", "arraySkillList", defaultSkillList);
-      game.settings.set("starwarsffg", "skilltheme", "starwars");
+      await game.settings.set("starwarsffg", "arraySkillList", defaultSkillList);
+      await game.settings.set("starwarsffg", "skilltheme", "starwars");
 
-      foundry.utils.debounce(() => window.location.reload(), 100);
+      // debounce() only builds a function; it has to be called. Both reload sites here used to
+      // discard it, so the page never reloaded and the new skill list only showed after a manual
+      // refresh. foundry.utils.debouncedReload is core's shared, already-debounced one.
+      foundry.utils.debouncedReload();
 
       this.close();
     });
@@ -78,7 +81,7 @@ export default class SkillListImporter extends HandlebarsApplicationMixin(Applic
 
       // Trigger file save procedure
       const filename = `swffg-skilltheme-${skilltheme.replace(/\s/g, "_")}.json`;
-      saveDataToFile(JSON.stringify(data, null, 2), "text/json", filename);
+      foundry.utils.saveDataToFile(JSON.stringify(data, null, 2), "text/json", filename);
     });
 
     html.find(".dialog-button").on("click", async (event) => {
@@ -88,7 +91,7 @@ export default class SkillListImporter extends HandlebarsApplicationMixin(Applic
 
         const form = html[0];
         if (!form.data.files.length) return ui.notifications.error("You did not upload a data file!");
-        const text = await readTextFromFile(form.data.files[0]);
+        const text = await foundry.utils.readTextFromFile(form.data.files[0]);
 
         let currentSkillList = await game.settings.get("starwarsffg", "arraySkillList");
 
@@ -110,7 +113,7 @@ export default class SkillListImporter extends HandlebarsApplicationMixin(Applic
 
         const newMasterSkillListData = currentSkillList;
         await game.settings.set("starwarsffg", "arraySkillList", newMasterSkillListData);
-        foundry.utils.debounce(() => window.location.reload(), 100);
+        foundry.utils.debouncedReload();
 
         this.close();
       } catch (error) {

@@ -2345,8 +2345,16 @@ export default class ImportHelpers {
       CONFIG.logger.debug(`New ${type} ${dataType} ${data.name} : ${JSON.stringify(compendiumItem)}`);
       const crt = await pack.importDocument(compendiumItem);
       if (type === "Item") {
-        // make sure Active Effects get created
-        await new Promise(r => setTimeout(r, 50));
+        // Wait for _onCreate to build the (inherent) effect before copying stats into it. A fixed
+        // 50ms sleep lost this race for most items, and applyActiveEffectOnUpdate then silently
+        // skipped the inherent effect: imported armour gave no soak/defence and careers and
+        // specializations no career skills. Poll for it instead (bounded, for types that get one).
+        const inherentTypes = ["species", "gear", "weapon", "armour", "shipattachment", "career", "specialization"];
+        if (inherentTypes.includes(crt?.type)) {
+          for (let waited = 0; waited < 3000 && !crt.effects.find(e => e.name === "(inherent)"); waited += 25) {
+            await new Promise(r => setTimeout(r, 25));
+          }
+        }
         await ImportHelpers.applyActiveEffectOnUpdate(crt, data);
         await ImportHelpers.applyTalentActiveEffects(crt);
       }

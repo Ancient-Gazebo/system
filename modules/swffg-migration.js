@@ -1,4 +1,5 @@
 import ModifierHelpers from "./helpers/modifiers.js";
+import ItemHelpers from "./helpers/item-helpers.js";
 import { AE_MODES } from "./config/ffg-active-effect-modes.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
@@ -75,6 +76,11 @@ async function handleMigration(oldVersion, newVersion) {
   // flag seeded from equipped or every unequipped item suddenly starts weighing something.
   if (!oldVersion || foundry.utils.isNewerVersion("2.1.34", oldVersion)) {
     await migrateGearCarriedState();
+  }
+  // 2.1.39: armour whose (inherent) effect never received its soak/defence, and careers or
+  // specializations whose effect never received their career skills (an OggDude importer race).
+  if (!oldVersion || foundry.utils.isNewerVersion("2.1.39", oldVersion)) {
+    await repairInherentStatEffects();
   }
   await warnTheme();
 }
@@ -501,7 +507,7 @@ async function migrateCreditsToGlass() {
  *
  * Runs automatically on version bump, and can be run by hand at any time (as a GM) via:
  *   game.ffg.migrateSpeciesInherentEffects()
- * @returns {Promise<{scanned: number, repaired: number}>}
+ * @returns {Promise<{scanned: number, repaired: number, items: string[]}>}
  */
 export async function migrateSpeciesInherentEffects() {
   if (!game.user?.isGM) {
@@ -848,6 +854,61 @@ async function migrateGearCarriedState() {
 
   CONFIG.logger.debug(`Gear carried-state migration: ${itemsUpdated} item(s) across ${actorsTouched} actor(s)`);
   return { actors: actorsTouched, items: itemsUpdated };
+}
+
+/**
+ * Repair (inherent) effects that never received their item's stats: armour soak/defence, and the
+ * career skills of careers and specializations (see ItemHelpers.syncInherentStatEffect for why they
+ * went missing). Worn armour affected by this gave its wearer no soak or defence at all. Also builds
+ * the effects that installed attachments never brought along (ItemHelpers.createMissingModifierEffects),
+ * without which their actor-level modifiers - defence, skill boosts and so on - never applied.
+ *
+ * World items and items owned by player characters only. Adversaries are skipped: their stored soak,
+ * defence and skills come from a stat block that already includes their gear, so filling in their
+ * items' effects would count the armour twice (the adversary importer leaves them at zero on
+ * purpose). Compendium content is left as it is and is healed as it is dragged out
+ * (ItemFFG#_onCreate). Armour that is filled in and not worn is switched off, so it cannot start
+ * applying. Safe to run repeatedly - an item already in line is not written.
+ *
+ * Run as a GM via:
+ *   game.ffg.repairInherentStatEffects()
+ * @returns {Promise<{scanned: number, repaired: number, items: string[]}>}
+ */
+export async function repairInherentStatEffects() {
+  if (!game.user?.isGM) {
+    ui.notifications.warn("The inherent-effect repair must be run by a GM.");
+    return { scanned: 0, repaired: 0, items: [] };
+  }
+  const TYPES = ["armour", "career", "specialization", "weapon", "shipweapon"];
+  let scanned = 0;
+  let repaired = 0;
+  // Every item written, so a GM can check exactly what the repair touched.
+  const items = [];
+  const characters = game.actors.filter((a) => a.type === "character");
+  for (const collection of [game.items, ...characters.map((a) => a.items)]) {
+    for (const item of collection) {
+      if (!TYPES.includes(item.type) || item.pack) continue;
+      scanned += 1;
+      try {
+        // Both run: armour needs its own stats AND its attachments' effects checked.
+        const statFixed = await ItemHelpers.syncInherentStatEffect(item);
+        const created = await ItemHelpers.createMissingModifierEffects(item);
+        if (statFixed || created) {
+          repaired += 1;
+          items.push(`${item.actor ? `${item.actor.name} :: ` : ""}${item.name} [${item.type}]${statFixed ? " stats" : ""}${created ? ` +${created} attachment effect(s)` : ""}`);
+          CONFIG.logger.debug(`Repaired inherent effect on ${item.type} "${item.name}" (${item.uuid})`);
+        }
+      } catch (e) {
+        CONFIG.logger.error(`Failed to repair inherent effect on "${item?.name}"`, e);
+      }
+    }
+  }
+  if (repaired) {
+    ui.notifications.info(`Inherent-effect repair: ${repaired} of ${scanned} armour/weapon/career/specialization items updated (listed in the console).`);
+    console.info(`starwarsffg | inherent-effect repair updated:\n${items.join("\n")}`);
+  }
+  CONFIG.logger.debug(`repairInherentStatEffects: scanned ${scanned}, repaired ${repaired}`);
+  return { scanned, repaired, items };
 }
 
 async function warnUnsupportedWorld() {

@@ -70,6 +70,11 @@ export class ItemFFG extends ItemBaseFFG {
 
     await this._onCreateAEs(options, force);
 
+    // Imported armour, careers and specializations frequently carry an (inherent) effect that never
+    // received their stats (see ItemHelpers.syncInherentStatEffect), and every copy - dropped on an
+    // actor, dragged into the sidebar - inherits it. Heal the copy as it lands.
+    await ItemHelpers.syncInherentStatEffect(this);
+
     // A modifier only reaches the actor through an Active Effect NAMED after its attribute key, and
     // that pairing is created by an item-sheet save - never by a copy. An item whose effects have
     // drifted from its attribute keys therefore hands every copy the same broken pairing: the copy
@@ -97,15 +102,7 @@ export class ItemFFG extends ItemBaseFFG {
     // equip-gated AE to the item's actual equipped state here, mirroring the equip-toggle branch of
     // _onUpdate, so nothing applies until the item is equipped.
     if (this.isEmbedded && this.actor && ["armour", "weapon", "gear"].includes(this.type)) {
-      const equipped = ItemHelpers.isEffectivelyEquipped(this);
-      const effects = this.getEmbeddedCollection("ActiveEffect");
-      await ItemHelpers.syncAEStatus(this, effects);
-      for (const effect of effects) {
-        if (await ItemHelpers.shouldUpdateAEStatus(this, effect)) {
-          await ItemHelpers.updateEncumbranceOnEquip(this, effect, equipped);
-          await effect.update({ disabled: !equipped });
-        }
-      }
+      await this._syncEquipEffects();
     }
 
     // Abilities have no equip slot; their modifiers are gated by the ability's own on/off toggle
@@ -316,7 +313,7 @@ export class ItemFFG extends ItemBaseFFG {
           existingChange.value = parseInt(changed.system.attributes[updateKey].value);
         }
       }
-      await itemEffect.update({changes: newChanges});
+      await ModifierHelpers.updateEffectChanges(itemEffect, newChanges);
     }
 
     // iterate over the changed data to look for any changes to attributes
@@ -342,12 +339,17 @@ export class ItemFFG extends ItemBaseFFG {
         if (existingEffect) {
           // existing entry
           CONFIG.logger.debug(`> Staged AE changes for update: ${JSON.stringify(changes)}`);
-          await existingEffect.update({
-            changes: changes,
-          });
+          await ModifierHelpers.updateEffectChanges(existingEffect, changes);
         }
       }
     }
+
+    // Stat edits made outside the item sheet (macros, modules, the API) must reach the effect too;
+    // the sheet path writes the same values itself, so this is a no-op after a sheet save.
+    const statsChanged = this.type === "armour"
+      ? (changed?.system?.soak !== undefined || changed?.system?.defence !== undefined)
+      : changed?.system?.careerSkills !== undefined;
+    if (statsChanged) await ItemHelpers.syncInherentStatEffect(this);
 
     // handle an ability being switched on / off - the equip toggle's equivalent for abilities
     if (this.type === "ability" && foundry.utils.hasProperty(changed, "system.active")) {
@@ -363,32 +365,51 @@ export class ItemFFG extends ItemBaseFFG {
       // `equipped` undefined in the payload - reading it there would disable every effect on the
       // item and reset armour's encumbrance AE to its un-worn weight. `this` is already updated by
       // the time _onUpdate runs, and isEffectivelyEquipped folds in the carried axis besides.
-      const equipped = ItemHelpers.isEffectivelyEquipped(this);
       CONFIG.logger.debug("caught equip / unequip, checking if Active Effect state should be synced");
-      await ItemHelpers.syncAEStatus(this, updatedExistingEffects);
-      for (const effect of updatedExistingEffects) {
-        if (await ItemHelpers.shouldUpdateAEStatus(this, effect)) {
-          await ItemHelpers.updateEncumbranceOnEquip(this, effect, equipped);
-          // Skip the write when the suspension state already matches, as the ability branch above
-          // does: this fires on every write inside `equippable`, and the carried-state migration
-          // walks every gear item on every actor, where the state is already correct.
-          if (effect.disabled !== !equipped) {
-            await effect.update({disabled: !equipped});
-          }
-        }
-      }
+      await this._syncEquipEffects();
     }
+  }
+
+  /**
+   * Suspend or restore every equip-gated Active Effect to match the item's CURRENT equipped state.
+   *
+   * Syncs for one item run one at a time. The create hook and every equip write each start one,
+   * and each checks an effect's state before writing it across several awaits - so two running
+   * side by side (an item created and equipped in one go, as macros and modules do) interleaved:
+   * one skipped an effect it saw as already enabled while the other's stale disable was still in
+   * flight, leaving an equipped item that applied nothing. Queued, each sync reads the live state
+   * when it runs, and the last one queued always has the final word.
+   * @returns {Promise<void>}
+   */
+  _syncEquipEffects() {
+    const run = async () => {
+      const effects = this.getEmbeddedCollection("ActiveEffect");
+      await ItemHelpers.syncAEStatus(this, effects);
+      for (const effect of effects) {
+        if (!(await ItemHelpers.shouldUpdateAEStatus(this, effect))) continue;
+        const equipped = ItemHelpers.isEffectivelyEquipped(this);
+        await ItemHelpers.updateEncumbranceOnEquip(this, effect, equipped);
+        // Skip the write when the suspension state already matches: this fires on every write inside
+        // `equippable`, and the carried-state migration walks every gear item on every actor, where
+        // the state is already correct.
+        if (effect.disabled !== !equipped) await effect.update({ disabled: !equipped });
+      }
+    };
+    // a failed sync must not stall the ones queued behind it
+    this._equipSyncChain = (this._equipSyncChain ?? Promise.resolve()).then(run, run);
+    return this._equipSyncChain;
   }
 
   /**
    * Augment the basic Item data model with additional dynamic data.
    */
-  async prepareData() {
+  prepareData() {
     // Foundry calls prepareData synchronously and ignores the returned promise, so any work after an
     // `await` lands on a later microtask - after the sheet has already rendered. The derived-stat math
     // below must therefore run synchronously, or stats are stale until a manual refresh (e.g. right
     // after dragging an attachment on). super.prepareData() is synchronous in core; do not await it,
-    // and avoid awaiting before the stat block (renderedDesc uses the sync renderer for the same reason).
+    // and do not await anything here (updateSource below is synchronous too - awaiting it deferred
+    // the whole stat block for any item created without starwarsffg flags).
     super.prepareData();
 
     // Get the Item's data
@@ -397,7 +418,7 @@ export class ItemFFG extends ItemBaseFFG {
     const data = item.system;
 
     if (!item.flags.starwarsffg) {
-      await item.updateSource({
+      item.updateSource({
         flags: {
           starwarsffg: {
             isCompendium: !!this.compendium,
@@ -425,10 +446,19 @@ export class ItemFFG extends ItemBaseFFG {
       }
     }
 
-    // Synchronous render keeps prepareData free of awaits so the derived stats below are computed
-    // before the sheet renders. The async enrichHTML pass (entity links) is skipped here; the item
-    // sheet re-renders its own description, and roll tags / dice symbols are still rendered.
-    data.renderedDesc = PopoutEditor.renderDiceImagesSync(data.description, actor);
+    // Rendered on first read, not here. Only the bio tabs of an actor sheet display it (the item
+    // sheet renders its own), yet building it eagerly ran ~30 regex passes over every description
+    // on every prepare - close to half of a world's whole data-preparation time. The value is
+    // cached until the next prepare redefines it, and stays enumerable so preparedSystemCopy()
+    // still picks it up. The async enrichHTML pass (entity links) is skipped; roll tags and dice
+    // symbols are still rendered.
+    let renderedDesc;
+    Object.defineProperty(data, "renderedDesc", {
+      configurable: true,
+      enumerable: true,
+      get: () => (renderedDesc ??= PopoutEditor.renderDiceImagesSync(data.description, actor)),
+      set: (value) => { renderedDesc = value; },
+    });
 
     // perform localisation of dynamic values
     switch (this.type) {
@@ -818,7 +848,14 @@ export class ItemFFG extends ItemBaseFFG {
     data.prettyDesc = await PopoutEditor.renderDiceImages(data.description, this.actor);
 
     if (["weapon", "armor", "armour", "shipweapon"].includes(this.type)) {
-      data.doNotSubmit = (await this.sheet.getData()).data.doNotSubmit;
+      // Only the qualities summary is wanted here, and it depends on nothing but these two lists.
+      // This used to build the item sheet's entire render context (getData) for it - on every render
+      // of every weapon chat card - which also rewrote the sheet's position as a side effect and
+      // made the card fail to render whenever that sheet could not build its context.
+      const lists = {};
+      if (data.itemmodifier) lists.itemmodifier = data.itemmodifier;
+      if (data.itemattachment) lists.itemattachment = data.itemattachment;
+      data.doNotSubmit = this.sheet._getSummarizedQualities({ data: lists }).data.doNotSubmit;
     }
 
     if (["talent"].includes(this.type) && data.longDesc) {

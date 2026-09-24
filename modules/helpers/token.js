@@ -67,15 +67,28 @@ export function drawMinionCount(token) {
   const maxCount = counts.total;
   const maxRender = 6;
 
+  // refreshToken fires on every animation frame of a moving token (and for any other refresh), so
+  // rebuilding these Graphics each time was pure churn. Skip it when nothing the counter shows has
+  // changed. The signature lives on the container, which a token redraw discards - so a redraw
+  // still rebuilds.
+  const signature = `${curCount}/${maxCount}|${token.w}x${token.h}|${gridScale}`;
+  const existing = token.children.find(i => i.name === "minionCount");
+  if (existing?._ffgSignature === signature) {
+    token.minionCount = existing;
+    return;
+  }
+
   // attempt to draw it on the token directly
   // check for existing copies of the container
-  if (!token.children.find(i => i.name === "minionCount")) {
+  if (!existing) {
     const countContainer = new PIXI.Container();
     countContainer.name = "minionCount";
     token.minionCount = token.addChild(countContainer);
   } else {
+    token.minionCount = existing;
     token.minionCount.removeChildren().forEach(i => i.destroy());
   }
+  token.minionCount._ffgSignature = signature;
 
   const tokenWidth = token.w;
   const markerWidth = 7 * gridScale;
@@ -174,15 +187,24 @@ export function drawAdversaryCount(token) {
     clearBadge();
     return;
   }
+  // Same per-frame churn as drawMinionCount: only rebuild the sprite when the badge would change.
+  const signature = `${adversaryLevel}|${token.w}x${token.h}`;
+  const existing = token.children.find(i => i.name === "adversaryLevel");
+  if (existing?._ffgSignature === signature) {
+    token.adversaryLevel = existing;
+    return;
+  }
   // attempt to draw it on the token directly
   // check for existing copies of the container
-  if (!token.children.find(i => i.name === "adversaryLevel")) {
+  if (!existing) {
     const countContainer = new PIXI.Container();
     countContainer.name = "adversaryLevel";
     token.adversaryLevel = token.addChild(countContainer);
   } else {
+    token.adversaryLevel = existing;
     token.adversaryLevel.removeChildren().forEach(i => i.destroy());
   }
+  token.adversaryLevel._ffgSignature = signature;
   // Clamp BEFORE the texture path is built. Only adversary-1..6.png ship, and the clamp used to
   // run after the filename was interpolated, so seven or more ranks requested an image that does
   // not exist and the badge silently failed to draw.

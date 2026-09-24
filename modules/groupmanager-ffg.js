@@ -310,7 +310,7 @@ export class GroupManager extends FFGFormApplication {
             tokens.push(token);
           }
         } else {
-          ui.notifications.warn(`${c.name} has no active Token in the current scene.`);
+          ui.notifications.warn(`${game.actors.get(c)?.name ?? c} has no active Token in the current scene.`);
         }
       })
     );
@@ -366,19 +366,17 @@ export class GroupManager extends FFGFormApplication {
             const container = document.getElementById(id);
             const amount = container.querySelector('input[name="amount"]');
             const note = container.querySelector('input[name="note"]').value;
-            // Effective (sheet-visible) values for the log, read before edit mode suspends the
-            // purchase active effects that reduce available XP.
+            // Effective (sheet-visible) values for the log: after the purchase active effects
+            // that reduce available XP.
             const loggedAvailable = +character.system.experience.available + +amount.value;
             const loggedTotal = +character.system.experience.total + +amount.value;
-            const state = await ActorHelpers.beginEditMode(character, true);
-            // Add to the BASE values (effects suspended) so the grant survives the effects being
-            // restored without them being double-counted.
+            // Add to the stored BASE values (before those effects) so the grant is not offset by them.
+            const base = ActorHelpers.baseExperience(character);
             await character.update({
-              ["system.experience.total"]: +character.system.experience.total + +amount.value,
-              ["system.experience.available"]: +character.system.experience.available + +amount.value,
+              ["system.experience.total"]: base.total + +amount.value,
+              ["system.experience.available"]: base.available + +amount.value,
             });
             await xpLogEarn(character, amount.value, loggedAvailable, loggedTotal, note);
-            await ActorHelpers.endEditMode(character, state, true);
             ui.notifications.info(`Granted ${amount.value} XP to ${character.name}.`);
           },
         },
@@ -417,19 +415,17 @@ export class GroupManager extends FFGFormApplication {
               if (character?.type !== "character") {
                 continue;
               }
-              // Effective (sheet-visible) values for the log, read before edit mode suspends the
-              // purchase active effects that reduce available XP.
+              // Effective (sheet-visible) values for the log: after the purchase active effects
+              // that reduce available XP.
               const loggedAvailable = +character.system.experience.available + +amount.value;
               const loggedTotal = +character.system.experience.total + +amount.value;
-              const state = await ActorHelpers.beginEditMode(character, true);
-              // Add to the BASE values (effects suspended) so the grant survives the effects being
-              // restored without them being double-counted.
+              // Add to the stored BASE values (before those effects) so the grant is not offset by them.
+              const base = ActorHelpers.baseExperience(character);
               await character.update({
-                ["system.experience.total"]: +character.system.experience.total + +amount.value,
-                ["system.experience.available"]: +character.system.experience.available + +amount.value,
+                ["system.experience.total"]: base.total + +amount.value,
+                ["system.experience.available"]: base.available + +amount.value,
               });
               await xpLogEarn(character, amount.value, loggedAvailable, loggedTotal, note);
-              await ActorHelpers.endEditMode(character, state, true);
               ui.notifications.info(`Granted ${amount.value} XP to ${character.name}.`);
             }
           },

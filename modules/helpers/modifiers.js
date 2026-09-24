@@ -833,6 +833,48 @@ export default class ModifierHelpers {
     return result;
   }
 
+  /**
+   * Write an effect's changes only when they differ from what is stored.
+   *
+   * Every item-sheet save - including the silent submit-on-close of a sheet that was only looked
+   * at - rebuilds the item's effect changes from the form and used to write them unconditionally.
+   * Several of those writers disagree about the list's shape: some pass the PREPARED changes,
+   * which carry the `priority` core derives, others build fresh ones without it. The stored list
+   * therefore never settled, and careers, specializations and species wrote their inherent effect
+   * twice on every close, forever. Each write re-prepares the owning actor and re-renders its
+   * sheets on every client.
+   *
+   * Compared: key, type (V14 string, or the legacy numeric mode), value and phase. `priority` is
+   * ignored - nothing in this system sets it; it only ever appears as core's derived default.
+   * @param {ActiveEffect} effect
+   * @param {object[]} changes   the complete desired change list
+   * @returns {Promise<boolean>} whether an update was sent
+   */
+  static async updateEffectChanges(effect, changes) {
+    if (!effect) return false;
+    const stored = effect._source?.changes ?? effect._source?.system?.changes ?? [];
+    if (ModifierHelpers._changesSignature(stored) === ModifierHelpers._changesSignature(changes)) return false;
+    await effect.update({changes});
+    return true;
+  }
+
+  /**
+   * Order-sensitive fingerprint of a change list for updateEffectChanges. Reads `type` first so a
+   * V14 change's deprecated `mode` getter (which warns on every read) is never touched; plain
+   * change objects built by this system carry only `mode`, which is a real property.
+   * @param {object[]} changes
+   * @returns {string}
+   */
+  static _changesSignature(changes) {
+    const MODE_TYPES = ["custom", "multiply", "add", "downgrade", "upgrade", "override"];
+    return JSON.stringify((changes ?? []).map((change) => [
+      change?.key ?? "",
+      change?.type ?? MODE_TYPES[change?.mode] ?? String(change?.mode),
+      String(change?.value ?? ""),
+      change?.phase ?? "initial",
+    ]));
+  }
+
   static async applyActiveEffectOnUpdate(item, formData) {
     /**
      * Given an updateObject event, update active effects on the item being updated
@@ -863,6 +905,7 @@ export default class ModifierHelpers {
     // first update anything inherent to the item type (such as "brawn" on "species")
     const inherentEffectName = `(inherent)`;
     const inherentEffect = existing.find(e => e.name === inherentEffectName);
+    let speciesChanges = null;
     if (inherentEffect && Object.keys(formData.data).includes("attributes")) {
       for (let k of Object.keys(formData.data.attributes)) {
         if (k.startsWith("attr")) {
@@ -899,7 +942,15 @@ export default class ModifierHelpers {
           }
         }
       }
-      await inherentEffect.update({changes: inherentEffect.changes});
+      // A species is written once, by the threshold block at the end, starting from a snapshot of
+      // these edited changes. Writing here as well stored the raw Wounds/Strain first and the baked
+      // thresholds a moment later: two writes per save, with owning actors briefly showing
+      // thresholds short by the species' Brawn/Willpower on every client in between. It must be a
+      // snapshot: the edits above are made on the prepared changes in place, and any embedded
+      // write before the threshold block (the per-attribute updates below) resets the item from
+      // its source, which would silently revert them.
+      if (item.type === "species") speciesChanges = foundry.utils.deepClone(inherentEffect.changes);
+      else await ModifierHelpers.updateEffectChanges(inherentEffect, inherentEffect.changes);
     }
     // some inherent effects are not in the `attribute` keyspace; make sure to get them as well
     if (inherentEffect && ["gear", "weapon", "armour"].includes(item.type)) {
@@ -952,7 +1003,7 @@ export default class ModifierHelpers {
           }
         }
       }
-      await inherentEffect.update({changes: inherentEffect.changes});
+      await ModifierHelpers.updateEffectChanges(inherentEffect, inherentEffect.changes);
     } else if (inherentEffect && ["shipattachment"].includes(item.type)) {
       const explodedMods = ModifierHelpers.explodeMod(
         "Vehicle Stat",
@@ -970,7 +1021,7 @@ export default class ModifierHelpers {
           inherentEffect.changes[inherentEffectChangeIndex].value = formData.data.hardpoints.value * -1;
         }
       }
-      await inherentEffect.update({changes: inherentEffect.changes});
+      await ModifierHelpers.updateEffectChanges(inherentEffect, inherentEffect.changes);
     }
 
 
@@ -1010,9 +1061,7 @@ export default class ModifierHelpers {
 
         // check if an active effect exists - create it if not, update it if it does
         if (match) {
-          await match.update({
-            changes: changes,
-          });
+          await ModifierHelpers.updateEffectChanges(match, changes);
         } else if (k.startsWith("attr")) {
           // user-created active effects only - skip inherent effects like "brawn" on "species"
           // new entry
@@ -1028,7 +1077,7 @@ export default class ModifierHelpers {
     const itemEffect = existingEffects.find(i => i.name === `(inherent)`);
     if (itemEffect && item.type === "species") {
       // update the wound and strain changes to match
-      const newChanges = foundry.utils.deepClone(itemEffect.changes);
+      const newChanges = speciesChanges ?? foundry.utils.deepClone(itemEffect.changes);
       // Read Brawn/Willpower/Wounds/Strain defensively. The inherent change may be absent (a
       // species built from scratch whose inherent AE was created before any characteristics
       // existed), so fall back to the submitted form, then the stored attributes, then 0. Using
@@ -1066,7 +1115,7 @@ export default class ModifierHelpers {
           change.value = newBrawn;
         }
       }
-      await itemEffect.update({changes: newChanges});
+      await ModifierHelpers.updateEffectChanges(itemEffect, newChanges);
     }
 
     if (toCreate.length) {

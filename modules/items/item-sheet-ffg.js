@@ -130,7 +130,12 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     // per-type default size. getData restores from these values. Guarded on `this.rendered` so
     // the initial render's own setPosition call doesn't cache the default before the user has
     // resized anything.
-    if (this.rendered && Number.isFinite(this.position?.width) && Number.isFinite(this.position?.height)) {
+    // Positive sizes only. A sheet positioned while the window has no size - a hidden or minimised
+    // tab reports 0x0 - is clamped to 0, and getData would then restore that 0. ApplicationV2's
+    // position proxy returns the assigned value from its `set` trap, so assigning 0 is a failed
+    // set: "'set' on proxy: trap returned falsish for property 'width'", thrown on every later
+    // render of that sheet until a reload (the intermittent "item sheet won't reopen" error).
+    if (this.rendered && this.position?.width > 0 && this.position?.height > 0) {
       this.sheetWidth = this.position.width;
       this.sheetHeight = this.position.height;
     }
@@ -532,8 +537,8 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     // honor that instead so modifier/attribute edits (which trigger a re-render) don't snap the
     // window back to the default. This runs before the render's own setPosition, so the restored
     // value is what actually gets applied (and re-cached).
-    if (Number.isFinite(this.sheetWidth)) this.position.width = this.sheetWidth;
-    if (Number.isFinite(this.sheetHeight)) this.position.height = this.sheetHeight;
+    if (this.sheetWidth > 0) this.position.width = this.sheetWidth;
+    if (this.sheetHeight > 0) this.position.height = this.sheetHeight;
 
     data.FFG = CONFIG.FFG;
 
@@ -558,11 +563,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
         },
         foundry.utils.deepClone(CONFIG.FFG.skills)
       );
-    }
-
-    data.renderedDesc = PopoutEditor.renderDiceImages(data.description, this.actor ? this.actor : {});
-    if (!data.renderedDesc) {
-      data.data.renderedDesc = PopoutEditor.renderDiceImages(data?.item?.system?.description, this.actor ? this.actor : {});
     }
 
     // get summarized data for qualities (e.g. weapons)
@@ -1083,9 +1083,12 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       event.stopPropagation();
 
       let data = event.currentTarget.dataset;
-      if (data) {
-        let sheet = this.actor.data;
+      if (data && this.actor) {
+        // `actor.data` is the pre-V10 document shape and no longer exists, so this threw on every
+        // click. Use the same sheet data the actor sheet's own [ROLL] handler rolls from.
+        let sheet = await this.actor.sheet.getData();
         let skill = sheet.data.skills[data["skill"]];
+        if (!skill) return;
         let characteristic = sheet.data.characteristics[skill.characteristic];
         let difficulty = data["difficulty"];
         await DiceHelpers.rollSkillDirect(skill, characteristic, difficulty, sheet);
@@ -1156,7 +1159,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       const li = event.currentTarget;
       const parent = $(li).parent().parent()[0];
       const itemType = parent.dataset.itemType;
-      const itemIndex = parent.dataset.itemIndex;
+      let itemIndex = parent.dataset.itemIndex;
 
       // This handler manages array-backed embedded items (itemmodifier / itemattachment on weapons,
       // armour, and gear), addressed by a numeric data-item-index. The broad `.item-delete` selector
@@ -1167,6 +1170,30 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       const targetCollection = this.object.system?.[itemType];
       if (itemIndex === undefined || itemIndex === null || !Array.isArray(targetCollection)) {
         return;
+      }
+      // The qualities list is a SUMMARY (_getSummarizedQualities): modifications hidden from it
+      // (showInQualities: false) are left out and same-name entries are merged, so a row's index is
+      // not an index into system.itemmodifier. Deleting "Pierce" on an attachment whose list starts
+      // with a hidden "Damage +1" removed the Damage +1 instead. Resolve the row by the modifier's
+      // own id - or, for imported modifications that carry no id, its name - preferring the visible
+      // entry when a hidden one matches too.
+      if (itemType === "itemmodifier") {
+        const id = parent.dataset.itemId;
+        const name = parent.dataset.upgradeName;
+        const visible = (m) => m?.system?.showInQualities !== false;
+        const matchers = [
+          id && ((m) => m?._id === id && visible(m)),
+          id && ((m) => m?._id === id),
+          name && ((m) => m?.name === name && visible(m)),
+          name && ((m) => m?.name === name),
+        ].filter(Boolean);
+        for (const match of matchers) {
+          const resolved = targetCollection.findIndex(match);
+          if (resolved >= 0) {
+            itemIndex = resolved;
+            break;
+          }
+        }
       }
 
       // locate all effects from this item
@@ -1472,15 +1499,15 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
       throw new Error("Not enough XP");
     }
-    const AEState = await ActorHelpers.beginEditMode(owner, true);
-    const availableXP = owner.system.experience.available;
+    // The purchase is written against the stored BASE available (before the purchase effects);
+    // see ActorHelpers.baseExperience for why this no longer suspends every effect to read it.
+    const availableXP = ActorHelpers.baseExperience(owner).available;
     return {
       owner: owner,
       cost: cost,
       availableXP: availableXP,
       availableXPToLog: availableXPToLog,
       totalXP: totalXP,
-      AEState: AEState,
     }
   }
 
@@ -1599,13 +1626,13 @@ export class ItemSheetFFG extends FFGDocumentSheet {
             callback: async (event, button, dialog) => {
               if (!owner.verifyEditModeIsNotEnabled()) return;
 
-              const AEState = await ActorHelpers.beginEditMode(owner, true);
               // Unlearn the node (direct update persists it and re-renders the sheet).
               await this.object.update({ system: { [collection]: { [nodeId]: { islearned: false } } } });
 
               // Refund the XP that was actually spent (if any) and record it in the log.
               if (refundAmount > 0) {
-                const newAvailable = owner.system.experience.available + refundAmount;
+                // Add to the stored BASE available (before the purchase effects).
+                const newAvailable = ActorHelpers.baseExperience(owner).available + refundAmount;
                 await owner.update({ system: { experience: { available: newAvailable } } });
                 const log = owner.getFlag("starwarsffg", "xpLog") || [];
                 if (logEntry) {
@@ -1613,9 +1640,8 @@ export class ItemSheetFFG extends FFGDocumentSheet {
                   const match = log.find((e) => e.action === "purchased" && !e.refunded && e.description === logDescription);
                   if (match) match.refunded = true;
                 }
-                // Effective (sheet-visible) XP. system.experience.available is the
-                // BASE value - and this runs inside edit mode, which suspends the
-                // purchase effects - so it does not match the XP box. Every log entry
+                // Effective (sheet-visible) XP. The stored available is the BASE value,
+                // before the purchase effects, so it does not match the XP box. Every log entry
                 // records the effective available after its own operation, so the
                 // newest one is the current value; a refund returns exactly the
                 // recorded cost. (Mirrors the four actor-sheet refund paths.)
@@ -1639,11 +1665,9 @@ export class ItemSheetFFG extends FFGDocumentSheet {
                 });
                 await owner.setFlag("starwarsffg", "xpLog", log);
               }
-              await ActorHelpers.endEditMode(owner, AEState, true);
-              // Re-sync the modifier AEs to the node's now-unlearned state. endEditMode restores every
-              // AE to its pre-refund (enabled) state, so a stat-granting talent/upgrade (e.g. Toughened,
-              // Grit) would otherwise keep applying after the node is unlearned. This mirrors the learn
-              // path, which syncs AE status on submit.
+              // Re-sync the modifier AEs to the node's now-unlearned state, so a stat-granting
+              // talent/upgrade (e.g. Toughened, Grit) stops applying once the node is unlearned. This
+              // mirrors the learn path, which syncs AE status on submit.
               await ItemHelpers.syncAEStatus(this.object, this.object.getEmbeddedCollection("ActiveEffect"));
               // If a copy of an unranked talent in another tree was suspended as a duplicate of the
               // node just refunded, re-syncing every tree lets that copy take over as the modifier
@@ -1672,7 +1696,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     let owner;
     let availableXP;
     let totalXP;
-    let AEState;
     let availableXPToLog;
     const dialog = DialogV2.wait({
         window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.FP.ConfirmTitle") },
@@ -1693,7 +1716,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
                 owner = basic_data.owner;
                 availableXP = basic_data.availableXP;
                 totalXP = basic_data.totalXP;
-                AEState = basic_data.AEState;
                 availableXPToLog = basic_data.availableXPToLog;
               } catch (e) {
                 return;
@@ -1702,9 +1724,8 @@ export class ItemSheetFFG extends FFGDocumentSheet {
               const input = $(`[name="data.upgrades.${upgradeId}.islearned"]`, this.element)[0];
               input.checked = true;
               await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
-              owner.update({system: {experience: {available: availableXP - cost}}});
+              await owner.update({system: {experience: {available: availableXP - cost}}});
               await xpLogSpend(owner, `force power ${baseName} upgrade ${upgradeName}`, cost, availableXPToLog - cost, totalXP, undefined, {kind: "tree", type: "forcepower", itemId: this.object.id, nodeId: upgradeId});
-              await ActorHelpers.endEditMode(owner, AEState, true);
             },
           },
           {
@@ -1726,7 +1747,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     let owner;
     let availableXP;
     let totalXP;
-    let AEState;
     let availableXPToLog;
     const dialog = DialogV2.wait({
         window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.SA.ConfirmTitle") },
@@ -1748,7 +1768,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
                 owner = basic_data.owner;
                 availableXP = basic_data.availableXP;
                 totalXP = basic_data.totalXP;
-                AEState = basic_data.AEState;
                 availableXPToLog = basic_data.availableXPToLog;
               } catch (e) {
                 return;
@@ -1758,9 +1777,8 @@ export class ItemSheetFFG extends FFGDocumentSheet {
               const input = $(`[name="data.upgrades.${upgradeId}.islearned"]`, this.element)[0];
               input.checked = true;
               await this._onSubmit(new Event("submit", { cancelable: true }), { render: true });
-              owner.update({system: {experience: {available: availableXP - cost}}});
+              await owner.update({system: {experience: {available: availableXP - cost}}});
               await xpLogSpend(owner, `signature ability ${baseName} upgrade ${upgradeName}`, cost, availableXPToLog - cost, totalXP, undefined, {kind: "tree", type: "signatureability", itemId: this.object.id, nodeId: upgradeId});
-              await ActorHelpers.endEditMode(owner, AEState, true);
             },
           },
           {
@@ -1782,7 +1800,6 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     let owner;
     let availableXP;
     let totalXP;
-    let AEState;
     let availableXPToLog;
     const dialog = DialogV2.wait({
         window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Specialization.ConfirmTitle") },
@@ -1803,14 +1820,12 @@ export class ItemSheetFFG extends FFGDocumentSheet {
                 owner = basic_data.owner;
                 availableXP = basic_data.availableXP;
                 totalXP = basic_data.totalXP;
-                AEState = basic_data.AEState;
                 availableXPToLog = basic_data.availableXPToLog;
               } catch (e) {
                 return;
               }
-              owner.update({system: {experience: {available: availableXP - cost}}});
+              await owner.update({system: {experience: {available: availableXP - cost}}});
               await xpLogSpend(owner, `specialization ${baseName} upgrade ${upgradeName}`, cost, availableXPToLog - cost, totalXP, undefined, {kind: "tree", type: "specialization", itemId: this.object.id, nodeId: upgradeId});
-              await ActorHelpers.endEditMode(owner, AEState, true);
               // update the form because the fields are read when an update is performed
               const input = $(`[name="data.talents.${upgradeId}.islearned"]`, this.element)[0];
               input.checked = true;
@@ -2294,6 +2309,9 @@ export class ItemSheetFFG extends FFGDocumentSheet {
             items.push(itemObject);
           } else {
             ui.notifications.warn(`Item does not have enough available hardpoints (${this.object.system.hardpoints.adjusted} left)`);
+            // Rejected: stop here. Carrying on used to transfer the refused attachment's Active
+            // Effects onto the item anyway, so its modifiers applied without it being installed.
+            return;
           }
           break;
         }
@@ -2306,11 +2324,12 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       foundry.utils.setProperty(formData, `data.${itemObject.type}`, items);
 
       await obj.update(formData);
-      // TODO: this happens even if there isn't enough HP (meaning the item gets rejected)
       if (rankOnlyUpdate) {
         await ItemHelpers.syncAEStatus(this.object, this.object.effects);
       } else {
         await this._transferActiveEffects(itemObject);
+        // ...and build the effects it should have carried but did not (imported attachments).
+        await ItemHelpers.createMissingModifierEffects(this.object, [itemObject]);
       }
     }
   }
@@ -2487,9 +2506,12 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           event.stopPropagation();
 
           let data = event.currentTarget.dataset;
-          if (data) {
-            let sheet = await this.getData();
+          if (data && this.actor) {
+            // Skills live on the owning actor; this item sheet's own getData has none, so reading
+            // them from it threw. Roll from the actor sheet's data, as the actor sheet itself does.
+            let sheet = await this.actor.sheet.getData();
             let skill = sheet.data.skills[data["skill"]];
+            if (!skill) return;
             let characteristic = sheet.data.characteristics[skill.characteristic];
             let difficulty = data["difficulty"];
             await DiceHelpers.rollSkillDirect(skill, characteristic, difficulty, sheet);

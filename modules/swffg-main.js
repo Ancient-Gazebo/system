@@ -51,7 +51,7 @@ import LanguageSettings from "./settings/language-settings.js";
 import {register_dice_enricher, register_oggdude_tag_enricher, register_roll_tag_enricher} from "./helpers/journal.js";
 import {drawAdversaryCount, drawMinionCount, registerTokenControls} from "./helpers/token.js";
 import {promptDispositionChange, registerDispositionControls, setTokenDisposition} from "./helpers/token-disposition.js";
-import {handleUpdate, migrateSpeciesInherentEffects, cleanupSpeciesTalentEffects, repairEncumbranceThresholds} from "./swffg-migration.js";
+import {handleUpdate, migrateSpeciesInherentEffects, cleanupSpeciesTalentEffects, repairEncumbranceThresholds, repairInherentStatEffects} from "./swffg-migration.js";
 import SWAImporter from "./importer/swa-importer.js";
 import {CharacterCreator} from "./helpers/character-creator.js";
 import ActorHelpers, {xpLogUndo} from "./helpers/actor-helpers.js";
@@ -78,11 +78,15 @@ import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 /* -------------------------------------------- */
 
 async function parseSkillList() {
+  const raw = await game.settings.get("starwarsffg", "arraySkillList");
+  // Normally already an array; only legacy worlds stored it as a JSON string. Parsing an array
+  // unconditionally failed (and logged) on every single load.
+  if (typeof raw !== "string") return raw;
   try {
-    return JSON.parse(await game.settings.get("starwarsffg", "arraySkillList"));
+    return JSON.parse(raw);
   } catch (e) {
     CONFIG.logger.log("Could not parse custom skill list, returning raw setting");
-    return await game.settings.get("starwarsffg", "arraySkillList");
+    return raw;
   }
 }
 
@@ -136,6 +140,7 @@ Hooks.once("init", async function () {
     migrateSpeciesInherentEffects,
     cleanupSpeciesTalentEffects,
     repairEncumbranceThresholds,
+    repairInherentStatEffects,
     setupCriticalTables,
     migrateLegacyScope,
     // Bulk token disposition, for a hotbar macro: `game.ffg.promptDispositionChange()`.
@@ -731,8 +736,11 @@ Hooks.once("init", async function () {
       }
     });
 
-    Hooks.on("preCreateCombatant", async (combatant, context, options, combatantId) => {
-      await game.combat.handleCombatantAddition(combatant, context, options, combatantId);
+    Hooks.on("preCreateCombatant", (combatant, context, options, combatantId) => {
+      // The combatant's own encounter: `game.combat` is null while an encounter is being set up
+      // with nothing viewed yet (the first combatants of a new encounter), which threw an unhandled
+      // rejection per combatant. Not awaited - core ignores a pre-hook's promise anyway.
+      combatant.parent?.handleCombatantAddition?.(combatant, context, options, combatantId);
     });
     CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
   }
@@ -2006,12 +2014,16 @@ Hooks.once("ready", async () => {
     if (item.isEmbedded && item.parent.documentName === "Actor") {
       const actor = item.actor
       if (item.type === "species" && actor.type === "character") {
-        const grantedXp = item.system.startingXP;
+        const grantedXp = parseInt(item.system.startingXP, 10) || 0;
+        // Write against the BASE values: `system.experience.available` is the effective value
+        // (base minus the "purchased-*" effects), and storing it back as the base counted every
+        // purchase a second time - swapping species dropped available XP by the whole spend.
+        const base = ActorHelpers.baseExperience(actor);
         const currentAvailable = actor.system.experience.available;
         const currentTotal = actor.system.experience.total;
         await actor.update({"system.experience": {
-          available: currentAvailable - grantedXp,
-          total: currentTotal - grantedXp,
+          available: base.available - grantedXp,
+          total: base.total - grantedXp,
         }});
         await xpLogUndo(
           actor,

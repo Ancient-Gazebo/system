@@ -93,6 +93,24 @@ export default class ActorHelpers {
   }
 
   /**
+   * The stored (base) experience values: what the XP box shows before the "purchased-*" Active
+   * Effects deduct each skill/characteristic purchase from them.
+   *
+   * XP purchases, grants and refunds must write against this base. They used to reach it by
+   * suspending every Active Effect on the actor and on every one of its items (beginEditMode with
+   * persistChanges), reading the prepared value, then restoring them all - two database writes per
+   * enabled effect, some 60 for an ordinary character, each re-preparing the actor and re-rendering
+   * its sheets on every client, so a purchase took seconds and the sheet visibly flickered. Nothing
+   * but Active Effects derives these values, so the stored source already IS that base.
+   * @param {Actor} actor
+   * @returns {{available: number, total: number}}
+   */
+  static baseExperience(actor) {
+    const xp = actor?._source?.system?.experience ?? {};
+    return { available: parseInt(xp.available, 10) || 0, total: parseInt(xp.total, 10) || 0 };
+  }
+
+  /**
    * Records the state of all active effects on the actor and then suspends them.
    * This is used to enable manual editing without an infinite loop from the two being combined
    * Note that this returns a state, which is REQUIRED to restore the original AE state

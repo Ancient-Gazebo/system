@@ -425,7 +425,7 @@ export class CombatFFG extends Combat {
         force: await foundry.applications.ux.TextEditor.enrichHTML("[FO]"),
       };
 
-      const title = game.i18n.localize("SWFFG.InitiativeRoll") + ` ${whosInitiative}...`;
+      const title = game.i18n.localize("SWFFG.InitiativeRoll") + (whosInitiative ? ` ${whosInitiative}...` : "...");
       const content = await foundry.applications.handlebars.renderTemplate("systems/starwarsffg/templates/dialogs/ffg-initiative.html", {
         id,
         dicePools,
@@ -525,26 +525,32 @@ export class CombatFFG extends Combat {
                   // caller-supplied rollMode.
                   const isV14 = game.release.generation >= 14;
                   const modeKey = isV14 ? "messageMode" : "rollMode";
+                  // Token-less combatants have no token, and without a drawn canvas (the core
+                  // "Disable Game Canvas" setting, or a scene not being viewed) canvas.scene is null -
+                  // both used to throw here, inside the dialog callback, so the roll silently did
+                  // nothing. Fall back to the combatant's own name and scene.
+                  const hidden = c.token?.hidden || c.hidden;
+                  const speakerName = c.token?.name ?? c.name;
                   let rollMode;
                   if (isV14) {
                     rollMode = messageOptions.messageMode
                       ?? (messageOptions.rollMode ? Roll._mapLegacyRollMode(messageOptions.rollMode) : game.settings.get("core", "messageMode"));
-                    if ((c.token.hidden || c.hidden) && (rollMode === "public" || rollMode === "ic")) rollMode = "gm";
+                    if (hidden && (rollMode === "public" || rollMode === "ic")) rollMode = "gm";
                   } else {
                     rollMode = messageOptions.rollMode || game.settings.get("core", "rollMode");
-                    if ((c.token.hidden || c.hidden) && rollMode === "roll") rollMode = "gmroll";
+                    if (hidden && rollMode === "roll") rollMode = "gmroll";
                   }
 
                   // Construct chat message data
                   let messageData = foundry.utils.mergeObject(
                     {
                       speaker: {
-                        scene: canvas.scene.id,
+                        scene: c.sceneId ?? canvas.scene?.id ?? null,
                         actor: c.actor ? c.actor.id : null,
-                        token: c.token.id,
-                        alias: c.token.name,
+                        token: c.tokenId ?? null,
+                        alias: speakerName,
                       },
-                      flavor: `${c.token.name} ${game.i18n.localize("SWFFG.InitiativeRoll")} (${initiativeSkillName})`,
+                      flavor: `${speakerName} ${game.i18n.localize("SWFFG.InitiativeRoll")} (${initiativeSkillName})`,
                       flags: { "core.initiativeRoll": true },
                     },
                     messageOptions
@@ -754,12 +760,7 @@ export class CombatFFG extends Combat {
     }
     await this.unclaimSlot(round, combatantId);
     // now delete the toRemoveCombatantId slot
-    Hooks.off("preDeleteCombatant", CONFIG.FFG.preCombatDelete);
-    CONFIG.FFG.preCombatDelete = undefined;
-    await this.combatants.get(combatantId).delete();
-    if (CONFIG.FFG.preCombatDelete === undefined) {
-      CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
-    }
+    await withoutRemovalHandler(() => this.combatants.get(combatantId).delete());
     // now create a new slot to replace it
     // NOTE: declared outside the block - it was previously `const` inside the `if`, which made the
     // re-claim below throw a ReferenceError whenever the replaced slot had a claim on it
@@ -836,67 +837,65 @@ export class CombatFFG extends Combat {
     const priorTurn = this._captureTurnPosition();
     // prevent constant re-rendering of the tracker
     this.debounceRender();
-    // prevent an infinite loop as we delete actors
-    Hooks.off("preDeleteCombatant", CONFIG.FFG.preCombatDelete);
-
-    // Step 3 - Check if the results of steps 1 and 2 are the same or not. if they are different, proceed to step 4a. otherwise, go to 4b
     let removedCombatantReplacementId;
-    if (removedCombatantId !== lastSlotCombatantId) {
-      // Step 4a - Locate, record, and remove any claims on the slot of the actor being removed
-      let removedClaimantId = this.getSlotClaims(round, removedCombatantId);
-      // we should only reclaim the slot if the claimant is not the one being removed
-      const removedClaimantIsRemovedCombatant = removedClaimantId === removedCombatantId;
-      if (removedClaimantId) {
-        lastSlotActorClaimedRemovedCombatant = lastSlotCombatantId === removedClaimantId;
-        // revoke the claim on the removedCombatant slot
-        await this.unclaimSlot(round, removedCombatantId);
-      }
-
-      // Step 5 - Locate, record, and remove any claims on the last slot
-      const lastClaimantId = this.getSlotClaims(round, lastSlotCombatantId);
-      const lastClaimantIsRemovedCombatant = lastClaimantId === removedCombatantId;
-      if (lastClaimantId) {
-        // revoke the claim on the removedCombatant slot
-        await this.unclaimSlot(round, lastSlotCombatantId);
-      }
-
-      // Step 6 - Delete the actor being removed from the combat
-      await this.combatants.get(removedCombatantId).delete();
-
-      // Step 7 - Add a new slot with the last slot data (except Initiative, which is copied from the slot being removed)
-      removedCombatantReplacementId = await this.addIDedExtraSlot(
-          removedDisposition,
-          removedInitiative,
-          lastSlotActorId,
-          lastSlotTokenId,
-          lastSlotSceneId,
-          lastSlotName,
-      );
-
-      // Step 8 - Delete the last slot
-      await this.combatants.get(lastSlotCombatantId).delete();
-
-      // Step 9 - Re-claim slots as needed
-      if (removedClaimantId && !removedClaimantIsRemovedCombatant) {
-        if (lastSlotActorClaimedRemovedCombatant) {
-          // the last actor had the removed slot claimed
-          await this.claimSlot(round, removedCombatantReplacementId, removedCombatantReplacementId);
-        } else {
-          // a different actor had the removed slot claimed
-          await this.claimSlot(round, removedCombatantReplacementId, removedClaimantId);
+    // prevent an infinite loop as we delete actors
+    await withoutRemovalHandler(async () => {
+      // Step 3 - Check if the results of steps 1 and 2 are the same or not. if they are different, proceed to step 4a. otherwise, go to 4b
+      if (removedCombatantId !== lastSlotCombatantId) {
+        // Step 4a - Locate, record, and remove any claims on the slot of the actor being removed
+        let removedClaimantId = this.getSlotClaims(round, removedCombatantId);
+        // we should only reclaim the slot if the claimant is not the one being removed
+        const removedClaimantIsRemovedCombatant = removedClaimantId === removedCombatantId;
+        if (removedClaimantId) {
+          lastSlotActorClaimedRemovedCombatant = lastSlotCombatantId === removedClaimantId;
+          // revoke the claim on the removedCombatant slot
+          await this.unclaimSlot(round, removedCombatantId);
         }
-      } else if (lastClaimantId && !lastClaimantIsRemovedCombatant) {
-        await this.claimSlot(round, removedCombatantReplacementId, removedCombatantReplacementId);
+
+        // Step 5 - Locate, record, and remove any claims on the last slot
+        const lastClaimantId = this.getSlotClaims(round, lastSlotCombatantId);
+        const lastClaimantIsRemovedCombatant = lastClaimantId === removedCombatantId;
+        if (lastClaimantId) {
+          // revoke the claim on the removedCombatant slot
+          await this.unclaimSlot(round, lastSlotCombatantId);
+        }
+
+        // Step 6 - Delete the actor being removed from the combat
+        await this.combatants.get(removedCombatantId).delete();
+
+        // Step 7 - Add a new slot with the last slot data (except Initiative, which is copied from the slot being removed)
+        removedCombatantReplacementId = await this.addIDedExtraSlot(
+            removedDisposition,
+            removedInitiative,
+            lastSlotActorId,
+            lastSlotTokenId,
+            lastSlotSceneId,
+            lastSlotName,
+        );
+
+        // Step 8 - Delete the last slot
+        await this.combatants.get(lastSlotCombatantId).delete();
+
+        // Step 9 - Re-claim slots as needed
+        if (removedClaimantId && !removedClaimantIsRemovedCombatant) {
+          if (lastSlotActorClaimedRemovedCombatant) {
+            // the last actor had the removed slot claimed
+            await this.claimSlot(round, removedCombatantReplacementId, removedCombatantReplacementId);
+          } else {
+            // a different actor had the removed slot claimed
+            await this.claimSlot(round, removedCombatantReplacementId, removedClaimantId);
+          }
+        } else if (lastClaimantId && !lastClaimantIsRemovedCombatant) {
+          await this.claimSlot(round, removedCombatantReplacementId, removedCombatantReplacementId);
+        }
+      } else {
+        // Step 4b - Delete the actor being removed; no further steps are needed.
+        // Release any claim on this slot first so we don't leave a dangling claim flag that points at
+        // a slot which no longer exists.
+        await this.unclaimSlot(round, removedCombatantId);
+        await this.combatants.get(removedCombatantId).delete();
       }
-    } else {
-      // Step 4b - Delete the actor being removed; no further steps are needed.
-      // Release any claim on this slot first so we don't leave a dangling claim flag that points at
-      // a slot which no longer exists.
-      await this.unclaimSlot(round, removedCombatantId);
-      await this.combatants.get(removedCombatantId).delete();
-    }
-    // re-enable the hooks we disabled
-    CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
+    });
     this.setupTurns();
     // core advances the turn pointer when the current document is deleted. If the pointer was on
     // the removed actor, follow it to the replacement slot (same initiative, same position); if it
@@ -1033,9 +1032,7 @@ export class CombatFFG extends Combat {
     await this.unclaimSlot(round, clickedCombatantId);
     // now delete the toRemoveCombatantId slot
     CONFIG.logger.debug("Ok, actually removing the actor");
-    Hooks.off("preDeleteCombatant", CONFIG.FFG.preCombatDelete);
-    await this.combatants.get(toRemoveCombatantId).delete();
-    CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
+    await withoutRemovalHandler(() => this.combatants.get(toRemoveCombatantId).delete());
     // now create a new slot to replace it
     CONFIG.logger.debug("Re-creating the slot with the same disposition and initiative");
     const replacementTurnId = await this.addExtraSlot(round, disposition, initiative);
@@ -1371,8 +1368,11 @@ function _getInitiativeFormula(skill, ability) {
  * @returns {Combatant|undefined} undefined when the id is unknown or the combatant has no token
  */
 function _resolveCombatantForRoll(combat, combatantId) {
-  const tokenId = combat.combatants.find((c) => c._id === combatantId)?.tokenId;
-  if (!tokenId) return undefined;
+  const combatant = combat.combatants.get(combatantId);
+  const tokenId = combatant?.tokenId;
+  // A combatant added without a token (an actor dropped into the tracker, a module's placeholder)
+  // is still rollable through its actor; it used to resolve to nothing and silently not roll.
+  if (!tokenId) return combatant?.actor ? combatant : undefined;
   return combat.getCombatantsByToken
     ? combat.getCombatantsByToken(tokenId)?.[0]
     : combat.getCombatantByToken(tokenId);
@@ -1785,12 +1785,7 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
     // Delete exactly this slot. Suppress the preDeleteCombatant handler so the generic-slot removal
     // flow (which would re-create a replacement slot or open the removal prompt) doesn't fire - this
     // is an explicit, direct removal of the one slot that was right-clicked.
-    Hooks.off("preDeleteCombatant", CONFIG.FFG.preCombatDelete);
-    CONFIG.FFG.preCombatDelete = undefined;
-    await combatant.delete();
-    if (CONFIG.FFG.preCombatDelete === undefined) {
-      CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
-    }
+    await withoutRemovalHandler(() => combatant.delete());
 
     await combat._restoreTurnPosition(priorTurn);
 
@@ -1987,6 +1982,31 @@ function sortInit(a, b) {
 }
 
 export function registerHandleCombatantRemoval(combatant, options, userId) {
-  game.combat.handleCombatantRemoval(combatant, options, userId);
+  // The combatant's OWN encounter, not `game.combat` (the one currently viewed). Routing every
+  // removal to the viewed encounter blocked deleting a combatant from any other one: this still
+  // returned false, while the async removal looked the id up in the wrong combat and threw.
+  const combat = combatant?.parent ?? game.combat;
+  if (typeof combat?.handleCombatantRemoval !== "function") return true;
+  combat.handleCombatantRemoval(combatant, options, userId);
   return false;
+}
+
+/**
+ * Run `fn` with the generic-slot removal handler unhooked, so the slot surgery's own deletes do not
+ * re-enter it. Always re-hooks afterwards: the previous inline off/on pairs had no `finally`, so a
+ * delete that threw (a combatant already removed by another client, say) left combatant removal
+ * permanently unhandled until the next reload.
+ * @param {Function} fn
+ * @returns {Promise<*>} whatever fn returns
+ */
+async function withoutRemovalHandler(fn) {
+  if (CONFIG.FFG.preCombatDelete !== undefined) Hooks.off("preDeleteCombatant", CONFIG.FFG.preCombatDelete);
+  CONFIG.FFG.preCombatDelete = undefined;
+  try {
+    return await fn();
+  } finally {
+    if (CONFIG.FFG.preCombatDelete === undefined) {
+      CONFIG.FFG.preCombatDelete = Hooks.on("preDeleteCombatant", registerHandleCombatantRemoval);
+    }
+  }
 }

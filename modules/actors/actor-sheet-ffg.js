@@ -85,11 +85,59 @@ export class ActorSheetFFG extends FFGActorSheet {
     const result = super.setPosition(position);
     // Remember user-driven resizes so subsequent re-renders (drag-reorder, new tab, etc.)
     // don't resnap the sheet back to its default size. getData restores from these values.
-    if (this.rendered && Number.isFinite(this.position?.width) && Number.isFinite(this.position?.height)) {
+    // Positive sizes only: a sheet positioned while the window has no size (a hidden or minimised
+    // tab reports 0x0) is clamped to 0, and restoring that later is a TypeError (see ItemSheetFFG).
+    if (this.rendered && this.position?.width > 0 && this.position?.height > 0) {
       this.sheetWidth = this.position.width;
       this.sheetHeight = this.position.height;
     }
     return result;
+  }
+
+  /**
+   * Rules for items landing on an actor: one species and one career per character, no species or
+   * career on minions, critical damage only on vehicles, critical injuries only on characters and
+   * adversaries, no character-only item types on vehicles.
+   *
+   * Registered once per client at load (see the bottom of this file). It used to be registered from
+   * the first editable actor sheet's activateListeners, and only if NO package had a preCreateItem
+   * listener yet - so in a world where any module hooks preCreateItem first these rules never
+   * applied at all, and before anyone opened a sheet they did not apply either. Two companion
+   * preUpdateItem / preDeleteItem hooks registered the same way did nothing but copy that first
+   * sheet's size, which setPosition now remembers by itself; they are gone.
+   * @returns {boolean|void} false to block the create
+   */
+  static enforceActorItemRules(item, _createData, _options, _userId) {
+    if (!item.isEmbedded || item.parent?.documentName !== "Actor") return;
+    const actor = item.actor;
+    // we only allow one species and one career, find any other species and remove them.
+    if (item.type === "species" || item.type === "career") {
+      if (["character", "nemesis", "rival"].includes(actor.type)) {
+        const itemToDelete = actor.items.filter((i) => (i.type === item.type) && (i.id !== item.id));
+        itemToDelete.forEach((i) => {
+          actor.items.get(i.id).delete();
+        });
+      } else if (actor.type === "minion") {
+        ui.notifications.warn(`Item type '${item.type}' cannot be added to 'minion' actor types.`);
+        return false;
+      }
+    }
+
+    // Critical Damage can only be added to "vehicle" actors and Critical Injury can only be added to "character" actors.
+    if (item.type === "criticaldamage" && actor.type !== "vehicle") {
+      ui.notifications.warn("Critical Damage can only be added to 'vehicle' actor types.");
+      return false;
+    }
+    if (item.type === "criticalinjury" && !["character", "nemesis", "rival"].includes(actor.type)) {
+      ui.notifications.warn("Critical Injuries can only be added to 'character' actor types.");
+      return false;
+    }
+
+    // Prevent adding of character data type items to vehicles
+    if (["career", "forcepower", "talent", "signatureability", "specialization", "species", "ability"].includes(item.type.toString()) && actor.type === "vehicle") {
+      ui.notifications.warn(`Item type '${item.type}' cannot be added to 'vehicle' actor types.`);
+      return false;
+    }
   }
 
   /** @override */
@@ -117,11 +165,9 @@ export class ActorSheetFFG extends FFGActorSheet {
         // Effective (sheet-visible) values, used for the XP-log entry.
         const effectiveAvailable = parseInt(this.actor.system?.experience?.available);
         const effectiveTotal = parseInt(this.actor.system?.experience?.total);
-        const AEState = await ActorHelpers.beginEditMode(this.actor, true);
-        // Grant against the BASE values (purchase active effects suspended) so those deductions
-        // are not double-counted when the effects are restored (see the purchase flow below).
-        const baseAvailable = parseInt(this.actor.system.experience.available);
-        const baseTotal = parseInt(this.actor.system.experience.total);
+        // Grant against the BASE values (before the purchase active effects) so those deductions
+        // are not double-counted (see the purchase flow below).
+        const { available: baseAvailable, total: baseTotal } = ActorHelpers.baseExperience(this.actor);
         await this.actor.update(
           {
             system: {
@@ -133,7 +179,6 @@ export class ActorSheetFFG extends FFGActorSheet {
           }
         );
         await xpLogEarn(this.actor, startingXP, effectiveAvailable + startingXP, effectiveTotal + startingXP, game.i18n.format("SWFFG.GrantXPSpecies", {species: itemData.name}) );
-        await ActorHelpers.endEditMode(this.actor, AEState, true);
       }
 
       if (this.actor.type === "character" && ["talent", "specialization", "signatureability", "forcepower"].includes(itemData.type)) {
@@ -157,12 +202,10 @@ export class ActorSheetFFG extends FFGActorSheet {
               return;
             }
             const totalXP = this.actor.system.experience.total;
-            const AEState = await ActorHelpers.beginEditMode(this.actor, true);
-            // With the purchase effects suspended, this reads the stored BASE available. Subtract the
-            // cost from the base - NOT from the effective value read above - otherwise, once the
-            // effects are restored, their deductions are applied a second time on top of a base that
-            // was already lowered by them, driving available XP hundreds below where it should be.
-            const baseAvailableXP = this.actor.system.experience.available;
+            // Subtract the cost from the stored BASE available - NOT from the effective value read
+            // above - otherwise the purchase effects' deductions are applied a second time on top of
+            // a base already lowered by them, driving available XP hundreds below where it should be.
+            const baseAvailableXP = ActorHelpers.baseExperience(this.actor).available;
             await this.object.update({
               system: {
                 experience: {
@@ -190,7 +233,6 @@ export class ActorSheetFFG extends FFGActorSheet {
                 undefined,
                 refundMeta
             );
-            await ActorHelpers.endEditMode(this.actor, AEState, true);
           };
 
           const buttons = [
@@ -686,63 +728,6 @@ export class ActorSheetFFG extends FFGActorSheet {
 
     // Everything below here is only needed if the sheet is editable
     if (!this.isEditable) return;
-
-    if (Hooks.events.preCreateItem === undefined) {
-      Hooks.on("preCreateItem", (item, createData, options, userId) => {
-        // Save persistent sheet height and width for future use.
-        this.sheetWidth = this.position.width;
-        this.sheetHeight = this.position.height;
-
-        // Check that we are dealing with an Embedded Document
-        if (item.isEmbedded && item.parent.documentName === "Actor") {
-          const actor = item.actor
-          // we only allow one species and one career, find any other species and remove them.
-          if (item.type === "species" || item.type === "career") {
-            if (["character", "nemesis", "rival"].includes(actor.type)) {
-              const itemToDelete = actor.items.filter((i) => (i.type === item.type) && (i.id !== item.id));
-              itemToDelete.forEach((i) => {
-                actor.items.get(i.id).delete();
-              });
-            } else if (actor.type === "minion") {
-              ui.notifications.warn(`Item type '${item.type}' cannot be added to 'minion' actor types.`);
-              return false;
-            }
-          }
-
-          // Critical Damage can only be added to "vehicle" actors and Critical Injury can only be added to "character" actors.
-          if (item.type === "criticaldamage" && actor.type !== "vehicle") {
-            ui.notifications.warn("Critical Damage can only be added to 'vehicle' actor types.");
-            return false;
-          }
-          if (item.type === "criticalinjury" && !["character", "nemesis", "rival"].includes(actor.type)) {
-            ui.notifications.warn("Critical Injuries can only be added to 'character' actor types.");
-            return false;
-          }
-
-          // Prevent adding of character data type items to vehicles
-          if (["career", "forcepower", "talent", "signatureability", "specialization", "species", "ability"].includes(item.type.toString()) && actor.type === "vehicle") {
-            ui.notifications.warn(`Item type '${item.type}' cannot be added to 'vehicle' actor types.`);
-            return false;
-          }
-        }
-      });
-    }
-
-    if (Hooks.events.preDeleteItem === undefined) {
-      Hooks.on("preDeleteItem", (item, createData, options, userId) => {
-        // Save persistent sheet height and width for future use.
-        this.sheetWidth = this.position.width;
-        this.sheetHeight = this.position.height;
-      });
-    }
-
-    if (Hooks.events.preUpdateItem === undefined) {
-      Hooks.on("preUpdateItem", (item, createData, options, userId) => {
-        // Save persistent sheet height and width for future use.
-        this.sheetWidth = this.position.width;
-        this.sheetHeight = this.position.height;
-      });
-    }
 
     let contextMenuOptions = [
       {
@@ -3289,20 +3274,16 @@ export class ActorSheetFFG extends FFGActorSheet {
                 ? Number(newestEntry.total)
                 : Number(this.actor.system.experience.total) || 0;
 
-              const AEState = await ActorHelpers.beginEditMode(this.actor, true);
               await item.update({ system: { [collection]: { [nodeId]: { islearned: false } } } });
               if (refundAmount > 0) {
-                // Add to the BASE available (edit mode has the purchase effects
-                // suspended) so the refund survives them being restored.
-                const newAvailable = this.actor.system.experience.available + refundAmount;
+                // Add to the stored BASE available (before the purchase effects) so the
+                // refund is not offset by them.
+                const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
                 if (match) match.refunded = true;
               }
-              await ActorHelpers.endEditMode(this.actor, AEState, true);
               if (refundAmount > 0) {
-                // Log AFTER edit mode ends: while it is active the purchase Active
-                // Effects are disabled, so experience.available reads the base value
-                // instead of the effective one the XP box shows.
+                // The log records the EFFECTIVE available (what the XP box shows), not the base.
                 log.unshift({
                   action: "refunded",
                   id: undefined,
@@ -3316,10 +3297,9 @@ export class ActorSheetFFG extends FFGActorSheet {
                 });
                 await this.actor.setFlag("starwarsffg", "xpLog", log);
               }
-              // Re-sync the modifier AEs to the node's now-unlearned state. endEditMode restores every
-              // AE to its pre-refund (enabled) state, so a stat-granting talent/upgrade (e.g. Toughened,
-              // Grit) would otherwise keep applying after the node is unlearned. This mirrors the learn
-              // path, which syncs AE status on submit.
+              // Re-sync the modifier AEs to the node's now-unlearned state, so a stat-granting
+              // talent/upgrade (e.g. Toughened, Grit) stops applying once the node is unlearned. This
+              // mirrors the learn path, which syncs AE status on submit.
               await ItemHelpers.syncAEStatus(item, item.getEmbeddedCollection("ActiveEffect"));
               // If a copy of an unranked talent in another tree was suspended as a duplicate of the
               // node just refunded, re-syncing every tree lets that copy take over as the modifier
@@ -3414,19 +3394,15 @@ export class ActorSheetFFG extends FFGActorSheet {
                 ? Number(newestEntry.total)
                 : Number(this.actor.system.experience.total) || 0;
 
-              const AEState = await ActorHelpers.beginEditMode(this.actor, true);
               if (refundAmount > 0) {
-                // Add to the BASE available (edit mode has the purchase effects
-                // suspended) so the refund survives them being restored.
-                const newAvailable = this.actor.system.experience.available + refundAmount;
+                // Add to the stored BASE available (before the purchase effects) so the
+                // refund is not offset by them.
+                const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
                 if (match) match.refunded = true;
               }
-              await ActorHelpers.endEditMode(this.actor, AEState, true);
               if (refundAmount > 0) {
-                // Log AFTER edit mode ends: while it is active the purchase Active
-                // Effects are disabled, so experience.available reads the base value
-                // instead of the effective one the XP box shows.
+                // The log records the EFFECTIVE available (what the XP box shows), not the base.
                 log.unshift({
                   action: "refunded",
                   id: undefined,
@@ -3529,9 +3505,8 @@ export class ActorSheetFFG extends FFGActorSheet {
                 ? Number(newestEntry.total)
                 : Number(this.actor.system.experience.total) || 0;
 
-              const AEState = await ActorHelpers.beginEditMode(this.actor, true);
               if (refundAmount > 0) {
-                const newAvailable = this.actor.system.experience.available + refundAmount;
+                const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
                 if (match) match.refunded = true;
                 log.unshift({
@@ -3547,7 +3522,6 @@ export class ActorSheetFFG extends FFGActorSheet {
                 });
                 await this.actor.setFlag("starwarsffg", "xpLog", log);
               }
-              await ActorHelpers.endEditMode(this.actor, AEState, true);
               // Removing the base ability removes the ability entirely (it is the root of the tree).
               await this.actor.deleteEmbeddedDocuments("Item", [itemId]);
               this.render(false);
@@ -4141,7 +4115,8 @@ export class ActorSheetFFG extends FFGActorSheet {
         }
         const items = await pack.getDocuments();
         for (const item of items) {
-          if (sigAbilityNames.includes(item.name)) {
+          // a world copy (possibly customised) takes precedence; listing both showed every ability twice
+          if (sigAbilityNames.includes(item.name) && !selectableItems.some((s) => s.name === item.name)) {
             selectableItems.push({
               name: item.name,
               id: item.id,
@@ -4164,7 +4139,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
       const permittedSpecializations = Object.values(career.system.specializations).map(i => i.name);
       const matchingSpecializations = this.object.items.filter(i => i.type === "specialization" && permittedSpecializations.includes(i.name));
-      if (!matchingSpecializations) {
+      if (!matchingSpecializations.length) {
         ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.Career.Specializations.NotSet"));
         return;
       }
@@ -4178,7 +4153,8 @@ export class ActorSheetFFG extends FFGActorSheet {
           match = true;
           for (let i = 0; i < 4; i++) {
             // if the upgrade is required, and we don't have it learned, this is not a match
-            if (fullItem.system.uplink_nodes[`uplink${i}`] && !specialization.system.talents[`talent${i + 16}`].islearned) {
+            // Tree flags can be "true"/"false" strings in imported data; a raw test treats "false" as learned.
+            if (fullItem.system.uplink_nodes[`uplink${i}`] && !TalentTree._bool(specialization.system.talents[`talent${i + 16}`]?.islearned)) {
               match = false;
               break;
             }
@@ -4222,6 +4198,8 @@ export class ActorSheetFFG extends FFGActorSheet {
         }
         const items = await pack.getDocuments();
         for (const item of items) {
+          // a world copy (possibly customised) takes precedence; listing both showed every power twice
+          if (selectableItems.some((s) => s.name === item.name)) continue;
           selectableItems.push({
             name: item.name,
             id: item.id,
@@ -4326,8 +4304,7 @@ export class ActorSheetFFG extends FFGActorSheet {
                 }
               }
               await this.object.createEmbeddedDocuments("Item", [purchasedItem]);
-              const AEState = await ActorHelpers.beginEditMode(this.actor, true);
-              const updatedAvailableXP = this.actor.system.experience.available;
+              const updatedAvailableXP = ActorHelpers.baseExperience(this.actor).available;
               // this does not use _spendXp as it's granting items, which AEs cannot reasonably do
               await this.object.update({
                 system: {
@@ -4337,7 +4314,6 @@ export class ActorSheetFFG extends FFGActorSheet {
                 },
               });
               await xpLogSpend(game.actors.get(this.object.id), `new ${action} ${purchasedItem.name}`, cost, availableXP - cost, totalXP, undefined);
-              await ActorHelpers.endEditMode(this.actor, AEState, true);
             },
           },
           {
@@ -4463,14 +4439,12 @@ export class ActorSheetFFG extends FFGActorSheet {
             // Which value(s) to change: "both" (default), "available" only, or "total" only.
             // Adjusting one independently lets a GM rectify a desynced available/total pair.
             const adjustTarget = $("#adjustTarget").val() || "both";
-            const AEState = await ActorHelpers.beginEditMode(this.actor, true);
-            const startingAvailableXP =  foundry.utils.deepClone(parseInt(this.actor.system.experience.available));
-            const totalXP =  foundry.utils.deepClone(parseInt(this.actor.system.experience.total));
+            const { available: startingAvailableXP, total: totalXP } = ActorHelpers.baseExperience(this.actor);
             const updatedAvailableXP = adjustTarget === "total" ? startingAvailableXP : startingAvailableXP + adjustAmount;
             const updatedTotalXP = adjustTarget === "available" ? totalXP : totalXP + adjustAmount;
             await this.actor.update({ 'system.experience.available': updatedAvailableXP, 'system.experience.total': updatedTotalXP });
             // Log the EFFECTIVE available (what the bar shows, after purchase active effects), not the
-            // edit-mode base read above with effects suspended. Only add the delta when available is targeted.
+            // stored base read above (before the purchase effects). Only add the delta when available is targeted.
             const availableDelta = adjustTarget === "total" ? 0 : adjustAmount;
             await xpLogEarn(
               this.object,
@@ -4480,7 +4454,6 @@ export class ActorSheetFFG extends FFGActorSheet {
               adjustReason,
               "Self"
             );
-            await ActorHelpers.endEditMode(this.actor, AEState, true);
           },
           },
           {
@@ -4560,33 +4533,63 @@ export class ActorSheetFFG extends FFGActorSheet {
     d.render(true);
   }
 
-  debounceRender = foundry.utils.debounce(
-    (force, options) => {
-      // A close() that lands after a render was queued must win. Renders here
-      // are debounced (~100ms), so a trailing render scheduled by a field edit
-      // -- minion sheets force render:true on wounds/quantity edits -- fires
-      // after close() finished and reset its transient `_closing` flag, and
-      // would re-attach the sheet the user just closed (the "minion close
-      // button does nothing" bug). `_sheetClosed` is latched in close() and
-      // only cleared by a genuine (non-closing) render(), so a stray trailing
-      // render bails here.
-      if (this._sheetClosed) return;
-      super.render(force, options);
-    },
-    100,
-    {
-      leading: true,
-      maxWait: 100,
-    },
-  );
+  /**
+   * Performs the render that every render() call queued since the last one has been folded into.
+   * Runs 100ms after the most recent call (foundry.utils.debounce takes no options object; the
+   * lodash-style `{leading, maxWait}` this used to pass were silently ignored, so it was always
+   * trailing-only).
+   */
+  debounceRender = foundry.utils.debounce(async () => {
+    const pending = this._pendingRender;
+    this._pendingRender = null;
+    if (!pending) return;
+    try {
+      // A close() that lands after a render was queued must win. A trailing render scheduled by
+      // a field edit -- minion sheets force render:true on wounds/quantity edits -- fires after
+      // close() finished and reset its transient `_closing` flag, and would re-attach the sheet
+      // the user just closed (the "minion close button does nothing" bug). `_sheetClosed` is
+      // latched in close() and only cleared by a genuine (non-closing) render(), so a stray
+      // trailing render bails here.
+      if (!this._sheetClosed) await super.render(pending.options);
+      for (const {resolve} of pending.callers) resolve(this);
+    } catch (err) {
+      for (const {reject} of pending.callers) reject(err);
+    }
+  }, 100);
 
-  /** @override **/
-  render(force, options) {
+  /**
+   * Debounced, but still honouring ApplicationV2's render contract.
+   *
+   * Every call made while a render is pending is folded into that one render instead of only the
+   * last call's arguments surviving: `force` is kept if ANY caller asked for it, so an
+   * update-driven `render(false)` landing within 100ms can no longer swallow the `render(true)`
+   * that was opening the sheet, and a partial render only stays partial if every caller asked
+   * for parts. Each caller gets a promise resolving to this sheet once it has actually rendered;
+   * this used to return undefined, so `await actor.sheet.render(true)` resumed before the sheet
+   * existed (Monk's Combat Details stored that undefined as its combatant sheet and never
+   * closed the previous one).
+   * @override
+   */
+  render(options = {}, _options = {}) {
     // A real (re)open clears the closed latch. Auto-renders fired *during*
     // close (document.update in submit-on-close) run while `_closing` is true
     // and must NOT clear it, or they would reschedule a reopen.
     if (!this._closing) this._sheetClosed = false;
-    this.debounceRender(force, options);
+    if (typeof options === "boolean") options = {..._options, force: options};
+    const pending = this._pendingRender ??= {options: {}, callers: [], allParts: false};
+    const merged = pending.options;
+    const force = Boolean(merged.force || options?.force);
+    const priorParts = merged.parts ?? [];
+    Object.assign(merged, options, {force});
+    if (pending.allParts || !Array.isArray(options?.parts)) {
+      pending.allParts = true;
+      delete merged.parts;
+    } else {
+      merged.parts = [...new Set([...priorParts, ...options.parts])];
+    }
+    const promise = new Promise((resolve, reject) => pending.callers.push({resolve, reject}));
+    this.debounceRender();
+    return promise;
   }
 
   /** @override **/
@@ -4710,3 +4713,6 @@ export function addIfNotExist(array, element) {
   }
   return array;
 }
+
+// Registered once per client, at load - see ActorSheetFFG.enforceActorItemRules.
+Hooks.on("preCreateItem", (...args) => ActorSheetFFG.enforceActorItemRules(...args));

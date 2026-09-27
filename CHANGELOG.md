@@ -66,6 +66,7 @@
   * Deleting a quality from an attachment that also has hidden modifications (such as the Actuating Module's two Damage +1 entries) deleted the wrong entry. The qualities list is a merged summary, so its row position was never an index into the modifications; the row is now matched by name.
   * [ROLL] tags in an owned item's description threw an error instead of rolling.
   * The Force power and signature ability purchase lists showed every entry twice when the world held a copy of a compendium item; the world copy is now listed once. Signature abilities also no longer treat an imported "false" tree node as learned.
+  * Renaming a quality that is also one of an attachment's modifications (such as an imported "Unique Mod") no longer throws "Cannot convert undefined or null to object" and leaves the old name in place. Every save in an attachment's Modifications tab rebuilt its modifications from the form fields alone, dropping each one's id, type and Type setting - and, for a modification with no modifiers, its modifier list altogether, which the quality editor then choked on. The tab now keeps what its form does not show, and saving an entry it already stripped repairs it. The editor's window title also follows a rename instead of keeping the old name.
 
 `2.0.3`
 * Enhancements:

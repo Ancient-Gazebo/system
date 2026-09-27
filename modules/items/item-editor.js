@@ -16,10 +16,56 @@ function mergeApplyDeletions() {
   return game.release?.generation >= 14 ? { applyOperators: true } : { performDeletions: true };
 }
 
+/**
+ * The stored index each submitted modification row was rendered from, in the order
+ * ItemHelpers.explodeFormData collapses the rows into `system.itemmodifier`.
+ * ffg-modification.html names a row's inputs `system.itemmodifier[<index>]...`; a row added since
+ * the last render has no index yet (`[]`) and maps to `undefined`. Deleting a row leaves a gap in
+ * the indices, so a row's position alone does not identify its stored entry.
+ * @param {object} flatFormData the flat submit data, before explodeFormData
+ * @returns {Array<number|undefined>}
+ */
+function modificationRowIndices(flatFormData) {
+  const rows = new Map();
+  for (const key of Object.keys(flatFormData ?? {})) {
+    const index = /^system\.itemmodifier\[(\d*)\]/.exec(key)?.[1];
+    if ((index !== undefined) && !rows.has(index)) rows.set(index, (index === "") ? undefined : Number(index));
+  }
+  return [...rows.values()];
+}
+
+/**
+ * Rebuild an attachment's modifications from the editor's submitted rows.
+ *
+ * A row only has inputs for a modification's name, description, installed and show-in-qualities
+ * flags, rank and modifier rows, and the collapsed rows used to REPLACE `system.itemmodifier`
+ * outright. So every save stripped each modification to those fields, losing its `_id`, `type`,
+ * `img` and `system.type`. A modification with no modifier rows lost `system.attributes`
+ * altogether, and the qualities list's editor then threw on it. Each row is now merged over the
+ * stored entry it was rendered from. The rows stay authoritative for the modifiers, so a modifier
+ * row deleted in the editor does not survive the merge.
+ * @param {object[]} stored the attachment's stored `system.itemmodifier`
+ * @param {object[]} rows the submitted `system.itemmodifier`, as collapsed by explodeFormData
+ * @param {Array<number|undefined>} indices from {@link modificationRowIndices}
+ * @returns {object[]}
+ */
+function mergeModificationRows(stored, rows, indices) {
+  return (rows ?? []).map((row, i) => {
+    const source = Number.isInteger(indices[i]) ? stored?.[indices[i]] : undefined;
+    const merged = foundry.utils.mergeObject(
+      source ? foundry.utils.deepClone(source) : { _id: foundry.utils.randomID() },
+      row,
+    );
+    merged.type ??= "itemmodifier";
+    merged.system ??= {};
+    merged.system.attributes = row?.system?.attributes ?? {};
+    return merged;
+  });
+}
+
 export class itemEditor extends FFGFormApplication {
   /*
   Known issues:
-    - The title of the editor doesn't get updated when you update the name
     - Modification descriptions are rendered in an input field, not a rich text editor. I can't figure out how to get them to work in RTEs
     - Qualities added from an attachment do not get totaled if they are also already present on the weapon (e.g. a weapon with Pierce 2 and an attachment which adds Pierce 1)
   */
@@ -152,6 +198,10 @@ export class itemEditor extends FFGFormApplication {
   /** @override */
   async _onRender(context, options) {
     await super._onRender(context, options);
+    // ApplicationV2 writes the frame title on the first render only (a later render updates it
+    // only when handed `window.title`), so a rename never reached the header. _prepareContext has
+    // just refreshed `_title` from the saved name.
+    if (this.window?.title) this.window.title.textContent = this.title;
     this._setupTabs();
     this._activateListeners($(this.form));
     this._activateEditors();
@@ -551,7 +601,8 @@ export class itemEditor extends FFGFormApplication {
     this.data.clickedObject.system.type = event.currentTarget.value;
     // iterate over mods and update the modifier to be the first choice of the first modifierType
     // this is done because the selected modifier type changes when the "attachmentType" is changed
-    for (let mod of Object.keys(this.data.clickedObject.system.attributes)) {
+    // (a modification saved by the old modifications editor can have no attributes at all)
+    for (let mod of Object.keys(this.data.clickedObject.system.attributes ?? {})) {
       this.data.clickedObject.system.attributes[mod].modtype = Object.values(CONFIG.FFG.allowableModifierTypes[event.currentTarget.value])[0].value;
       this.data.clickedObject.system.attributes[mod].mod = Object.values(CONFIG.FFG.allowableModifierTypes[Object.values(CONFIG.FFG.allowableModifierTypes[event.currentTarget.value])[0].value])[0].value;
     }
@@ -603,6 +654,8 @@ export class itemEditor extends FFGFormApplication {
 
   /** @override */
   async _updateObject(event, formData) {
+    // read before explodeFormData collapses the rows and drops their indices
+    const modificationRows = modificationRowIndices(formData);
     formData = ItemHelpers.explodeFormData(formData);
     const equipped = this.data.sourceObject.system?.equippable?.equipped;
 
@@ -767,9 +820,17 @@ export class itemEditor extends FFGFormApplication {
           // attributes as `{"-=attr...": null}`, and the next render iterates
           // that null entry into ffg-mod.html, throwing "Cannot convert
           // undefined or null to object" and closing the editor window.
+          // The arrays are replaced, not merged, so the modifications are rebuilt over their stored
+          // entries first; the bare rows would strip everything the form does not render.
           attachment = foundry.utils.mergeObject(
             attachment,
-            formData,
+            {
+              ...formData,
+              system: {
+                ...formData.system,
+                itemmodifier: mergeModificationRows(attachment.system.itemmodifier, formData.system.itemmodifier, modificationRows),
+              },
+            },
             // V14 renamed mergeObject's `performDeletions` to `applyOperators`;
             // feature-detect so the `-=key` deletion markers are applied on both.
             mergeApplyDeletions(),
@@ -794,8 +855,10 @@ export class itemEditor extends FFGFormApplication {
       for (let modifier of updateData) {
         // select based on names instead of IDs, as IDs are not present here
         if (modifier.name === this.data.clickedObject.name) {
-          // iterate over the mods on the existing item and remove them if they are not present in the new data
-          for (let modKey of Object.keys(modifier.system.attributes)) {
+          // iterate over the mods on the existing item and remove them if they are not present in the new data.
+          // A modification saved by the old modifications editor may have no attributes at all (see
+          // mergeModificationRows); the merge below writes the form's `{}` back and repairs it.
+          for (let modKey of Object.keys(modifier.system?.attributes ?? {})) {
             if (!Object.keys(formData.system.attributes).includes(modKey)) {
               formData.system.attributes[`-=${modKey}`] = null;
               delete modifier.system.attributes[modKey];

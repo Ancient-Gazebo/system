@@ -382,6 +382,8 @@ export class CombatFFG extends Combat {
           CONFIG.logger.warn(`Unable to resolve combatant '${ids[0]}' for initiative; falling back to default dice pools.`);
         } else {
           const data = _findActorForInitiative(c);
+          // a vehicle with no crew member to roll for it: the user has already been told why
+          if (!data) return resolve(initiative);
           whosInitiative = c.actor.name;
 
           actorSkills = data.skills;
@@ -484,6 +486,8 @@ export class CombatFFG extends Combat {
 
                   // Detemine Formula
                   const data = _findActorForInitiative(c);
+                  // skipped (and already explained), like a combatant the user can't roll for
+                  if (!data?.skills?.[baseFormulaType]) return results;
                   let pool = _buildInitiativePool(data, baseFormulaType);
 
                   const addPool = DicePoolFFG.fromContainer(container.querySelector(`.addDicePool`));
@@ -1396,34 +1400,56 @@ function _resolveCombatantForRoll(combat, combatantId) {
     : combat.getCombatantByToken(tokenId);
 }
 
+/**
+ * Pick the crew member who rolls initiative for a vehicle.
+ *
+ * In order: whoever holds the Initiative crew role configured in the Crew settings; the built-in
+ * "Pilot" role; then any crew role that uses the vehicle's handling - a piloting role, whatever the
+ * world named it ("Driver / Pilot", "Space Pilot") - preferring the one whose skill suits the vehicle
+ * (space or planetary). Only "Pilot" used to be checked, so a world with its own role names fell
+ * through to the vehicle's own data, which has no skills, and initiative threw.
+ * @param {Actor} vehicle
+ * @returns {object|undefined} the crew entry
+ */
+function _findInitiativeCrew(vehicle) {
+  const crew = (vehicle.getFlag("starwarsffg", "crew") ?? []).filter((m) => game.actors.get(m?.actor_id)?.system);
+  if (!crew.length) return undefined;
+  const byRole = (name) => (name ? crew.find((m) => m.role === name) : undefined);
+  const direct = byRole(game.settings.get("starwarsffg", "initiativeCrewRole")?.role_name) ?? byRole("Pilot");
+  if (direct) return direct;
+  const roles = game.settings.get("starwarsffg", "arrayCrewRoles") ?? [];
+  const roleOf = (m) => roles.find((r) => r.role_name === m.role);
+  const piloting = crew.filter((m) => roleOf(m)?.use_handling);
+  if (piloting.length < 2) return piloting[0];
+  const suits = vehicle.system?.spaceShip ? /space/i : /planet|driv/i;
+  return piloting.find((m) => suits.test(roleOf(m)?.role_skill ?? "") || suits.test(m.role)) ?? piloting[0];
+}
+
 function _findActorForInitiative(c) {
   let data = c.actor.system;
-  const initiativeRole = game.settings.get('starwarsffg', 'initiativeCrewRole');
   CONFIG.logger.debug("Attempting to find initiative data for actor in combat");
   if (c.actor.type === "vehicle") {
     CONFIG.logger.debug("Actor is a vehicle, looking for initiative crew role.");
-    const crew = c.actor.getFlag("starwarsffg", "crew");
-    if (crew !== undefined && crew !== []) {
-      const initiativeCrew = crew.find((c) => c.role === "Pilot");
-      if (initiativeCrew) {
-        CONFIG.logger.debug("Found initiative crew role, swapping data to crew member");
-        const realActor = game.actors.get(initiativeCrew.actor_id);
-        if (realActor?.system) {
-          data = realActor.system;
-          // Minion pilots of a vehicle minion group rank their group skills off the formation's
-          // operational ships (see get_dice_pool). Layer the adjusted skills over the pilot's data
-          // instead of copying it, so everything else still reads through to the live system.
-          if (realActor.type === "minion" && isVehicleGroup(c.actor)) {
-            const rank = getGroupSkillRank(c.actor.system.group.operational);
-            const skills = Object.fromEntries(Object.entries(data.skills ?? {}).map(
-              ([key, skill]) => [key, skill?.groupskill ? { ...skill, rank } : skill]
-            ));
-            data = Object.create(data, { skills: { value: skills, enumerable: true } });
-          }
-        }
-      }
-    } else {
-      CONFIG.logger.warn("You must set a crew member with the pilot role to roll initiative for a vehicle");
+    const initiativeCrew = _findInitiativeCrew(c.actor);
+    const realActor = initiativeCrew ? game.actors.get(initiativeCrew.actor_id) : undefined;
+    if (!realActor?.system) {
+      // a vehicle has no skills of its own, so without a crew member to roll for it there is
+      // nothing to roll - say so rather than throw on the missing skills
+      CONFIG.logger.warn(`No crew member can roll initiative for vehicle ${c.actor.name}`);
+      ui.notifications.warn(game.i18n.format("SWFFG.Crew.Initiative.NoPilot", { vehicle: c.actor.name }));
+      return null;
+    }
+    CONFIG.logger.debug(`Rolling initiative for ${c.actor.name} with crew member ${realActor.name}`);
+    data = realActor.system;
+    // Minion pilots of a vehicle minion group rank their group skills off the formation's
+    // operational ships (see get_dice_pool). Layer the adjusted skills over the pilot's data
+    // instead of copying it, so everything else still reads through to the live system.
+    if (realActor.type === "minion" && isVehicleGroup(c.actor)) {
+      const rank = getGroupSkillRank(c.actor.system.group.operational);
+      const skills = Object.fromEntries(Object.entries(data.skills ?? {}).map(
+        ([key, skill]) => [key, skill?.groupskill ? { ...skill, rank } : skill]
+      ));
+      data = Object.create(data, { skills: { value: skills, enumerable: true } });
     }
   }
   CONFIG.logger.debug("Finished checking");

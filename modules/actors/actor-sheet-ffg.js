@@ -58,6 +58,13 @@ export class ActorSheetFFG extends FFGActorSheet {
 
   pools = new Map();
 
+  /** XP-log refund kinds for a purchased base item: the root of a tree, refunded as a whole. */
+  static BASE_REFUND_KINDS = {
+    forcepower: "forcepower-base",
+    signatureability: "signatureability-base",
+    specialization: "specialization-base",
+  };
+
   static DEFAULT_OPTIONS = {
     // `v2` is required, not cosmetic: the stylesheets key actor-sheet layout
     // off `.starwarsffg.sheet.actor.v2`. The V2-styled variant was the
@@ -221,6 +228,8 @@ export class ActorSheetFFG extends FFGActorSheet {
               refundMeta = {kind: "forcepower-base", name: itemData.name};
             } else if (itemData.type === "signatureability") {
               refundMeta = {kind: "signatureability-base", name: itemData.name};
+            } else if (itemData.type === "specialization") {
+              refundMeta = {kind: "specialization-base", name: itemData.name};
             } else {
               refundMeta = undefined;
             }
@@ -532,6 +541,18 @@ export class ActorSheetFFG extends FFGActorSheet {
 
     if (this.actor.flags?.starwarsffg?.xpLog) {
       data.xpLog = this.object.getFlag("starwarsffg", "xpLog") || [];
+      // Base Force powers, signature abilities and specializations bought with the sheet's purchase
+      // buttons (and drag-and-drop specializations) were logged without refund data, so their
+      // entries showed no refund button. Recognise them by description while the item is still
+      // owned; the display copy is changed, never the stored log.
+      const dragDrop = game.i18n.localize("SWFFG.DragDrop.XPLog").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const basePurchase = new RegExp(`^(?:new|${dragDrop}) (forcepower|signatureability|specialization) (.+)$`);
+      data.xpLog = data.xpLog.map((entry) => {
+        if (entry?.action !== "purchased" || entry.refunded || entry.refund || entry.id !== undefined) return entry;
+        const match = basePurchase.exec(entry.description ?? "");
+        if (!match || !this.actor.items.some((i) => i.type === match[1] && i.name === match[2])) return entry;
+        return { ...entry, refund: { kind: ActorSheetFFG.BASE_REFUND_KINDS[match[1]], name: match[2] } };
+      });
     }
 
     data.actor.items = ActorSheetFFG.sortForActorSheet(data.actor.items);
@@ -855,6 +876,14 @@ export class ActorSheetFFG extends FFGActorSheet {
         const item = this.actor.items.find((i) => i.type === "signatureability" && i.name === name);
         if (item) {
           await this._refundSignatureAbility(item.id);
+        } else {
+          ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Refund.NoOwner"));
+        }
+      } else if (kind === "specialization-base") {
+        const name = el.data("refund-name");
+        const item = this.actor.items.find((i) => i.type === "specialization" && i.name === name);
+        if (item) {
+          await this._refundSpecialization(item.id);
         } else {
           ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Refund.NoOwner"));
         }
@@ -3538,6 +3567,95 @@ export class ActorSheetFFG extends FFGActorSheet {
   }
 
   /**
+   * Refund a purchased specialization: return the XP its purchase entry recorded, log the refund
+   * and remove the specialization. Blocked while any talent in its tree is still learned, as the
+   * base power and ability refunds are: those talents were bought through this tree and are refunded
+   * from the log first.
+   *
+   * @param {string} itemId  The id of the specialization item on this actor.
+   */
+  async _refundSpecialization(itemId) {
+    const item = this.actor.items.get(itemId);
+    if (!item || item.type !== "specialization") return;
+
+    const isLearned = (v) => v === true || v === "true";
+    const learnedTalentNames = Object.values(item.system?.talents || {})
+      .filter((t) => t && isLearned(t.islearned) && t.name)
+      .map((t) => t.name);
+    if (learnedTalentNames.length > 0) {
+      ui.notifications.warn(
+        game.i18n.format("SWFFG.Actors.Sheets.Refund.WouldOrphan", { talents: learnedTalentNames.join(", ") })
+      );
+      return;
+    }
+
+    // The purchase entry ends with the name (`new specialization <name>` or `<drag-and-drop>
+    // specialization <name>`). Match the END: a talent bought in this tree is logged as
+    // `specialization <name> upgrade <talent>`, which a plain substring test would also hit.
+    const log = this.actor.getFlag("starwarsffg", "xpLog") || [];
+    const match = log.find((e) =>
+      e.action === "purchased" &&
+      !e.refunded &&
+      typeof e.description === "string" &&
+      e.description.endsWith(`specialization ${item.name}`)
+    );
+    const refundAmount = match ? (parseInt(match.xp.cost, 10) || 0) : 0;
+
+    DialogV2.wait({
+        window: { title: game.i18n.localize("SWFFG.Actors.Sheets.Refund.DialogTitle") },
+        classes: ["dialog", "starwarsffg"],
+        content: `<p>${game.i18n.format("SWFFG.Actors.Sheets.Refund.ConfirmText", { talent: item.name, cost: refundAmount })}</p>`,
+        buttons: [
+          {
+            action: "done",
+            icon: "fa-solid fa-check",
+            label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Confirm"),
+            default: true,
+            callback: async (event, button, dialog) => {
+              if (!this.actor.verifyEditModeIsNotEnabled()) return;
+
+              // The newest log entry holds the effective (sheet-visible) available XP - see
+              // _refundForcePower for why the stored field cannot be used.
+              const newestEntry = log?.[0]?.xp;
+              const effectiveAvailableBefore = Number.isFinite(Number(newestEntry?.available))
+                ? Number(newestEntry.available)
+                : Number(this.actor.system.experience.available) || 0;
+              const effectiveTotal = Number.isFinite(Number(newestEntry?.total))
+                ? Number(newestEntry.total)
+                : Number(this.actor.system.experience.total) || 0;
+
+              if (refundAmount > 0) {
+                const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
+                await this.actor.update({ system: { experience: { available: newAvailable } } });
+                if (match) match.refunded = true;
+                log.unshift({
+                  action: "refunded",
+                  id: undefined,
+                  xp: {
+                    cost: refundAmount,
+                    available: effectiveAvailableBefore + refundAmount,
+                    total: effectiveTotal,
+                  },
+                  date: new Date().toISOString().slice(0, 10),
+                  description: match ? match.description : `specialization ${item.name}`,
+                });
+                await this.actor.setFlag("starwarsffg", "xpLog", log);
+              }
+              await this.actor.deleteEmbeddedDocuments("Item", [itemId]);
+              this.render(false);
+            },
+          },
+          {
+            action: "cancel",
+            icon: "fas fa-cancel",
+            label: game.i18n.localize("SWFFG.Actors.Sheets.Refund.Cancel"),
+          },
+        ],
+        rejectClose: false,
+      });
+  }
+
+  /**
    * Remove skill from skill list
    * @param  {object} a - Event object
    */
@@ -4322,7 +4440,11 @@ export class ActorSheetFFG extends FFGActorSheet {
                   },
                 },
               });
-              await xpLogSpend(game.actors.get(this.object.id), `new ${action} ${purchasedItem.name}`, cost, availableXP - cost, totalXP, undefined);
+              // Carry the same refund data drag-and-drop purchases do, so the XP log offers a refund
+              // for a base power, ability or specialization bought here too.
+              const refundKind = ActorSheetFFG.BASE_REFUND_KINDS[purchasedItem.type];
+              await xpLogSpend(game.actors.get(this.object.id), `new ${action} ${purchasedItem.name}`, cost, availableXP - cost, totalXP, undefined,
+                refundKind ? { kind: refundKind, name: purchasedItem.name } : undefined);
             },
           },
           {

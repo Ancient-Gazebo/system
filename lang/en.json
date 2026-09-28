@@ -918,6 +918,7 @@
   "SWFFG.Crew.Roles.Weapon.Description": "Choose the gunner to use",
   "SWFFG.Crew.Roles.None": "(none)",
   "SWFFG.Crew.Roles.Initiative.Name": "Initiative",
+  "SWFFG.Crew.Initiative.NoPilot": "{vehicle} has no crew member to roll initiative. Give someone the Initiative role, or a piloting role that uses the vehicle's handling.",
   "SWFFG.Crew.Actor.Removed": "Actor representing this crew member was deleted, removing from role",
   "SWFFG.Crew.Role.Removed": "Role has been removed",
   "SWFFG.Crew.Role.Invalid": "You must define a skill for this role before it can be used",

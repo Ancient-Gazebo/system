@@ -966,7 +966,10 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           callbacks: { drop: this._onDropTalentToSpecialization.bind(this) },
         });
 
-        dragDrop.bind($(`form.editable.item-sheet-${this.object.type}`)[0]);
+        // bind to this sheet's own form: a global selector always found the FIRST open sheet of
+        // this type, so a drop on a second one landed on the first. Locked sheets stay unbound, as
+        // the selector's `.editable` kept them (_canDragDrop below allows every drop).
+        if (this.isEditable) dragDrop.bind(html[0]);
       } catch (err) {
         CONFIG.logger.debug(err);
       }
@@ -979,7 +982,10 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           callbacks: { drop: this._onDragItemCareer.bind(this) },
         });
 
-        dragDrop.bind($(`form.editable.item-sheet-${this.object.type}`)[0]);
+        // bind to this sheet's own form: a global selector always found the FIRST open sheet of
+        // this type, so a drop on a second one landed on the first. Locked sheets stay unbound, as
+        // the selector's `.editable` kept them (_canDragDrop below allows every drop).
+        if (this.isEditable) dragDrop.bind(html[0]);
       } catch (err) {
         CONFIG.logger.debug(err);
       }
@@ -1036,7 +1042,10 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           callbacks: { drop: this.onDropItemToSpecies.bind(this) },
         });
 
-        dragDrop.bind($(`form.editable.item-sheet-${this.object.type}`)[0]);
+        // bind to this sheet's own form: a global selector always found the FIRST open sheet of
+        // this type, so a drop on a second one landed on the first. Locked sheets stay unbound, as
+        // the selector's `.editable` kept them (_canDragDrop below allows every drop).
+        if (this.isEditable) dragDrop.bind(html[0]);
 
         // handle click events for talents on species
         html.find(".item-delete").on("click", async (event) => {

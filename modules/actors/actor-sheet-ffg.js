@@ -4091,7 +4091,13 @@ export class ActorSheetFFG extends FFGActorSheet {
       content = await foundry.applications.handlebars.renderTemplate(template, { inCareer, outCareer, universal, baseCost, increasedCost: baseCost, itemType: itemType, itemCategory: "specialization", groups: groups });
     } else if (action === "signatureability") {
       const sources = game.settings.get("starwarsffg", "signatureAbilityCompendiums").split(",");
-      const rawSelectableItems =  this.object.items.find(i => i.type === "career").system.signatureabilities;
+      // checked before the career is read: with no career this threw instead of warning
+      const career = this.object.items.find(i => i.type === "career");
+      if (!career) {
+        ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CareerNotSet"));
+        return;
+      }
+      const rawSelectableItems = career.system.signatureabilities;
       const sigAbilityNames = Object.values(rawSelectableItems).map(i => i.name);
       let selectableItems = [];
       // pull items out of the world
@@ -4132,11 +4138,6 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
       // filter purchasable signature abilities to those where the required specialization upgrades have been purchased
       // filter specializations to those within the career
-      const career = this.object.items.find(i => i.type === "career");
-      if (!career) {
-        ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CareerNotSet"));
-        return;
-      }
       const permittedSpecializations = Object.values(career.system.specializations).map(i => i.name);
       const matchingSpecializations = this.object.items.filter(i => i.type === "specialization" && permittedSpecializations.includes(i.name));
       if (!matchingSpecializations.length) {

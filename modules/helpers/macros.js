@@ -7,6 +7,24 @@ const createMacroItem = async (macro) => {
   return false;
 };
 
+/**
+ * Whether the system makes the macro for a hotbar drop, rather than core. The hotbarDrop hook needs
+ * this answer synchronously: an async handler returns a Promise, never `false`, so core went on to
+ * handle every drop as well, including the ones the system had already made a macro for.
+ */
+export function handlesHotbarDrop(data) {
+  // skill rows (CreateMacro) and the weapon/armour/gear rows' own drag format (Transfer)
+  if (["CreateMacro", "Transfer"].includes(data?.type)) return true;
+  if (data?.type !== "Item") return false;
+  try {
+    const item = fromUuidSync(data.uuid);
+    // an owned weapon rolls; anything else is core's to display
+    return item?.type === "weapon" && !!item?.isEmbedded;
+  } catch (err) {
+    return false;
+  }
+}
+
 // Simple function for handling the creation of rollable weapon macros on hotbarDrop event.
 export async function createFFGMacro(bar, data, slot) {
   let macro;
@@ -21,11 +39,11 @@ export async function createFFGMacro(bar, data, slot) {
         command = `await foundry.applications.ui.Hotbar.toggleDocumentSheet("${data.uuid}");`;
       } else {
         command = `
-      game.ffg.DiceHelpers.rollItem(\"${item._id}\", \"${entity.actorId}\");
+      game.ffg.DiceHelpers.rollItem(\"${entity.id}\", \"${entity.parent.id}\");
       `;
       }
       macro = await createMacroItem({
-        name: entity.name,
+        name: entity.isEmbedded ? `Attack with ${entity.name}` : entity.name,
         type: "script",
         img: entity.img,
         command: command,

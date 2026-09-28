@@ -3577,6 +3577,7 @@ img {
   transition: opacity 0.5s;
   z-index: -500;
   padding: 0 10px;
+  pointer-events: none;
 }
 
 .starwarsffg .hover .tooltip2 {
@@ -4196,6 +4197,10 @@ img {
 
 .starwarsffg .item-sheet-signatureability .talent-background .talent-header div input[type="text"] {
   background-color: #fcadad;
+}
+
+.starwarsffg .item-sheet-signatureability .sheet-header .talent-header {
+  padding-right: 3.5rem;
 }
 
 .starwarsffg .item-sheet-signatureability .header-fields {

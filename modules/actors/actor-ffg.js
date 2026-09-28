@@ -145,7 +145,7 @@ export class ActorFFG extends Actor {
         // as the Mystic Alignment effect are not baked into the new stored threshold and compounded.
         const originalWounds = this._source.system.stats?.wounds.max;
         const originalWoundsWithoutBrawn = originalWounds - originalBrawn;
-        const updatedWounds = originalWoundsWithoutBrawn + parseInt(updatedBrawn);
+        const updatedWounds = originalWoundsWithoutBrawn + (parseInt(updatedBrawn, 10) || 0);
         if (!Object.keys(changes.system).includes("stats")) {
           changes.system.stats = {};
         }
@@ -166,7 +166,7 @@ export class ActorFFG extends Actor {
         // and compounded.
         const originalSoak = this._source.system.stats?.soak.value;
         const originalSoakWithoutBrawn = originalSoak - originalBrawn;
-        const updatedSoak = originalSoakWithoutBrawn + parseInt(updatedBrawn);
+        const updatedSoak = originalSoakWithoutBrawn + (parseInt(updatedBrawn, 10) || 0);
         CONFIG.logger.debug(`The character sheet showed ${originalSoak} soak, while that value without Brawn was ${originalSoakWithoutBrawn}. Updating to be ${updatedSoak}`);
         changes.system.stats = foundry.utils.mergeObject(
           changes.system.stats,
@@ -181,7 +181,11 @@ export class ActorFFG extends Actor {
         // stored value would only leave dead data behind.
       }
       const originalWillpower = this.system.characteristics.Willpower.value;
-      const updatedWillpower = changes.system?.characteristics?.Willpower?.value;
+      // Parsed, as Brawn is above: a string value (an API or macro write) was added onto the
+      // threshold as text, so Willpower "3" on a stored 10 wrote a strain threshold of "103". A
+      // cleared box counts as 0, which is what the arithmetic below always treated null as.
+      const rawWillpower = changes.system?.characteristics?.Willpower?.value;
+      const updatedWillpower = rawWillpower === undefined ? undefined : (parseInt(rawWillpower, 10) || 0);
       if (originalWillpower !== undefined && updatedWillpower !== undefined && originalWillpower !== updatedWillpower) {
         CONFIG.logger.debug(`Detected modified Willpower (${originalWillpower} -> ${updatedWillpower}, updating derived values`);
         if (!Object.keys(changes.system).includes("stats")) {

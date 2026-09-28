@@ -122,8 +122,14 @@ export class ItemFFG extends ItemBaseFFG {
     // an already-correct AE is left untouched. Mirrors the species branch of applyActiveEffectOnUpdate.
     if (this.type === "species" && this.isEmbedded && this.actor) {
       const inherent = this.effects.find(e => e.name === "(inherent)");
-      if (inherent) {
-        const attrs = this.system.attributes ?? {};
+      const attrs = this.system.attributes ?? {};
+      const keys = (inherent?.changes ?? []).map((c) => c.key);
+      if (inherent && new Set(keys).size !== keys.length && Object.keys(attrs).some((k) => !k.startsWith("attr"))) {
+        // A source built by the old create or import path carries the same threshold key more than
+        // once, and correcting each copy below would apply the threshold twice. Rebuild the whole
+        // list from the species' own stats instead.
+        await inherent.update({ changes: ModifierHelpers.buildSpeciesInherentChanges(attrs) });
+      } else if (inherent) {
         const speciesBrawn = parseInt(attrs.Brawn?.value, 10) || 0;
         const speciesWillpower = parseInt(attrs.Willpower?.value, 10) || 0;
         const rawWounds = parseInt(attrs.Wounds?.value, 10);
@@ -166,46 +172,11 @@ export class ItemFFG extends ItemBaseFFG {
           changes: [],
         };
         if (this.type === "species") {
-          for (const attribute of Object.keys(this.system.attributes)) {
-            if (attribute.startsWith("attr")) {
-              // migrated data may contain attributes that the user has added, and we don't want this in the inherent effect
-              continue;
-            }
-            const explodedMods = ModifierHelpers.explodeMod(
-              this.system.attributes[attribute].modtype,
-              attribute,
-              this.type
-            );
-            for (const cur_mod of explodedMods) {
-              const path = ModifierHelpers.getModKeyPath(
-                cur_mod['modType'],
-                cur_mod['mod']
-              );
-              effects.changes.push({
-                key: path,
-                mode: AE_MODES.ADD,
-                value: this.system.attributes[attribute].value,
-              });
-            }
-          }
-          // The loop above stored each attribute's literal value, but the Wound/Strain thresholds are
-          // derived: WT = species Wounds + species Brawn, ST = species Strain + species
-          // Willpower. The import and species-edit paths bake these in,
-          // but a species dragged directly onto an actor only hits this create path - leaving the
-          // thresholds short by the species' own characteristic (the off-by-one). Fold them in here so a
-          // dragged-on species is correct immediately, without having to open and re-save the species.
-          const speciesBrawn = parseInt(effects.changes.find(c => c.key === "system.characteristics.Brawn.value")?.value, 10) || 0;
-          const speciesWillpower = parseInt(effects.changes.find(c => c.key === "system.characteristics.Willpower.value")?.value, 10) || 0;
-          for (const change of effects.changes) {
-            if (change.key === "system.stats.wounds.max") {
-              change.value = (parseInt(change.value, 10) || 0) + speciesBrawn;
-            } else if (change.key === "system.stats.strain.max") {
-              change.value = (parseInt(change.value, 10) || 0) + speciesWillpower;
-            } else if (change.key === "system.stats.encumbrance.max") {
-              // Species Brawn only - the flat +5 encumbrance baseline is derived on the actor.
-              change.value = speciesBrawn;
-            }
-          }
+          // One change per key with the thresholds already derived (WT = Wounds + Brawn, ST = Strain +
+          // Willpower). This used to push one change per source and then add the characteristic onto
+          // each, so a species created with its stats filled in carried wounds 4 AND 12 for Wounds 10 /
+          // Brawn 2 - and a character it was dropped on got 24.
+          effects.changes = ModifierHelpers.buildSpeciesInherentChanges(this.system.attributes);
         } else if (["gear", "weapon"].includes(this.type)) {
           const explodedMods = ModifierHelpers.explodeMod(
             "Stat",
@@ -529,7 +500,6 @@ export class ItemFFG extends ItemBaseFFG {
             const activeModifiers = attachment.system?.itemmodifier?.filter((i) => i?.system?.active) || [];
             apply(data.damage, attachment.name, ModifierHelpers.getCalculatedValueFromCurrentAndArray(attachment, activeModifiers, "damage", "Weapon Stat"));
             apply(data.crit, attachment.name, ModifierHelpers.getCalculatedValueFromCurrentAndArray(attachment, activeModifiers, "critical", "Weapon Stat"));
-            if (data.crit.adjusted < 1) data.crit.adjusted = 1;
             data.encumbrance.adjusted += ModifierHelpers.getCalculatedValueFromCurrentAndArray(attachment, activeModifiers, "encumbrance", "Weapon Stat");
             data.price.adjusted += ModifierHelpers.getCalculatedValueFromCurrentAndArray(attachment, activeModifiers, "price", "Weapon Stat");
             data.rarity.adjusted += ModifierHelpers.getCalculatedValueFromCurrentAndArray(attachment, activeModifiers, "rarity", "Weapon Stat");
@@ -559,6 +529,11 @@ export class ItemFFG extends ItemBaseFFG {
             }
           });
         }
+
+        // A Critical rating can never be reduced below 1, but a weapon with no rating (0, shown as "—")
+        // must not be handed one. This used to run inside the attachment loop, so any attachment at all
+        // turned a crit-0 weapon into crit 1, and a mid-loop clamp made stacked attachments order-dependent.
+        data.crit.adjusted = Math.max(data.crit.adjusted, data.crit.value > 0 ? 1 : 0);
 
         // Walk the band once, and only when something actually moves it: an unrecognised base range
         // used to be snapped to the first band by any modifier or attachment, even one with no range.
@@ -979,17 +954,22 @@ export class ItemFFG extends ItemBaseFFG {
           `);
         }
 
-        props.push(`<div>${game.i18n.localize("SWFFG.ItemDescriptors")}: <ul>${qualities.join("")}<ul></div>`);
+        props.push(`<div>${game.i18n.localize("SWFFG.ItemDescriptors")}: <ul>${qualities.join("")}</ul></div>`);
       }
 
+      // Weapons, armour and ship weapons derive `adjusted` in prepareData, so an attachment that takes
+      // a stat down to 0 is a real 0 - it used to be read as "not set" and the card showed the base
+      // value instead. Other types keep the old fallback: their `adjusted` is just whatever was stored.
+      const derivesAdjusted = ["weapon", "armour", "shipweapon"].includes(this.type);
+      const shown = (stat) => ((derivesAdjusted && Number.isFinite(stat?.adjusted)) || stat?.adjusted) ? stat.adjusted : stat?.value;
       if (data.hasOwnProperty("encumbrance")) {
-        props.push(`${game.i18n.localize("SWFFG.Encumbrance")}: ${data.encumbrance?.adjusted ? data.encumbrance.adjusted : data.encumbrance.value}`);
+        props.push(`${game.i18n.localize("SWFFG.Encumbrance")}: ${shown(data.encumbrance)}`);
       }
       if (data.hasOwnProperty("price")) {
-        props.push(`${game.i18n.localize("SWFFG.ItemsPrice")}: ${data.price?.adjusted ? data.price.adjusted : data.price.value}`);
+        props.push(`${game.i18n.localize("SWFFG.ItemsPrice")}: ${shown(data.price)}`);
       }
       if (data.hasOwnProperty("rarity")) {
-        props.push(`${game.i18n.localize("SWFFG.ItemsRarity")}: ${data.rarity?.adjusted ? data.rarity.adjusted : data.rarity.value} ${data.rarity.isrestricted ? "<span class='restricted'>" + game.i18n.localize("SWFFG.IsRestricted") + "</span>" : ""}`);
+        props.push(`${game.i18n.localize("SWFFG.ItemsRarity")}: ${shown(data.rarity)} ${data.rarity.isrestricted ? "<span class='restricted'>" + game.i18n.localize("SWFFG.IsRestricted") + "</span>" : ""}`);
       }
       if (data.hasOwnProperty("talents")) {
         for (const talentKey of Object.keys(data.talents)) {

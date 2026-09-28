@@ -24,9 +24,12 @@ export default class ActorHelpers {
     if (Object.keys(formData).length > 1 && formData.data) {
       if (this.object.type === "minion") {
         Object.keys(formData?.data?.skills).forEach((skill) => {
-          if (!formData.data.skills[skill].groupskill && this.object.system.skills[skill].groupskill) {
-            // this is a minion group with a group skill being removed - reduce the rank by one (since we added 1 when it was checked)
-            formData.data.skills[skill].rank -= this.object.system.quantity.value;
+          if (!formData.data.skills[skill].groupskill && this.object.system.skills[skill]?.groupskill) {
+            // A group skill's rank is derived from the group size (_prepareMinionData), and the rank
+            // box shows that derived value. Unticking it used to subtract the group size from the
+            // derived rank, which stored -1 (or NaN when the rank box was disabled and not submitted).
+            // Minions hold no individual ranks, so it goes back to 0.
+            formData.data.skills[skill].rank = 0;
           }
         });
       }
@@ -55,7 +58,15 @@ export default class ActorHelpers {
       }
       if (this.object.type === "minion") {
         // include the updated quantity of minions in the group in the update object so automation can access it
-        formData.data.quantity.value = Math.min(formData.data.quantity.max, formData.data.quantity.max - Math.floor(formData.data.stats.wounds.value - 1) / formData.data.unit_wounds.value);
+        // Same count ActorFFG#_prepareMinionData derives. The floor used to close before the division,
+        // so a group part-way through a minion stored a fractional count (3.6 alive).
+        // Fields missing from this submit fall back to the actor's current values.
+        const q = formData.data.quantity;
+        const unitWounds = Number(formData.data.unit_wounds?.value ?? this.object.system?.unit_wounds?.value) || 0;
+        const wounds = Number(formData.data.stats?.wounds?.value ?? this.object.system?.stats?.wounds?.value) || 0;
+        if (q && Number.isFinite(Number(q.max)) && unitWounds > 0) {
+          q.value = Math.max(Math.min(q.max, q.max - Math.floor((wounds - 1) / unitWounds)), 0);
+        }
       }
     }
     // Handle the free-form attributes list

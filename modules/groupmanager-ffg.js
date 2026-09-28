@@ -79,12 +79,16 @@ export class GroupManager extends FFGFormApplication {
     const characters = [];
     let obligationRangeStart = 0;
     let dutyRangeStart = 0;
+    // Rebuilt on every render: this window re-renders on every actor update, and the tables used to
+    // be appended to each time.
+    this.obligations = [];
+    this.duties = [];
     if (pcListMode === "active") {
       players.forEach((player) => {
         if (player.character) {
           try {
-            obligationRangeStart = this._addCharacterObligationDuty(player.character, obligationRangeStart, player.character.system.obligationlist, "obligations");
-            dutyRangeStart = this._addCharacterObligationDuty(player.character, dutyRangeStart, player.character.system.dutylist, "duties");
+            obligationRangeStart = this._addCharacterObligationDuty(player.character, obligationRangeStart, this._obligationEntries(player.character, "obligation"), "obligations");
+            dutyRangeStart = this._addCharacterObligationDuty(player.character, dutyRangeStart, this._obligationEntries(player.character, "duty"), "duties");
             //obligationRangeStart = this._addCharacterObligations(player.character, obligationRangeStart);
             //dutyRangeStart = this._addCharacterDuties(player.character, dutyRangeStart);
             characters.push(player.character);
@@ -109,8 +113,8 @@ export class GroupManager extends FFGFormApplication {
 })
       .forEach((c) => {
         try {
-          obligationRangeStart = this._addCharacterObligationDuty(c, obligationRangeStart, c.system.obligationlist, "obligations");
-          dutyRangeStart = this._addCharacterObligationDuty(c, dutyRangeStart, c.system.dutylist, "duties");
+          obligationRangeStart = this._addCharacterObligationDuty(c, obligationRangeStart, this._obligationEntries(c, "obligation"), "obligations");
+          dutyRangeStart = this._addCharacterObligationDuty(c, dutyRangeStart, this._obligationEntries(c, "duty"), "duties");
           characters.push(c);
           // obligationRangeStart = this._addCharacterObligations(c, obligationRangeStart);
           // dutyRangeStart = this._addCharacterDuties(c, dutyRangeStart);
@@ -247,6 +251,22 @@ export class GroupManager extends FFGFormApplication {
     game.settings.set("starwarsffg", "dPoolLight", formDPool.light);
     game.settings.set("starwarsffg", "dPoolDark", formDPool.dark);
     return formData;
+  }
+
+  /**
+   * A character's Obligation or Duty entries, as the table rows need them. These are "obligation"
+   * items (system.type obligation / duty / morality) - the same ones the character sheet lists. The
+   * table used to read `system.obligationlist` / `system.dutylist`, which the data model no longer
+   * has, so both tables were always empty and every roll reported nothing triggered.
+   * @param {Actor} character
+   * @param {"obligation"|"duty"} kind
+   * @returns {{type: string, magnitude: number}[]}
+   */
+  _obligationEntries(character, kind) {
+    return character.items
+      .filter((i) => i.type === "obligation" && i.system?.type === kind)
+      .map((i) => ({ type: i.name || i.system?.subtype, magnitude: parseInt(i.system?.magnitude, 10) || 0 }))
+      .filter((entry) => entry.magnitude > 0);
   }
 
   _addCharacterObligationDuty(character, rangeStart, list, type) {

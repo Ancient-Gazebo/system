@@ -1105,7 +1105,7 @@ export default class SWAImporter extends HandlebarsApplicationMixin(ApplicationV
                 if (!entry) {
                   CONFIG.logger.debug(`Importing Adversary - Actor`);
                   compendiumItem = new CONFIG.Actor.documentClass(adversary, { temporary: true });
-                  this._importLogger(`New Adversary ${name} : ${JSON.stringify(compendiumItem)}`);
+                  this._importLogger(`New Adversary ${adversary.name} : ${JSON.stringify(compendiumItem)}`);
                   const created = await pack.importDocument(compendiumItem);
                   // trigger active effect creation
                   for (const item of created.items) {
@@ -1121,7 +1121,7 @@ export default class SWAImporter extends HandlebarsApplicationMixin(ApplicationV
                   //let updateData = ImportHelpers.buildUpdateData(item);
                   let updateData = adversary;
                   updateData["_id"] = entry._id;
-                  this._importLogger(`Updating talent ${name} : ${JSON.stringify(updateData)}`);
+                  this._importLogger(`Updating adversary ${adversary.name} : ${JSON.stringify(updateData)}`);
                   let to_update = await pack.getDocument(updateData._id)
                   await to_update.update(updateData);
                   for (const item of to_update.items) {

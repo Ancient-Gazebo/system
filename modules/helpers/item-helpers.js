@@ -312,7 +312,8 @@ export default class ItemHelpers {
     const toCreate = [];
     const collect = (attributes, active, img) => {
       for (const [key, attr] of Object.entries(attributes ?? {})) {
-        if (!attr || typeof attr !== "object" || existing.has(key)) continue;
+        // a legacy row with no `mod` has nothing to apply, and explodeMod throws on it
+        if (!attr || typeof attr !== "object" || typeof attr.mod !== "string" || existing.has(key)) continue;
         const changes = (ModifierHelpers.explodeMod(attr.modtype, attr.mod, host.type) ?? [])
           .map((m) => ({ key: ModifierHelpers.getModKeyPath(m.modType, m.mod), mode: AE_MODES.ADD, value: attr.value }))
           .filter((c) => c.key && c.key !== "system.stats.encumbrance.value");
@@ -468,8 +469,10 @@ export default class ItemHelpers {
       CONFIG.logger.debug("armor and weapon, checking modifiers to sync value to rank");
       // sync AEs to the rank value - that is, if we have a mod which adds 1 to max wounds with 4 ranks, the AE should have a value of 4, not 1
       const existingEffects = item.getEmbeddedCollection("ActiveEffect");
-      for (const modifier of item.system.itemmodifier) {
-        for (const attr of Object.keys(modifier.system.attributes)) {
+      // Guarded: qualities stripped by the pre-2.1.40 modifications editor can have no `attributes`
+      // at all, and one of those used to throw here - after the item save had already gone out.
+      for (const modifier of item.system.itemmodifier ?? []) {
+        for (const attr of Object.keys(modifier?.system?.attributes ?? {})) {
           const matchingEffect = existingEffects.find(effect => effect.name === attr);
           if (matchingEffect) {
             // The mod should be applied once per rank - the modifier's OWN rank. The derived

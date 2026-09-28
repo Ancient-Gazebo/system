@@ -1497,7 +1497,9 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       CONFIG.logger.warn("Refused to buy for item with no owner ID");
       throw new Error("Refused to buy for item with no owner ID");
     }
-    const owner = game.actors.get(ownerId);
+    // The item's own actor first: an unlinked token's actor is not in game.actors, and the id read
+    // out of its uuid ("Scene.<id>.Token...") is the scene's, so purchases on it were refused.
+    const owner = this.object.actor ?? game.actors.get(ownerId);
     if (!owner) {
       CONFIG.logger.warn("Refused to buy for item with no found owner actor");
       throw new Error("Refused to buy for item with no found owner actor");
@@ -1556,6 +1558,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
    * @returns {Actor|null}
    */
   _resolveTreeOwner() {
+    if (this.object.actor) return this.object.actor;
     const ownerFlag = this.object.flags?.starwarsffg?.ffgUuid;
     const ownerId = ownerFlag?.split(".")?.[1];
     if (!ownerId) return null;

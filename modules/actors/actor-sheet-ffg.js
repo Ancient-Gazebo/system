@@ -52,8 +52,20 @@ export class ActorSheetFFG extends FFGActorSheet {
     this._filters = {
       skills: new Set(),
     };
-    this.object.setFlag("starwarsffg", "config.enableEditMode", false);
-    this.object.setFlag("starwarsffg", "config.editModeActor", "");
+    // Clear an edit mode left behind by an earlier session. The Active Effect suspension it relies on
+    // lives only in memory, so a flag that outlived a reload would show the edit inputs over
+    // effect-applied values. This used to write both flags unconditionally from every client that
+    // built the sheet: two document writes per actor per session, a permission error for a player
+    // who can only observe the actor, and it switched off another user's edit session in progress.
+    const config = this.object.flags?.starwarsffg?.config;
+    const editor = config?.editModeActor;
+    const stale = config?.enableEditMode && (!editor || editor === game.user.id || !game.users.get(editor)?.active);
+    if (stale && this.object.isOwner && !this.object.pack) {
+      this.object.update({
+        "flags.starwarsffg.config.enableEditMode": false,
+        "flags.starwarsffg.config.editModeActor": "",
+      });
+    }
   }
 
   pools = new Map();
@@ -720,10 +732,13 @@ export class ActorSheetFFG extends FFGActorSheet {
     html.on("contextmenu.ffgForcePresence", ".force-presence-dark", this._onForcePresenceAdjust.bind(this, "dark", -1));
     html.on("contextmenu.ffgForcePresence", ".force-presence-light", this._onForcePresenceAdjust.bind(this, "light", -1));
 
-    // Setup dice pool image and hide filtered skills
-    html.find(".skill").each(async (_, elem) => {
-      await DiceHelpers.addSkillDicePool(await this.getData({}), elem);
-      const filters = this._filters.skills;
+    // Dice pool preview on every skill row. addSkillDicePool reads only the prepared skills and
+    // characteristics, so hand it the actor's own prepared system. This used to call the sheet's full
+    // getData() once PER ROW - some 35 complete context builds (enriched biography, talent and gear
+    // organisation, crew rolls, ...) on every render of every actor sheet.
+    const skillPoolData = { data: this.actor.system };
+    html.find(".skill").each((_, elem) => {
+      DiceHelpers.addSkillDicePool(skillPoolData, elem);
     });
 
     // Collapsible identity header (species/career/spec/force pills). Flip the
@@ -1359,8 +1374,8 @@ export class ActorSheetFFG extends FFGActorSheet {
           }
         }
         if (ev?.originalEvent?.target && $(ev?.originalEvent?.target).hasClass("item-pill")) {
-          event.preventDefault();
-          event.stopPropagation();
+          ev.preventDefault();
+          ev.stopPropagation();
           const li = $(ev.originalEvent.target);
           const itemType = li.attr("data-item-embed-type");
           let itemData = {};
@@ -1385,9 +1400,9 @@ export class ActorSheetFFG extends FFGActorSheet {
             tempItem.sheet.render(true);
           } else {
             CONFIG.logger.debug(`Unknown item type: ${itemType}, or lacking new embed system`);
-            let itemId = li.dataset.itemId;
-            let modifierType = li.dataset.modifierType;
-            let modifierId = li.dataset.modifierId;
+            let itemId = li[0].dataset.itemId;
+            let modifierType = li[0].dataset.modifierType;
+            let modifierId = li[0].dataset.modifierId;
 
             await EmbeddedItemHelpers.displayOwnedItemItemModifiersAsJournal(itemId, modifierType, modifierId, this.actor.id, this.actor.compendium);
           }
@@ -4601,14 +4616,11 @@ export class ActorSheetFFG extends FFGActorSheet {
   async _xpExport(event) {
     event.preventDefault();
     event.stopPropagation();
-    const existingLog = this.actor.getFlag("starwarsffg", "xpLog");
-    const downloadLog = [];
-    for (const entry of existingLog) {
-      if (Object.keys(entry).includes("id")) {
-        delete entry.id;
-      }
-      downloadLog.push(entry);
-    }
+    const existingLog = this.actor.getFlag("starwarsffg", "xpLog") ?? [];
+    // Strip the ids from COPIES. getFlag hands back the live flag data, and deleting `id` there
+    // removed the link from each skill/characteristic purchase to its Active Effect for the rest of
+    // the session - no refund button - and for good the next time anything wrote the log back.
+    const downloadLog = existingLog.map(({ id, ...entry }) => entry);
     const blob = new Blob([JSON.stringify(downloadLog)], {type: "text/plain"});
     const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -4641,10 +4653,21 @@ export class ActorSheetFFG extends FFGActorSheet {
             callback: async (event, button, dialog) => {
             const fileElement = $("#xpLogFile");
             const file = fileElement[0].files?.[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.readAsText(file, 'UTF-8');
             reader.onload = async ({ target }) => {
-              const parsedLog = JSON.parse(target.result);
+              let parsedLog;
+              try {
+                parsedLog = JSON.parse(target.result);
+              } catch (err) {
+                ui.notifications.error("Failed to load file contents");
+                return;
+              }
+              if (!Array.isArray(parsedLog)) {
+                ui.notifications.error("Failed to load file contents");
+                return;
+              }
               CONFIG.logger.debug(`Loading processed XP log: ${JSON.stringify(parsedLog)}`);
               await this.actor.setFlag("starwarsffg", "xpLog", parsedLog);
             }

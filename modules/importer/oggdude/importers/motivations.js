@@ -6,7 +6,7 @@ export default class Motivations {
       displayName: 'Motivations',
       className: "Motivations",
       itemName: "motivation",
-      localizationName: "SWFFG.ItemsMotivations",
+      localizationName: "SWFFG.Motivations",
       fileNames: ["SpecificMotivations.xml"],
       filesAreDir: false,
       phase: 2,

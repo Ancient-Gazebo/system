@@ -32,7 +32,7 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
-`Unreleased`
+`3.0.0`
 * Enhancements:
   * A modified weapon or armour value in the equipment lists now shows where it came from. Hovering damage, critical, range, defence, soak or hardpoints lists each contribution - the item's own modifiers, its qualities, its attachments, the characteristic added to damage and any Skill Damage - on character, NPC, adversary and vehicle sheets.
   * Vehicle weapons can be dragged from one vehicle's sheet onto another's to copy them there, the same way weapons, armour and gear are copied between characters (the original stays put). Dropping one on a character is refused.
@@ -85,6 +85,23 @@
   * Installing an attachment checks the hardpoints the item has LEFT, not its total, so an item can no longer take on more attachments than it has room for.
   * Rolling initiative for a vehicle works with a world's own crew roles. Only a role named exactly "Pilot" was looked for, so with roles such as "Driver / Pilot" or "Space Pilot" the vehicle's own data (which has no skills) was used and the roll threw "Cannot read properties of undefined (reading 'Vigilance')". The roll now uses whoever holds the Initiative crew role from the Crew settings, then a "Pilot", then any crew role that uses the vehicle's handling - the one whose skill suits the vehicle (space or planetary) when there are several. A vehicle with none of these says so instead of failing.
   * Base Force powers, signature abilities and specializations bought with the sheet's purchase buttons can be refunded from the XP log, and so can specializations bought by drag-and-drop. Only drag-and-drop Force powers and signature abilities used to carry the refund data, so the rest showed no refund button; purchases already in the log get the button too. A specialization is refunded like the others: its XP comes back and it is removed, but not while any of its talents is still learned.
+  * A weapon with no Critical rating (0, shown as "—") no longer gains a rating of 1 as soon as any attachment is installed. The "never below 1" rule was applied once per attachment; it now runs once, after every quality and attachment, and only for weapons that have a rating. This also corrects the rating on the weapon's chat card and the Apply Crit eligibility check.
+  * Species created with their characteristics already filled in - every species the OggDude importer makes, and any made by a macro or module - carried their wound and strain thresholds twice, with the wrong values, and a character they were dropped on got roughly double (a wound threshold of 22 instead of 11). They are now built with one change per stat, and a species still carrying the duplicates is rebuilt from its own stats when it lands on a character. Species edited through their sheet were not affected.
+  * The species repair (`game.ffg.migrateSpeciesInherentEffects()`) works again. It failed on every species with a ReferenceError and repaired nothing, and on V14 it would have rewritten every species on every run even when nothing had changed.
+  * Actor sheets render faster: every render built the sheet's entire context once per skill row - about 35 times - just to draw the skill dice previews.
+  * A modifier added to a weapon, armour or gear a character is carrying but has not equipped no longer applies until the item is equipped.
+  * Exporting the XP log no longer strips the refund link from skill and characteristic purchases. It deleted each entry's id from the live log, so their refund buttons disappeared - for good once the log was next saved. Importing a file that is not an XP log now reports an error.
+  * Picking a sound in the roll dialog for a weapon that had been rolled before no longer stops the roll (saving the sound threw); the sound is remembered on the weapon itself rather than on the actor.
+  * The Group Manager's Obligation and Duty tables list the characters' Obligation and Duty items again. They read an old field the data model no longer has, so both tables were empty and every roll reported nothing triggered.
+  * Cancelling or closing the initiative dialog no longer leaves whatever asked for the roll waiting forever.
+  * Unticking a minion group skill sets its rank to 0 instead of -1 (or a blank), and the stored count of living minions is a whole number.
+  * Setting a character's Willpower from a macro or module with a text value ("3") no longer turns the strain threshold into text (a threshold of 10 became "103"), and clearing the Brawn box no longer writes an invalid wound threshold.
+  * Opening an actor sheet no longer writes the edit-mode flags every time - two database writes per actor per session, and an error for a player who can only view the actor - and no longer switches off another user's edit mode. An edit mode left behind by a reload is still cleared.
+  * Chat messages are re-rendered for dice symbols only when they contain some. This speeds up loading the chat log, and the system no longer throws away listeners other modules add inside a message.
+  * A weapon chat card shows an encumbrance, price or rarity that attachments bring down to 0 as 0 rather than the base value.
+  * Buying or refunding talents and Force power upgrades works on an unlinked token's actor (its owner was looked up by the scene's id).
+  * An item carrying a modifier row with no target (left by the pre-2.1.40 modifications editor) no longer aborts its drop onto an actor, and a quality with no modifiers no longer throws after a weapon or armour save.
+  * The OggDude importer labels the Motivations entry properly instead of showing a raw localization key, dice pool tooltips no longer throw on a modifier source they do not recognise, and a player loading a world the GM has not opened since the last update no longer hits an error at the end of loading.
 * Removed:
   * The character creation wizard (the Actors-directory button, its window, templates and player-to-GM socket requests), along with the settings only it used: default obligation, duty, morality and credits, maximum rarity, restricted items, and the background, obligation, species, career, motivation and item compendium lists. The specialization, signature ability, Force power and talent compendium settings stay, since the character sheet's purchase buttons use them.
 

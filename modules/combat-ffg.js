@@ -609,7 +609,10 @@ export class CombatFFG extends Combat {
           },
         ],
         rejectClose: false,
-      });
+        // Cancelling or closing the dialog never resolved this promise, so anything awaiting
+        // rollInitiative (the tracker's roll buttons, modules) waited forever. Resolving again after a
+        // roll has already resolved it is a no-op.
+      }).then(() => resolve(initiative), () => resolve(initiative));
     });
 
     return await promise;

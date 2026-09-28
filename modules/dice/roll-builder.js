@@ -259,6 +259,8 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
     this._activateProfileControls(html);
 
     this._refreshAdversary(html);
+    // one listener per dialog, however many times it renders
+    if (this._adversaryHookId) Hooks.off("targetToken", this._adversaryHookId);
     this._adversaryHookId = Hooks.on("targetToken", (user) => {
       if (user?.id !== game.user.id) return;
       this._refreshAdversary(html);
@@ -304,27 +306,20 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         const sound = html.find(".sound-selection")?.[0]?.value;
         if (sound) {
           this.roll.sound = sound;
-          // Only save sound to real item documents (synthetic skill items have no id)
-          if (this?.roll?.item?.id) {
-            let entity;
-            let entityData;
-            if (!this?.roll?.item?.flags?.starwarsffg?.uuid) {
-              entity = game.actors.get(this.roll.data.actor._id);
-              entityData = {
-                _id: this.roll.item.id,
-              };
-            } else {
-              const parts = this.roll.item.flags.starwarsffg?.uuid.split(".");
-              const [sceneName, sceneId, entityName, entityId, embeddedName, embeddedId] = parts;
-              entity = game.actors.tokens[entityId].items.get(embeddedId);
-              if (parts.length === 6) {
-                entityData = {
-                  _id: entity.id,
-                };
+          // Remember the sound on the item being rolled (synthetic skill items have no id). This used
+          // to rebuild the item from its cached uuid flag with a destructuring that only fitted a
+          // token actor's six-part uuid: an ordinary "Actor.<id>.Item.<id>" threw on it, so picking a
+          // sound for any weapon rolled before (the flag is set by the first roll) aborted the roll
+          // itself. Without the flag it wrote the sound onto the ACTOR instead of the item.
+          if (this?.roll?.item?.id && this.roll.item.uuid) {
+            try {
+              const soundItem = await fromUuid(this.roll.item.uuid);
+              if (soundItem?.isOwner && soundItem.getFlag("starwarsffg", "ffgsound") !== sound) {
+                await soundItem.update({ "flags.starwarsffg.ffgsound": sound });
               }
+            } catch (err) {
+              CONFIG.logger.warn("Could not remember the roll sound on the item", err);
             }
-            foundry.utils.setProperty(entityData, "flags.starwarsffg.ffgsound", sound);
-            entity.update(entityData);
           }
         }
       }

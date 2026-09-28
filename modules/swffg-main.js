@@ -1357,7 +1357,15 @@ Hooks.on("renderCompendiumDirectory", (app, html, data) => {
 Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
   html = html instanceof jQuery ? html : $(html);
   const content = html.find(".message-content");
-  content[0].innerHTML = await PopoutEditor.renderDiceImages(content[0].innerHTML);
+  // Only re-render content that has something to render: a dice/symbol code ([SU], :boost:) or a
+  // roll tag. Core has already enriched the message, so for everything else this was a second
+  // enrichHTML per message (the whole log on load) - and the innerHTML write that followed it threw
+  // away any listener another module had bound inside the message during this same hook.
+  const original = content[0]?.innerHTML ?? "";
+  if (/\[[a-z]{2}|:[a-z]+:/i.test(original)) {
+    const rendered = await PopoutEditor.renderDiceImages(original);
+    if (rendered !== content[0].innerHTML) content[0].innerHTML = rendered;
+  }
 
   // Apply Damage / Apply Crit buttons on weapon-attack cards. `app` is the
   // ChatMessage document; both binders expect (message, jQuery html).
@@ -2040,7 +2048,9 @@ Hooks.once("ready", async () => {
 
   const turnMarkerConfigured = game.settings.get("starwarsffg", "configuredTurnMarker");
   const combatTrackerConfig = game.settings.get("core", "combatTrackerConfig");
-  if (combatTrackerConfig.turnMarker.enabled && !turnMarkerConfigured) {
+  // Both settings are world-scoped: a player loading a world the GM has not opened since this was
+  // added would otherwise throw here, at the very end of the ready hook.
+  if (game.user.isGM && combatTrackerConfig.turnMarker.enabled && !turnMarkerConfigured) {
     await game.settings.set("starwarsffg", "configuredTurnMarker", true);
     combatTrackerConfig.turnMarker.enabled = false;
     await game.settings.set("core", "combatTrackerConfig", combatTrackerConfig);

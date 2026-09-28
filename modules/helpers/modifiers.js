@@ -707,6 +707,45 @@ export default class ModifierHelpers {
   }
 
   /**
+   * The complete (inherent) change list of a species, derived from its stored attributes.
+   *
+   * One change per key: Brawn and Wounds both explode onto `system.stats.wounds.max` (Willpower and
+   * Strain onto strain.max), and the derived thresholds are then set outright from the raw values -
+   * WT = Wounds + Brawn, ST = Strain + Willpower, encumbrance = Brawn (the flat 5 is derived on the
+   * actor). This is the shape the species sheet writes on save. The create path and the OggDude
+   * importer used to keep one change per source AND add the characteristic onto each of them, so a
+   * species created with its stats already filled in (every imported species) applied e.g. wounds
+   * 8 + 11 instead of 11, and dropping it on a character doubled that to 22.
+   *
+   * User modifiers ("attr*" keys) live in their own effects and are skipped.
+   * @param {object} attributes the species' `system.attributes`
+   * @returns {object[]} change data
+   */
+  static buildSpeciesInherentChanges(attributes) {
+    const changes = [];
+    for (const [key, attr] of Object.entries(attributes ?? {})) {
+      if (key.startsWith("attr")) continue;
+      if (!attr || typeof attr !== "object" || !attr.modtype) continue;
+      for (const curMod of ModifierHelpers.explodeMod(attr.modtype, key, "species")) {
+        const changeKey = ModifierHelpers.getModKeyPath(curMod.modType, curMod.mod);
+        if (!changeKey) continue;
+        const existing = changes.find((c) => c.key === changeKey);
+        if (existing) existing.value = attr.value;
+        else changes.push({ key: changeKey, mode: AE_MODES.ADD, value: attr.value });
+      }
+    }
+    const num = (value) => parseInt(value, 10) || 0;
+    const brawn = num(attributes?.Brawn?.value);
+    const willpower = num(attributes?.Willpower?.value);
+    for (const change of changes) {
+      if (change.key === "system.stats.wounds.max") change.value = num(attributes?.Wounds?.value) + brawn;
+      else if (change.key === "system.stats.strain.max") change.value = num(attributes?.Strain?.value) + willpower;
+      else if (change.key === "system.stats.encumbrance.max") change.value = brawn;
+    }
+    return changes;
+  }
+
+  /**
    * Every place on an item that can hold user-created modifiers ("attr*" entries), as
    * `{attrs, disabled}` scopes. A modifier on the item itself always applies; one on a
    * specialization talent box or a Force power / signature ability upgrade box only applies once
@@ -782,6 +821,10 @@ export default class ModifierHelpers {
     const toCreate = [];
     const toUpdate = [];
     for (const [key, {attribute, learned}] of wanted.entries()) {
+      // A legacy entry with no target (no `mod`, or no modtype) has nothing to apply, and explodeMod
+      // throws on it - which, from ItemFFG._onCreate, aborted everything after it (the equip-state
+      // sync included) for an item that merely carried one such row.
+      if (typeof attribute?.mod !== "string" || !attribute?.modtype) continue;
       const match = existing.find(effect => effect.name === key);
       // A healthy pairing is left completely alone. A matched effect that carries NO changes is the
       // same failure wearing a different hat - the modifier is stored, the effect that should apply
@@ -1071,6 +1114,16 @@ export default class ModifierHelpers {
           });
         }
       }
+    }
+
+    // A new modifier on a weapon, armour or gear an actor holds follows the item's equip state, the
+    // same as every effect already on it. Created enabled, it applied from an unequipped item until
+    // the item was next equipped and unequipped. Only the new effects are set here: the state of
+    // existing ones is left alone (the equip toggle owns it).
+    if (toCreate.length && item.isEmbedded && item.actor && ["armour", "weapon", "gear"].includes(item.type)) {
+      const equippable = item.system?.equippable;
+      const equipped = !!equippable?.equipped && equippable?.carried !== false;
+      for (const effect of toCreate) effect.disabled = !equipped;
     }
 
     const existingEffects = item.getEmbeddedCollection("ActiveEffect");

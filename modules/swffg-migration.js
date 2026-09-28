@@ -515,39 +515,11 @@ export async function migrateSpeciesInherentEffects() {
     return { scanned: 0, repaired: 0 };
   }
 
-  // Build the desired inherent change list from a species' stored attributes. Mirrors the create
-  // path in item-ffg.js#_onCreateAEs, but de-duplicated (findIndex-then-push) so shared keys such as
-  // system.stats.wounds.max produced by both the Brawn and Wounds attributes collapse to one change.
-  const buildInherentChanges = (attributes) => {
-    const changes = [];
-    for (const attribute of Object.keys(attributes ?? {})) {
-      if (attribute.startsWith("attr")) continue; // user modifiers live in their own AEs
-      const attr = attributes[attribute];
-      if (!attr || typeof attr !== "object") continue;
-      const explodedMods = ModifierHelpers.explodeMod(attr.modtype, attribute, item.type);
-      for (const curMod of explodedMods) {
-        const key = ModifierHelpers.getModKeyPath(curMod.modType, curMod.mod);
-        if (!key) continue;
-        const idx = changes.findIndex(c => c.key === key);
-        if (idx >= 0) {
-          changes[idx].value = attr.value;
-        } else {
-          changes.push({ key, mode: AE_MODES.ADD, value: attr.value });
-        }
-      }
-    }
-    // fold in the derived thresholds from the raw characteristics
-    const brawn = parseInt(attributes?.Brawn?.value, 10) || 0;
-    const willpower = parseInt(attributes?.Willpower?.value, 10) || 0;
-    const wounds = parseInt(attributes?.Wounds?.value, 10) || 0;
-    const strain = parseInt(attributes?.Strain?.value, 10) || 0;
-    for (const change of changes) {
-      if (change.key === "system.stats.wounds.max") change.value = wounds + brawn;
-      else if (change.key === "system.stats.strain.max") change.value = strain + willpower;
-      else if (change.key === "system.stats.encumbrance.max") change.value = brawn;
-    }
-    return changes;
-  };
+  // The desired inherent change list, from the species' stored attributes: the same builder the
+  // create path and the importer use. This helper used to be a local copy that read `item.type`,
+  // which was not in scope here: every call threw a ReferenceError, caught per item below, so the
+  // repair logged a failure for each species and never rebuilt a single one.
+  const buildInherentChanges = (attributes) => ModifierHelpers.buildSpeciesInherentChanges(attributes);
 
   // Compare two change lists ignoring order; treats values as strings so 3 and "3" match (Active
   // Effect changes are stored as strings), avoiding needless updates that would re-render sheets.
@@ -556,8 +528,12 @@ export async function migrateSpeciesInherentEffects() {
     // `c.type ?? c.mode`: V14 stores the change kind as the string `type` and keeps
     // `mode` only as a deprecated getter (removed in V16). Short-circuiting means
     // `mode` is never read when `type` exists, so this warns on neither generation.
+    // The desired list is built with the numeric `mode`, so fold that onto the V14 name as well:
+    // compared raw, "add" never equalled 2 and every species was rewritten on every run.
+    const MODE_TYPES = ["custom", "multiply", "add", "downgrade", "upgrade", "override"];
+    const kind = (c) => c.type ?? MODE_TYPES[c.mode] ?? c.mode;
     const norm = (list) => [...list]
-      .map(c => `${c.key}\u0000${c.type ?? c.mode}\u0000${c.value}`)
+      .map(c => `${c.key}\u0000${kind(c)}\u0000${c.value}`)
       .sort();
     const na = norm(a);
     const nb = norm(b);

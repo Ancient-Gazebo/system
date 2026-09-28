@@ -3142,7 +3142,13 @@ export default class ImportHelpers {
     // first update anything inherent to the item type (such as "brawn" on "species")
     const inherentEffectName = "(inherent)";
     const inherentEffect = existing.find(e => e.name === inherentEffectName);
-    if (inherentEffect && Object.keys(formData.system).includes("attributes")) {
+    if (inherentEffect && item.type === "species" && Object.keys(formData.system).includes("attributes")) {
+      // A species' inherent changes are derived from its stats as a whole. The loop below adds Brawn
+      // (or Willpower) onto the FIRST wounds.max (strain.max) change once per attribute that explodes
+      // onto it, on top of the create path's own changes: Wounds 9 / Brawn 2 imported as wounds 8 AND
+      // 11, and a character the species was dropped on got 22. Rebuild the list outright instead.
+      await inherentEffect.update({ changes: ModifierHelpers.buildSpeciesInherentChanges(formData.system.attributes) }, { noHook: true });
+    } else if (inherentEffect && Object.keys(formData.system).includes("attributes")) {
       for (let k of Object.keys(formData.system.attributes)) {
         if (k.startsWith("attr")) {
           // inherent effects like "brawn" on "species" only - skip user-created active effects only

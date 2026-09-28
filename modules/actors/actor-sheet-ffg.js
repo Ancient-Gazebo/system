@@ -3637,8 +3637,8 @@ export class ActorSheetFFG extends FFGActorSheet {
     // Those have nothing to transfer or sort, so bail out instead of dereferencing undefined.
     if (!item) return false;
 
-    // limit transfer on personal weapons/armour/gear
-    if (["weapon", "armour", "gear"].includes(item.type)) {
+    // limit transfer on personal weapons/armour/gear, plus ship weapons (copied between vehicles)
+    if (["weapon", "armour", "gear", "shipweapon"].includes(item.type)) {
       const dragData = {
         type: "Transfer",
         actorId: this.actor.id,
@@ -3708,6 +3708,13 @@ export class ActorSheetFFG extends FFGActorSheet {
     if (event._ffgTransferHandled) return;
     event._ffgTransferHandled = true;
     event.stopPropagation();
+
+    // Ship weapons are copied from one vehicle to another only; nothing else stops one landing
+    // on a character.
+    if (data.data?.type === "shipweapon" && this.actor.type !== "vehicle") {
+      ui.notifications.warn(game.i18n.localize("SWFFG.DragDrop.ShipWeaponVehicleOnly"));
+      return false;
+    }
 
     if (data.data) {
       let sameActor = data.actorId === this.actor.id;
@@ -4091,7 +4098,14 @@ export class ActorSheetFFG extends FFGActorSheet {
       content = await foundry.applications.handlebars.renderTemplate(template, { inCareer, outCareer, universal, baseCost, increasedCost: baseCost, itemType: itemType, itemCategory: "specialization", groups: groups });
     } else if (action === "signatureability") {
       const sources = game.settings.get("starwarsffg", "signatureAbilityCompendiums").split(",");
-      const rawSelectableItems =  this.object.items.find(i => i.type === "career").system.signatureabilities;
+      // Checked before the career is read: the check further down came too late, and a character
+      // with no career threw here instead of being told it needs one.
+      const career = this.object.items.find(i => i.type === "career");
+      if (!career) {
+        ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CareerNotSet"));
+        return;
+      }
+      const rawSelectableItems = career.system.signatureabilities;
       const sigAbilityNames = Object.values(rawSelectableItems).map(i => i.name);
       let selectableItems = [];
       // pull items out of the world
@@ -4132,11 +4146,6 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
       // filter purchasable signature abilities to those where the required specialization upgrades have been purchased
       // filter specializations to those within the career
-      const career = this.object.items.find(i => i.type === "career");
-      if (!career) {
-        ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.CareerNotSet"));
-        return;
-      }
       const permittedSpecializations = Object.values(career.system.specializations).map(i => i.name);
       const matchingSpecializations = this.object.items.filter(i => i.type === "specialization" && permittedSpecializations.includes(i.name));
       if (!matchingSpecializations.length) {

@@ -472,8 +472,14 @@ export default class ItemHelpers {
         for (const attr of Object.keys(modifier.system.attributes)) {
           const matchingEffect = existingEffects.find(effect => effect.name === attr);
           if (matchingEffect) {
-            // the mod should be applied once per rank
-            const newValue = modifier.system.rank_current * modifier.system.attributes[attr].value;
+            // The mod should be applied once per rank - the modifier's OWN rank. The derived
+            // rank_current also folds in the ranks of same-named modifications on attachments, which
+            // carry their own effects, so scaling by it counted those twice.
+            let ranks = parseInt(modifier.system.rank, 10);
+            if (isNaN(ranks) || ranks < 1) {
+              ranks = 1;
+            }
+            const newValue = ranks * modifier.system.attributes[attr].value;
             CONFIG.logger.debug(`Located ${attr}, updating with new value of ${newValue}`);
             // Only the value changes. Deep-clone the effect's stored `_source`
             // changes and edit that in place, rather than rebuilding the change
@@ -483,9 +489,11 @@ export default class ItemHelpers {
             // so any read of it warns. `_source` is the raw stored data with no
             // getters, so this touches nothing deprecated and preserves whichever
             // shape the effect actually has (plus key, priority, and any siblings).
+            // Every change, not just the first: a mod such as Defence explodes into several
+            // (melee and ranged), all built from the same attribute value.
             const changes = foundry.utils.deepClone(matchingEffect._source.changes ?? []);
             if (changes.length) {
-              changes[0].value = newValue;
+              for (const change of changes) change.value = newValue;
               await matchingEffect.update({ changes });
             }
           }

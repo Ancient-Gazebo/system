@@ -40,7 +40,7 @@ import { registerChatTimestampGuard } from "./helpers/chat-timestamp-guard.js";
 
 // Import Dice Types
 import { AbilityDie, BoostDie, ChallengeDie, DifficultyDie, ForceDie, ProficiencyDie, SetbackDie } from "./dice-pool-ffg.js";
-import { createFFGMacro, updateMacro } from "./helpers/macros.js";
+import { createFFGMacro, handlesHotbarDrop, updateMacro } from "./helpers/macros.js";
 import EmbeddedItemHelpers from "./helpers/embeddeditem-helpers.js";
 import DataImporter from "./importer/data-importer.js";
 import PauseFFG from "./apps/pause-ffg.js";
@@ -53,7 +53,6 @@ import {drawAdversaryCount, drawMinionCount, registerTokenControls} from "./help
 import {promptDispositionChange, registerDispositionControls, setTokenDisposition} from "./helpers/token-disposition.js";
 import {handleUpdate, migrateSpeciesInherentEffects, cleanupSpeciesTalentEffects, repairEncumbranceThresholds, repairInherentStatEffects} from "./swffg-migration.js";
 import SWAImporter from "./importer/swa-importer.js";
-import {CharacterCreator} from "./helpers/character-creator.js";
 import ActorHelpers, {xpLogUndo} from "./helpers/actor-helpers.js";
 import StackHelpers from "./helpers/stack-helpers.js";
 import CurrencyManager from "./helpers/currency.js";
@@ -353,54 +352,6 @@ Hooks.once("init", async function () {
     default: true,
     type: Boolean,
   });
-  game.settings.register("starwarsffg", "defaultObligation", {
-    name: game.i18n.localize("SWFFG.Settings.Obligation.Default.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Obligation.Default.Hint"),
-    scope: "world",
-    config: false,
-    default: 20,
-    type: Number,
-  });
-  game.settings.register("starwarsffg", "defaultDuty", {
-    name: game.i18n.localize("SWFFG.Settings.Duty.Default.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Duty.Default.Hint"),
-    scope: "world",
-    config: false,
-    default: 20,
-    type: Number,
-  });
-  game.settings.register("starwarsffg", "defaultMorality", {
-    name: game.i18n.localize("SWFFG.Settings.Morality.Default.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Morality.Default.Hint"),
-    scope: "world",
-    config: false,
-    default: 50,
-    type: Number,
-  });
-  game.settings.register("starwarsffg", "maxRarity", {
-    name: game.i18n.localize("SWFFG.Settings.CharCreator.Items.maxRarity.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.CharCreator.Items.maxRarity.Hint"),
-    scope: "world",
-    config: false,
-    default: 6,
-    type: Number,
-  });
-  game.settings.register("starwarsffg", "allowRestricted", {
-    name: game.i18n.localize("SWFFG.Settings.CharCreator.Items.allowRestricted.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.CharCreator.Items.allowRestricted.Hint"),
-    scope: "world",
-    config: false,
-    default: false,
-    type: Boolean,
-  });
-  game.settings.register("starwarsffg", "defaultCredits", {
-    name: game.i18n.localize("SWFFG.Settings.Credits.Default.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Credits.Default.Hint"),
-    scope: "world",
-    config: false,
-    default: 500,
-    type: Number,
-  });
 
   /**
    * Register the option to use generic slots for combat
@@ -493,60 +444,6 @@ Hooks.once("init", async function () {
     scope: "world",
     config: false,
     default: "",
-    type: String,
-  });
-  // backgrounds
-  game.settings.register("starwarsffg", "backgroundCompendiums", {
-    name: game.i18n.localize("SWFFG.Settings.Purchase.Background.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Purchase.Background.Hint"),
-    scope: "world",
-    config: false,
-    default: "world.oggdudebackgrounds",
-    type: String,
-  });
-  // obligations
-  game.settings.register("starwarsffg", "obligationCompendiums", {
-    name: game.i18n.localize("SWFFG.Settings.Purchase.Obligation.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Purchase.Obligation.Hint"),
-    scope: "world",
-    config: false,
-    default: "world.oggdudeobligations",
-    type: String,
-  });
-  // species
-  game.settings.register("starwarsffg", "speciesCompendiums", {
-    name: game.i18n.localize("SWFFG.Settings.Purchase.Species.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Purchase.Species.Hint"),
-    scope: "world",
-    config: false,
-    default: "world.oggdudespecies",
-    type: String,
-  });
-  // careers
-  game.settings.register("starwarsffg", "careerCompendiums", {
-    name: game.i18n.localize("SWFFG.Settings.Purchase.Career.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Purchase.Career.Hint"),
-    scope: "world",
-    config: false,
-    default: "world.oggdudecareers",
-    type: String,
-  });
-  // motivations
-  game.settings.register("starwarsffg", "motivationCompendiums", {
-    name: game.i18n.localize("SWFFG.Settings.Purchase.Motivation.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Purchase.Motivation.Hint"),
-    scope: "world",
-    config: false,
-    default: "world.oggdudemotivations",
-    type: String,
-  });
-  // items
-  game.settings.register("starwarsffg", "itemCompendiums", {
-    name: game.i18n.localize("SWFFG.Settings.Purchase.Item.Name"),
-    hint: game.i18n.localize("SWFFG.Settings.Purchase.Item.Hint"),
-    scope: "world",
-    config: false,
-    default: "world.oggdudeweapons,world.oggdudearmor,world.oggdudegear,world.oggdudearmorattachments,world.oggdudegenericattachments,world.oggdudeweaponattachments,world.oggdudearmormods,world.oggdudegenericmods,world.oggdudeweaponmods",
     type: String,
   });
   // defense dice setting
@@ -1191,7 +1088,11 @@ Hooks.once("init", async function () {
       }
 
     } catch (e) {
-      ui.notifications.warn("Failed to load custom statuses, likely bad JSON");
+      // ui.notifications does not exist yet during init. Calling it here threw out of this catch and
+      // aborted the rest of init - sheet registration included - so a typo in this one setting took
+      // the whole system down. Skip the custom statuses, log now, and warn once the world is up.
+      CONFIG.logger.warn("Failed to load custom statuses, likely bad JSON", e);
+      Hooks.once("ready", () => ui.notifications.warn(game.i18n.localize("SWFFG.Settings.AdditionalStatuses.BadJson")));
     }
 
     // `order` on a status effect is only honoured by the V14 Token HUD; V13 sorts the
@@ -1418,35 +1319,6 @@ Hooks.on("renderChatInput", (app, html, data) => {
           data: game.user.system,
         };
         await DiceHelpers.displayRollDialog(user, dicePool, game.i18n.localize("SWFFG.RollingDefaultTitle"), "");
-      }
-    }
-  }
-});
-
-Hooks.on("renderActorDirectory", (app, html) => {
-  if (app.id === "actors") {
-    const wizardId = "ffgCharacterWizard";
-    if (!document.querySelector(`#${wizardId}`)) {
-      const wizardButtonIcon = document.createElement("i");
-      wizardButtonIcon.classList.add("fa-solid", "fa-wand-magic-sparkles");
-
-      const wizardButtonText = document.createElement("span");
-      wizardButtonText.textContent = game.i18n.localize("SWFFG.CharacterCreator.Entry.Button");
-
-      const wizardButton = document.createElement("button");
-      wizardButton.id = wizardId;
-      wizardButton.type = "button";
-      wizardButton.classList.add("activate-wizard");
-      wizardButton.appendChild(wizardButtonIcon);
-      wizardButton.appendChild(wizardButtonText);
-
-      const folderElement = html.querySelector(".header-actions.action-buttons");
-      folderElement.appendChild(wizardButton);
-
-      wizardButton.onclick = async function () {
-        ui.notifications.info(game.i18n.localize("SWFFG.CharacterCreator.Entry.Loading"));
-        const create = new CharacterCreator();
-        create.render(true);
       }
     }
   }
@@ -1917,7 +1789,12 @@ Hooks.once("ready", async () => {
   }
 
   // Wait to register hotbar drop hook on ready so that modules could register earlier if they want to
-  Hooks.on("hotbarDrop", async (bar, data, slot) => await createFFGMacro(bar, data, slot));
+  Hooks.on("hotbarDrop", (bar, data, slot) => {
+    // answered synchronously (see handlesHotbarDrop); the macro itself is built without awaiting
+    if (!handlesHotbarDrop(data)) return true;
+    createFFGMacro(bar, data, slot);
+    return false;
+  });
   Hooks.on("createMacro", async function (...args) {
     args[0] = await updateMacro(args[0]);
     return args;
@@ -2167,83 +2044,6 @@ Hooks.once("ready", async () => {
     await game.settings.set("starwarsffg", "configuredTurnMarker", true);
     combatTrackerConfig.turnMarker.enabled = false;
     await game.settings.set("core", "combatTrackerConfig", combatTrackerConfig);
-  }
-
-  // handle character creation requests
-  if (game.user.isGM && game.user.id === game.users.find(u => u.isGM && u.active).id) {
-    game.socket.on("system.starwarsffg", async (...args) => {
-      CONFIG.logger.debug("Processing PC wizard from player");
-      if (args[0]?.eventType === "pcWizard") {
-        const requestor = args[1];
-        const requestorName = game.users.get(requestor).name;
-        const actorName = `temp actor - ${requestorName}`;
-        if (args[0]?.event === "createCharacterRequest") {
-          CONFIG.logger.debug("create Character request, deleting old copies...");
-          // delete previous (temporary) copies of the actor
-          const existingActor = game.actors.getName(actorName);
-          if (existingActor) {
-            await existingActor.delete();
-          }
-
-          CONFIG.logger.debug("creating new temporary copy...");
-          // create a new temporary actor
-          const tempActor = await Actor.create(
-            {
-              name: actorName,
-              type: "character",
-              displaySheet: false,
-              ownership: {
-                [requestor]: foundry.CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER,
-              },
-            },
-          );
-
-          CONFIG.logger.debug("Returning event to player");
-          // notify the user that their actor is ready
-          game.socket.emit("system.starwarsffg", {
-            eventType: "pcWizard",
-            event: "createCharacterResponse",
-            actorId: tempActor.id,
-          });
-
-        } else if (args[0]?.event === "deleteCharacter") {
-          CONFIG.logger.debug("Deleting old copies...");
-          // delete temporary copies of the actor
-          const existingActor = game.actors.getName(actorName);
-          if (existingActor) {
-            await existingActor.delete();
-          }
-
-          CONFIG.logger.debug("Returning event to player...r");
-          // notify the user that the actor has been deleted
-          game.socket.emit("system.starwarsffg", {
-            eventType: "pcWizard",
-            event: "deleteCharacterResponse",
-          });
-        } else if (args[0]?.event === "createFinalActorRequest") {
-          CONFIG.logger.debug("Processing final actor request from player");
-          // create a new temporary actor
-          const newActor = await Actor.create(
-            {
-              name: `${requestorName}'s new PC!`,
-              type: "character",
-              displaySheet: false,
-              ownership: {
-                [requestor]: foundry.CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER,
-              },
-            },
-          );
-
-          CONFIG.logger.debug("Returning event to player...");
-          // notify the user that their actor is ready
-          game.socket.emit("system.starwarsffg", {
-            eventType: "pcWizard",
-            event: "createFinalActorResponse",
-            actorId: newActor.id,
-          });
-        }
-      }
-    });
   }
 });
 

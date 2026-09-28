@@ -2387,6 +2387,7 @@ img {
   transition: opacity 0.5s;
   z-index: -500;
   padding: 0 10px;
+  pointer-events: none;
 }
 .starwarsffg .hover .tooltip2 {
   width: 100%;
@@ -2411,6 +2412,17 @@ img {
 }
 .starwarsffg .hover .tooltip2 .dietype {
   background-color: white;
+}
+
+/* A modified equipment value anchors its own sources popup. The popup spans the neighbouring
+   columns, so it lets clicks through to the controls underneath it. */
+.starwarsffg .adjusted-value {
+  position: relative;
+}
+
+.starwarsffg .adjusted-value .tooltip2 {
+  pointer-events: none;
+  text-align: left;
 }
 .starwarsffg .ffg-sendtochat.hover:hover .tooltip2 {
   background: #fff;

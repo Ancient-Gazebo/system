@@ -2221,34 +2221,42 @@ export default class ImportHelpers {
    * @returns {*[]}
    */
   static getSourcesAsArray(sources) {
-    let parsedSources = [];
+    const parsedSources = [];
 
     // if there are no sources, don't bother trying to parse
     if (!sources) {
       return parsedSources;
     }
 
-    // sometimes there's a single source not inside a `source` block
-    if (sources?._) {
-      sources.Source = [sources];
+    // normalise the shapes the XML can take into one array of source entries. The old version only
+    // understood <Sources><Source/></Sources> and a single <Source Page="x">, and silently dropped
+    // a bare <Source>User Data</Source> (a string) along with sibling <Source/> elements
+    let arr;
+    if (Array.isArray(sources)) {
+      // multiple <Source> siblings without a <Sources> wrapper
+      arr = sources;
+    } else if (typeof sources === "string") {
+      // <Source>User Data</Source> (no attributes)
+      arr = [{ _: sources }];
+    } else if (sources.Source !== undefined) {
+      // <Sources><Source/>...</Sources> wrapper
+      arr = Array.isArray(sources.Source) ? sources.Source : [sources.Source];
+    } else {
+      // single <Source Page="x">text</Source>
+      arr = [sources];
     }
 
-    try {
-      // convert the sources to an array if they aren't already one (silly XML)
-      if (!Array.isArray(sources.Source)) {
-        sources.Source = [sources.Source];
+    for (const source of arr) {
+      if (source == null) {
+        continue;
       }
-
-      for (const source of sources.Source) {
-        if (source?.$Page) {
-          parsedSources.push(`${source._} pg.${source.$Page}`);
-        } else {
-          parsedSources.push(source._);
-        }
+      if (typeof source === "string") {
+        parsedSources.push(source);
+      } else if (source.$Page != null) {
+        parsedSources.push(`${source._} pg.${source.$Page}`);
+      } else if (source._ != null) {
+        parsedSources.push(source._);
       }
-    } catch {
-      // in all the cases I looked at, this is due to bad data. just return what we've got so far
-      return parsedSources;
     }
     return parsedSources;
   }
@@ -2283,6 +2291,29 @@ export default class ImportHelpers {
     const sourceText = `<p><h3>Sources:</h3>${text.join("")}</p>`;
 
     return sourceText;
+  }
+
+  /**
+   * Cleans an OggDude description for storage by dropping the leading header line that only repeats
+   * the item's name (`[H3]Name[h3]` on equipment and vehicles, `[H4]Name[h4]` on most other
+   * records) and joining the remaining lines with <br>. A description that does not open with a
+   * header is returned untouched, so hand-wrapped text keeps flowing as it always has. OggDude
+   * markup ([B], [H3], [BR], dice codes...) is left in place for the renderer to convert.
+   *
+   * Replaces per-importer copies of `split('\n').slice(1)`: some dropped the first line whether or
+   * not it was a header (a one-line weapon description vanished entirely), and careers ran it twice,
+   * which emptied every career description with a later [H4] section.
+   * @param {string} description - Raw description text from the dataset.
+   * @returns {string}
+   */
+  static cleanDescription(description) {
+    const text = (description || "").replace(/\r\n?/g, "\n").trim();
+    const lines = text.split("\n");
+    if (!/^\[H[1-4]\]/i.test(lines[0].trim())) {
+      return text;
+    }
+    lines.shift();
+    return lines.join("<br>").replace(/^(<br>)+/, "");
   }
 
   static prepareBaseObject(obj, type) {
@@ -3188,6 +3219,18 @@ export default class ImportHelpers {
           if (inherentEffectChangeIndex >= 0) {
             inherentEffect.changes[inherentEffectChangeIndex].value = formData.system.soak.value;
           }
+        }
+      }
+      await inherentEffect.update({changes: inherentEffect.changes}, { noHook: true });
+    } else if (inherentEffect && item.type === "shipattachment") {
+      // the inherent effect is created at 0; without this an imported vehicle attachment cost no
+      // hardpoints until someone opened and saved it. Mirrors the item sheet's own write.
+      for (const curMod of ModifierHelpers.explodeMod("Vehicle Stat", "Vehicle.Hardpoints")) {
+        const modPath = ModifierHelpers.getModKeyPath(curMod['modType'], curMod['mod']);
+        const inherentEffectChangeIndex = inherentEffect.changes.findIndex(c => c.key === modPath);
+        if (inherentEffectChangeIndex >= 0) {
+          // hardpoints are _spent_, not _gained_
+          inherentEffect.changes[inherentEffectChangeIndex].value = (parseInt(formData.system?.hardpoints?.value, 10) || 0) * -1;
         }
       }
       await inherentEffect.update({changes: inherentEffect.changes}, { noHook: true });

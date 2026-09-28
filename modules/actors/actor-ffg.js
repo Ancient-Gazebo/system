@@ -578,6 +578,13 @@ export class ActorFFG extends Actor {
       const charValue = parseInt(data.characteristics?.[idata.characteristic.value]?.value, 10);
       if (Number.isNaN(charValue)) continue;
       idata.damage.adjusted = parseInt(idata.damage.adjusted, 10) + charValue;
+      if (charValue) {
+        const label = CONFIG.FFG.characteristics?.[idata.characteristic.value]?.label;
+        (idata.damage.sources ??= []).push({
+          name: label ? game.i18n.localize(label) : idata.characteristic.value,
+          value: charValue > 0 ? `+${charValue}` : `${charValue}`,
+        });
+      }
     }
   }
 
@@ -601,6 +608,10 @@ export class ActorFFG extends Actor {
       const bonus = parseInt(data.skills?.[skillKey]?.damage, 10);
       if (Number.isNaN(bonus) || bonus === 0) continue;
       idata.damage.adjusted = parseInt(idata.damage.adjusted, 10) + bonus;
+      (idata.damage.sources ??= []).push({
+        name: data.skills?.[skillKey]?.label ?? skillKey,
+        value: bonus > 0 ? `+${bonus}` : `${bonus}`,
+      });
     }
   }
 

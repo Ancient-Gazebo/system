@@ -3577,6 +3577,7 @@ img {
   transition: opacity 0.5s;
   z-index: -500;
   padding: 0 10px;
+  pointer-events: none;
 }
 
 .starwarsffg .hover .tooltip2 {
@@ -3604,6 +3605,17 @@ img {
 
 .starwarsffg .hover .tooltip2 .dietype {
   background-color: white;
+}
+
+/* A modified equipment value anchors its own sources popup. The popup spans the neighbouring
+   columns, so it lets clicks through to the controls underneath it. */
+.starwarsffg .adjusted-value {
+  position: relative;
+}
+
+.starwarsffg .adjusted-value .tooltip2 {
+  pointer-events: none;
+  text-align: left;
 }
 
 .starwarsffg .ffg-sendtochat.hover:hover .tooltip2 {
@@ -3869,6 +3881,17 @@ img {
   border: 0;
   background: rgba(0, 0, 0, 0);
   color: #0e4400;
+}
+
+/* The cost and the purchase/settings icons are pinned to the bottom of each upgrade box, and the
+   description ran underneath them, so the cost sat on top of its last line. Stop the description
+   above that strip (it scrolls), and give the basic power's cost a line of its own. */
+.starwarsffg .item-sheet-forcepower .talent-grid .talent-body {
+  height: calc(100% - 3rem);
+}
+
+.starwarsffg .item-sheet-forcepower .header-fields .talent-background {
+  padding-bottom: calc(5px + 0.75rem);
 }
 
 .starwarsffg .item-sheet-forcepower .talent-modifiers {
@@ -4198,6 +4221,10 @@ img {
   background-color: #fcadad;
 }
 
+.starwarsffg .item-sheet-signatureability .sheet-header .talent-header {
+  padding-right: 3.5rem;
+}
+
 .starwarsffg .item-sheet-signatureability .header-fields {
   position: relative;
 }
@@ -4240,6 +4267,11 @@ img {
   border: 0;
   background: rgba(0, 0, 0, 0);
   color: #630000;
+}
+
+/* As on the Force power sheet: keep the description clear of the cost and icons at the box's foot. */
+.starwarsffg .item-sheet-signatureability .talent-grid .talent-body {
+  height: calc(100% - 3rem);
 }
 
 .starwarsffg .item-sheet-signatureability .talent-modifiers {

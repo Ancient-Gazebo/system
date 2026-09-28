@@ -1,0 +1,12 @@
+{{!-- An equipment list value with a popup listing what modified it. `cls` carries the list's own
+      column class, so the cell lays out exactly as the plain one did. --}}
+<div class="{{cls}} adjusted-value{{#if sources.length}} hover{{/if}}">
+  {{#if label}}{{localize label}}{{else}}{{value}} {{#if show}}({{adjusted}}){{/if}}{{/if}}
+  {{#if sources.length}}
+  <div class="tooltip2">
+    {{#each sources as |source|}}
+    <div>{{source.name}}: {{source.value}}</div>
+    {{/each}}
+  </div>
+  {{/if}}
+</div>

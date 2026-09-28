@@ -8,6 +8,7 @@ export default class TemplateHelpers {
       "systems/starwarsffg/templates/parts/actor/ffg-skills.html",
       "systems/starwarsffg/templates/parts/actor/ffg-weapon-armor-gear.html",
       "systems/starwarsffg/templates/parts/actor/ffg-weapons-armor.html",
+      "systems/starwarsffg/templates/parts/actor/ffg-adjusted-value.html",
       "systems/starwarsffg/templates/parts/actor/ffg-gear.html",
       "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html",
       "systems/starwarsffg/templates/parts/actor/ffg-bio-general.html",
@@ -42,10 +43,6 @@ export default class TemplateHelpers {
       "systems/starwarsffg/templates/combat/ffg-combat-tracker-footer.html",
       "systems/starwarsffg/templates/chat/parts/item/ffg-header.html",
       "systems/starwarsffg/templates/chat/parts/item/ffg-footer.html",
-      "systems/starwarsffg/templates/wizards/char_creator/actor_preview.html",
-      "systems/starwarsffg/templates/wizards/char_creator/preview/skills.html",
-      "systems/starwarsffg/templates/wizards/char_creator/preview/specialization.html",
-      "systems/starwarsffg/templates/wizards/char_creator/preview/forcepower.html",
     ];
     return foundry.applications.handlebars.loadTemplates(templatePaths);
   }

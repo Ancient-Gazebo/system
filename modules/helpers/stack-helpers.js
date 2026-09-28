@@ -25,7 +25,7 @@ import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
  *     players trade with no GM present.
  *
  * All socket traffic rides the existing "system.starwarsffg" channel and is namespaced by
- * an "event" string so it coexists with the combat/PC-wizard handlers already registered.
+ * an "event" string so it coexists with the combat handlers already registered.
  */
 export default class StackHelpers {
   static SOCKET = "system.starwarsffg";

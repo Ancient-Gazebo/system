@@ -966,7 +966,10 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           callbacks: { drop: this._onDropTalentToSpecialization.bind(this) },
         });
 
-        dragDrop.bind($(`form.editable.item-sheet-${this.object.type}`)[0]);
+        // Bind to THIS sheet's form. The document-wide selector always found the first open sheet of
+        // this type, so with two open, drops onto the second landed on the first (or nowhere).
+        // Still only while editable, as the old `form.editable` selector required.
+        if (html[0]?.classList.contains("editable")) dragDrop.bind(html[0]);
       } catch (err) {
         CONFIG.logger.debug(err);
       }
@@ -979,7 +982,10 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           callbacks: { drop: this._onDragItemCareer.bind(this) },
         });
 
-        dragDrop.bind($(`form.editable.item-sheet-${this.object.type}`)[0]);
+        // Bind to THIS sheet's form. The document-wide selector always found the first open sheet of
+        // this type, so with two open, drops onto the second landed on the first (or nowhere).
+        // Still only while editable, as the old `form.editable` selector required.
+        if (html[0]?.classList.contains("editable")) dragDrop.bind(html[0]);
       } catch (err) {
         CONFIG.logger.debug(err);
       }
@@ -1036,7 +1042,10 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           callbacks: { drop: this.onDropItemToSpecies.bind(this) },
         });
 
-        dragDrop.bind($(`form.editable.item-sheet-${this.object.type}`)[0]);
+        // Bind to THIS sheet's form. The document-wide selector always found the first open sheet of
+        // this type, so with two open, drops onto the second landed on the first (or nowhere).
+        // Still only while editable, as the old `form.editable` selector required.
+        if (html[0]?.classList.contains("editable")) dragDrop.bind(html[0]);
 
         // handle click events for talents on species
         html.find(".item-delete").on("click", async (event) => {
@@ -2300,7 +2309,12 @@ export class ItemSheetFFG extends FFGDocumentSheet {
           break;
         }
         case "itemattachment": {
-          if (this.object.system.hardpoints.adjusted - itemObject.system.hardpoints.value >= 0) {
+          // Checked against the hardpoints LEFT (the adjusted total minus what installed attachments
+          // already use), not the total: any attachment that fitted an empty item was accepted, so
+          // an item could carry far more than it has room for.
+          const hardpointsLeft = Number(this.object.system.hardpoints?.current ?? this.object.system.hardpoints?.adjusted) || 0;
+          const hardpointsCost = Number(itemObject.system.hardpoints?.value) || 0;
+          if (hardpointsLeft - hardpointsCost >= 0) {
             // Preserve each modification's installed (active) state rather than force-enabling
             // them, so optional modifications are not auto-installed when an attachment is added.
             // Base modifiers (system.attributes) still apply; only the optional modifications
@@ -2308,7 +2322,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
             itemObject = await ItemHelpers.uniqueAttrs(itemObject, this.object);
             items.push(itemObject);
           } else {
-            ui.notifications.warn(`Item does not have enough available hardpoints (${this.object.system.hardpoints.adjusted} left)`);
+            ui.notifications.warn(`Item does not have enough available hardpoints (${hardpointsLeft} left)`);
             // Rejected: stop here. Carrying on used to transfer the refused attachment's Active
             // Effects onto the item anyway, so its modifiers applied without it being installed.
             return;

@@ -21,9 +21,9 @@
         {{item.name}}
       </div>
       <div>{{#if (eq item.system.firingarc.fore true)}}{{localize "SWFFG.VehicleFiringArcForward"}}{{/if}} {{#if (eq item.system.firingarc.aft true)}}{{localize "SWFFG.VehicleFiringArcAft"}}{{/if}} {{#if (eq item.system.firingarc.port true)}}{{localize "SWFFG.VehicleFiringArcPort"}}{{/if}} {{#if (eq item.system.firingarc.starboard true)}}{{localize "SWFFG.VehicleFiringArcStarboard"}}{{/if}} {{#if (eq item.system.firingarc.dorsal true)}}{{localize "SWFFG.VehicleFiringArcDorsal"}}{{/if}} {{#if (eq item.system.firingarc.ventral true)}}{{localize "SWFFG.VehicleFiringArcVentral"}}{{/if}}</div>
-      <div>{{item.system.damage.value}} {{#if (and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0)))}}({{item.system.damage.adjusted}}){{/if}}</div>
-      <div>{{localize item.system.range.label}}</div>
-      <div>{{item.system.crit.value}} {{#if (and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0)))}}({{item.system.crit.adjusted}}){{/if}}</div>
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-adjusted-value.html" (object cls="" value=item.system.damage.value adjusted=item.system.damage.adjusted show=(and (ne item.system.damage.value item.system.damage.adjusted) (or (gt item.system.damage.adjusted.length 0) (gt item.system.damage.adjusted 0))) sources=item.system.damage.sources)}}
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-adjusted-value.html" (object cls="" label=item.system.range.label sources=item.system.range.sources)}}
+      {{> "systems/starwarsffg/templates/parts/actor/ffg-adjusted-value.html" (object cls="" value=item.system.crit.value adjusted=item.system.crit.adjusted show=(and (ne item.system.crit.value item.system.crit.adjusted) (or (gt item.system.crit.adjusted.length 0) (gt item.system.crit.adjusted 0))) sources=item.system.crit.sources)}}
       {{#if @root.showShipWeaponQuantity}}
       <div class="item-quantity weapon-col-quantity">
         {{#if (or (eq item.flags.starwarsffg.config.enableQuantity true) (gt item.system.quantity.value 1))}}

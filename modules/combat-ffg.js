@@ -745,17 +745,20 @@ export class CombatFFG extends Combat {
     const initiative = combatant.initiative;
     CONFIG.logger.debug(`Initial information: combatantId - ${combatantId}, combatantName - ${combatant.name}`);
 
-    const originalCombatantId = $('.combatant.actor[data-combatant-id="' + combatant.id + '"]').data('alt-id');
+    // the slot this combatant is sitting in, which may belong to someone else. Read from the claim
+    // flags: the tracker's rendered rows were used before, so the claim was missed whenever the
+    // tracker wasn't on screen (e.g. the token toggled out of combat from the canvas)
+    const originalCombatantId = this.findSlotClaims(round, combatantId);
 
     // record where the turn pointer is before core's delete handling moves it
     const priorTurn = this._captureTurnPosition();
-    // find if the combatant has any slots claimed
-    const claimedSlot = this.getSlotClaims(round, originalCombatantId);
+    // find who (if anyone) claimed the slot of the combatant being removed
+    const claimedSlot = this.getSlotClaims(round, combatantId);
     // prevent constant re-rendering of the tracker
     this.debounceRender();
-    if (claimedSlot) {
-      // un-claim the slot
-      CONFIG.logger.debug("Someone claimed the actors slot, un-claiming it");
+    if (originalCombatantId) {
+      // release the slot the combatant had claimed
+      CONFIG.logger.debug("The actor claimed someone else's slot, un-claiming it");
       await this.unclaimSlot(round, originalCombatantId);
     }
     await this.unclaimSlot(round, combatantId);
@@ -864,14 +867,18 @@ export class CombatFFG extends Combat {
         await this.combatants.get(removedCombatantId).delete();
 
         // Step 7 - Add a new slot with the last slot data (except Initiative, which is copied from the slot being removed)
-        removedCombatantReplacementId = await this.addIDedExtraSlot(
-            removedDisposition,
-            removedInitiative,
-            lastSlotActorId,
-            lastSlotTokenId,
-            lastSlotSceneId,
-            lastSlotName,
-        );
+        // a generic last slot has no actor or token to copy, so the replacement has to be generic as
+        // well - built by addIDedExtraSlot it would lack the generic-slot flags the tracker keys on
+        removedCombatantReplacementId = lastSlotActorId
+          ? await this.addIDedExtraSlot(
+              removedDisposition,
+              removedInitiative,
+              lastSlotActorId,
+              lastSlotTokenId,
+              lastSlotSceneId,
+              lastSlotName,
+            )
+          : await this.addExtraSlot(round, removedDisposition, removedInitiative);
 
         // Step 8 - Delete the last slot
         await this.combatants.get(lastSlotCombatantId).delete();
@@ -886,7 +893,10 @@ export class CombatFFG extends Combat {
             await this.claimSlot(round, removedCombatantReplacementId, removedClaimantId);
           }
         } else if (lastClaimantId && !lastClaimantIsRemovedCombatant) {
-          await this.claimSlot(round, removedCombatantReplacementId, removedCombatantReplacementId);
+          // the last slot's claim moves to its replacement, keeping whoever made it
+          // (a self-claim follows the actor, who is now sitting in the replacement slot)
+          const claimantId = lastClaimantId === lastSlotCombatantId ? removedCombatantReplacementId : lastClaimantId;
+          await this.claimSlot(round, removedCombatantReplacementId, claimantId);
         }
       } else {
         // Step 4b - Delete the actor being removed; no further steps are needed.
@@ -896,6 +906,12 @@ export class CombatFFG extends Combat {
         await this.combatants.get(removedCombatantId).delete();
       }
     });
+    // a turn index past the end of the now-shorter roster makes setupTurns() roll the round over,
+    // which would leave this round's claims behind. Pull it back in range first;
+    // _restoreTurnPosition below then settles it on the right combatant.
+    if (this.combatants.size && priorTurn.turn >= this.combatants.size) {
+      await this.update({ turn: this.combatants.size - 1 }, { turnEvents: false });
+    }
     this.setupTurns();
     // core advances the turn pointer when the current document is deleted. If the pointer was on
     // the removed actor, follow it to the replacement slot (same initiative, same position); if it

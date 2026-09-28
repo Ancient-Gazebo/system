@@ -567,13 +567,14 @@
   overflow: visible !important;
 }
 
-/* ---- Weapon organization tabs (Combat tab) ------------------------------ */
-/* The weapons list reuses the gear list's organization markup (.gear-org-* /
-   .gear-tab-*), but every theme scopes that styling under `.gear-items`.
-   Mirror those rules for the `.weapon-items` container (values copied from
-   mandar's gear block, which is also what space-op shows for gear tabs). */
+/* ---- Weapon / armour organization tabs (Combat tab) --------------------- */
+/* The weapons and armour lists reuse the gear list's organization markup
+   (.gear-org-* / .gear-tab-*), but every theme scopes that styling under
+   `.gear-items`. Mirror those rules for the `.weapon-items` and `.armor-items`
+   containers (values copied from mandar's gear block, which is also what
+   space-op shows for gear tabs). */
 
-.starwarsffg .weapon-items .gear-col-actions {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-col-actions {
   flex: 0 0 96px;
   display: flex;
   align-items: center;
@@ -581,19 +582,19 @@
   gap: 6px;
   width: auto;
 }
-.starwarsffg .weapon-items .gear-org-controls {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-controls {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.starwarsffg .weapon-items .items-header .gear-org-controls a {
+.starwarsffg :is(.weapon-items, .armor-items) .items-header .gear-org-controls a {
   color: white;
   cursor: pointer;
 }
-.starwarsffg .weapon-items .items-header .gear-org-controls a.active {
+.starwarsffg :is(.weapon-items, .armor-items) .items-header .gear-org-controls a.active {
   color: #f0c419;
 }
-.starwarsffg .weapon-items .gear-tab-header {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -602,23 +603,23 @@
   color: white;
   border-bottom: 1px solid rgba(0, 0, 0, 0.25);
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-title {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-title {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-collapse {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-collapse {
   color: white;
   cursor: pointer;
   width: 12px;
   text-align: center;
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-name {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-name {
   font-weight: bold;
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-name-input {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-name-input {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.25);
   color: white;
@@ -628,52 +629,52 @@
   max-width: 200px;
   flex: 0 1 200px;
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-count {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-count {
   opacity: 0.75;
   font-size: 11px;
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-delete {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-delete {
   color: white;
   cursor: pointer;
 }
-.starwarsffg .weapon-items .gear-tab-header .gear-tab-drag-handle {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header .gear-tab-drag-handle {
   color: white;
   cursor: grab;
   opacity: 0.6;
   width: 12px;
   text-align: center;
 }
-.starwarsffg .weapon-items .gear-tab-header.tab-drop-target {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-tab-header.tab-drop-target {
   outline: 2px dashed #f0c419;
   outline-offset: -2px;
 }
-.starwarsffg .weapon-items .gear-org-list {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.starwarsffg .weapon-items .gear-org-list.hidden {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list.hidden {
   display: none;
 }
 /* Match the compact single-line row layout that .items-list rows get, since the
    organized list intentionally is not .items-list (to keep Foundry's sort-drag off it). */
-.starwarsffg .weapon-items .gear-org-list .item {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item {
   line-height: 24px;
   padding: 3px 0;
   border-bottom: 1px solid #bbb;
   text-align: center;
 }
-.starwarsffg .weapon-items .gear-org-list .item:hover {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item:hover {
   background: rgba(25, 24, 19, 0.12);
 }
 /* Weapons use the red-fist (unequipped) / green-fist (equipped) colouring, NOT
    gear's grey/black. space-op provides that red/green but only scopes it to the
    flat `.items-list`, so the tabbed rows (.gear-org-list) need it here. Vars
    match space-op's palette with red/green fallbacks for other themes. */
-.starwarsffg .weapon-items .gear-org-list .item .toggle-equipped {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item .toggle-equipped {
   color: var(--red-light, #e01a1a);
 }
-.starwarsffg .weapon-items .gear-org-list .item .toggle-equipped.active {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item .toggle-equipped.active {
   color: var(--green, #5aa02f);
 }
 /* Green must mean "equipped", never "the pointer is here". A theme's generic
@@ -683,13 +684,13 @@
    state colours for :hover so the icon only changes when the equip state does.
    `!important` because the rule being beaten belongs to a third-party theme whose
    own weight we cannot rely on. */
-.starwarsffg .weapon-items .gear-org-list .item .toggle-equipped:hover {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item .toggle-equipped:hover {
   color: var(--red-light, #e01a1a) !important;
 }
-.starwarsffg .weapon-items .gear-org-list .item .toggle-equipped.active:hover {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item .toggle-equipped.active:hover {
   color: var(--green, #5aa02f) !important;
 }
-.starwarsffg .weapon-items .gear-org-list .item-name {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item-name {
   margin: 0;
   cursor: pointer;
   flex: 1 0 120px;
@@ -697,31 +698,31 @@
   display: flex;
   align-items: center;
 }
-.starwarsffg .weapon-items .gear-org-list .item-controls {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item-controls {
   z-index: 500;
 }
-.starwarsffg .weapon-items .gear-org-list .item-controls .item-control {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-list .item-controls .item-control {
   padding: 5px;
 }
-.starwarsffg .weapon-items .gear-org-item {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-item {
   cursor: grab;
 }
-.starwarsffg .weapon-items .gear-org-item.dragging {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-item.dragging {
   opacity: 0.4;
 }
-.starwarsffg .weapon-items .gear-org-item .gear-org-handle {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-item .gear-org-handle {
   flex: 0 0 auto;
   margin-right: 4px;
   opacity: 0.5;
   cursor: grab;
 }
-.starwarsffg .weapon-items .gear-org-item.drop-before {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-item.drop-before {
   border-top: 2px solid #f0c419;
 }
-.starwarsffg .weapon-items .gear-org-item.drop-after {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-item.drop-after {
   border-bottom: 2px solid #f0c419;
 }
-.starwarsffg .weapon-items .gear-org-dropzone {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-dropzone {
   text-align: center;
   font-size: 11px;
   font-style: italic;
@@ -730,7 +731,7 @@
   border: 1px dashed rgba(0, 0, 0, 0.25);
   margin: 2px 4px;
 }
-.starwarsffg .weapon-items .gear-org-dropzone.empty-hidden {
+.starwarsffg :is(.weapon-items, .armor-items) .gear-org-dropzone.empty-hidden {
   border: 0;
   padding: 2px;
   margin: 0;
@@ -760,12 +761,13 @@
    to out-specify the base `.items .items-list .item-controls { width:20px;
    margin:auto }`, which would otherwise steal the name column's slack and
    throw every column off. Covers flat (.items-list) and tabbed (.gear-org-list)
-   weapon rows plus the flat armour rows. */
+   weapon and armour rows. */
 .starwarsffg .weapon-items .items-header .gear-col-actions,
 .starwarsffg .armor-items .items-header .gear-col-actions,
 .starwarsffg .weapon-items .items-list .item-controls.gear-col-actions,
 .starwarsffg .weapon-items .gear-org-list .item-controls.gear-col-actions,
-.starwarsffg .armor-items .items-list .item-controls.gear-col-actions {
+.starwarsffg .armor-items .items-list .item-controls.gear-col-actions,
+.starwarsffg .armor-items .gear-org-list .item-controls.gear-col-actions {
   flex: 0 0 96px;
   width: auto;
   margin: 0;

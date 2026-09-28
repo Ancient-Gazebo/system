@@ -18,6 +18,7 @@ import TalentOrganization from "../helpers/talent-organization.js";
 import GearOrganization from "../helpers/gear-organization.js";
 import WeaponOrganization from "../helpers/weapon-organization.js";
 import AbilityOrganization from "../helpers/ability-organization.js";
+import ArmorOrganization from "../helpers/armor-organization.js";
 import RollProfiles from "../helpers/roll-profiles.js";
 import {
   change_role,
@@ -588,6 +589,9 @@ export class ActorSheetFFG extends FFGActorSheet {
 
     // Same for the Combat tab's weapons list
     data.weaponOrg = WeaponOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "weapon"));
+
+    // ...and its armour list
+    data.armorOrg = ArmorOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "armour"));
 
     // Same for the Abilities list (Talents tab)
     data.abilityOrg = AbilityOrganization.buildGroups(this.actor, data.items.filter((i) => i.type === "ability"));
@@ -1713,14 +1717,15 @@ export class ActorSheetFFG extends FFGActorSheet {
       await TalentOrganization.moveTalent(this.actor, this.actor.talentList, data.talentKey, targetTabId, beforeKey);
     });
 
-    // === Gear/Weapon organization: manual sort + custom collapsible tabs ===
-    // The Gear list (Gear tab) and the Weapons list (Combat tab) share one set
-    // of listeners and DOM classes (.gear-org-* / .gear-tab-*); each element
-    // carries data-org-type ("gear" default, or "weapon") which resolves the
-    // helper class and item list to operate on.
+    // === Gear/Weapon/Armour/Ability organization: manual sort + custom collapsible tabs ===
+    // The Gear list (Gear tab), the Weapons and Armour lists (Combat tab) and the Abilities list
+    // share one set of listeners and DOM classes (.gear-org-* / .gear-tab-*); each element carries
+    // data-org-type ("gear" default, "weapon", "armour" or "ability") which resolves the helper
+    // class and item list to operate on.
     const ORG_TYPES = {
       gear: { Org: GearOrganization, itemType: "gear" },
       weapon: { Org: WeaponOrganization, itemType: "weapon" },
+      armour: { Org: ArmorOrganization, itemType: "armour" },
       ability: { Org: AbilityOrganization, itemType: "ability" },
     };
     // Current item list, ordered the same way getData() presents items, used when re-sorting.

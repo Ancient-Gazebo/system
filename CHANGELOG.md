@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`3.0.1`
+* Enhancements:
+  * The Armour list on the Combat tab can be organized into named, collapsible tabs with drag-and-drop ordering, the same way the Gear, Weapons, Talents and Abilities lists can (the folder icon in the list header). Each list keeps its own tabs.
+
 `3.0.0`
 * Enhancements:
   * A modified weapon or armour value in the equipment lists now shows where it came from. Hovering damage, critical, range, defence, soak or hardpoints lists each contribution - the item's own modifiers, its qualities, its attachments, the characteristic added to damage and any Skill Damage - on character, NPC, adversary and vehicle sheets.

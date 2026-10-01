@@ -55,7 +55,7 @@
       {{/if}}
       <div class="item-controls">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>
@@ -107,7 +107,7 @@
       <!-- <div>{{item.system.encumbrance.value}}</div> -->
       <div class="item-controls">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>
@@ -117,7 +117,7 @@
 </ul>
 
 {{!-- Gear List --}}
-<ul class="items gear-items">
+<ul class="items gear-items{{#if @root.showTradeIcon}} has-trade-icon{{/if}}">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsGear"}}</div>
     <div class="gear-col-equipped">{{localize "SWFFG.CarriedEquipped"}}</div>
@@ -198,7 +198,7 @@
       </div>
       <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>
@@ -251,7 +251,7 @@
       <!-- <div>{{item.system.encumbrance.value}}</div> -->
       <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>

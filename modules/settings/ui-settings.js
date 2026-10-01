@@ -188,6 +188,29 @@ export class combatSettings extends ffgSettings {
   }
 }
 
+export class toolsSettings extends ffgSettings {
+  static DEFAULT_OPTIONS = {
+    id: "tools-settings",
+    classes: ["starwarsffg", "tools-settings"],
+    window: { title: "SWFFG.Settings.tools.Title" },
+  };
+
+  static PARTS = {
+    content: { root: true, template: "systems/starwarsffg/templates/dialogs/ffg-ui-settings.html" },
+  };
+
+  async _prepareContext(_options) {
+    const includeSettingsNames = [
+      "starwarsffg.enableRollRequests",
+      "starwarsffg.enableSpendResults",
+      "starwarsffg.enableWeaponQualities",
+      "starwarsffg.enableCharacterPilot",
+      "starwarsffg.enableCombatCarousel",
+    ];
+    return this._buildSettingsContext(includeSettingsNames);
+  }
+}
+
 export class actorSettings extends ffgSettings {
   static DEFAULT_OPTIONS = {
     id: "actor-settings",

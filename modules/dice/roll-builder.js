@@ -1,6 +1,7 @@
 import { getAdversaryLevel } from "../helpers/token.js";
 import { DicePoolFFG } from "./pool.js";
 import RollProfiles from "../helpers/roll-profiles.js";
+import WeaponQualities from "../helpers/weapon-qualities.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -49,6 +50,13 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
     this._profileSelection = this.profile
       ? { skill: this.profile.selectedSkill || null, characteristic: this.profile.selectedCharacteristic || null }
       : null;
+    /**
+     * Roll visibility forced by the caller (a GM roll request asking for a blind or private roll),
+     * as a legacy roll mode string. null leaves it to the roller's own chat setting.
+     */
+    this.rollMode = rollOptions?.rollMode ?? null;
+    /** Whether Auto-fire has been declared for this attack (see WeaponQualities.decorateRollBuilder). */
+    this._autoFire = false;
     this.adversaryRanks = RollBuilderFFG._computeAdversaryRanks();
     // Which pool the dialog shows/rolls when an Adversary is targeted. Defaults
     // to the Adversary pool so the upgrade is applied by default. Only takes
@@ -257,6 +265,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
     });
 
     this._activateProfileControls(html);
+    WeaponQualities.decorateRollBuilder(this, html);
 
     this._refreshAdversary(html);
     // one listener per dialog, however many times it renders
@@ -436,7 +445,17 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
             token: this.roll.data?.token?._id,
           },
           flavor: `${game.i18n.localize("SWFFG.Rolling")} ${game.i18n.localize(this.roll.skillName)}...`,
-        });
+          // Who the check was made against, recorded while it is still true. Spend Results and the
+          // weapon qualities act on "the target" long after the roller has clicked on something else.
+          flags: {
+            starwarsffg: {
+              attack: {
+                targets: Array.from(game.user.targets ?? []).map((token) => token.document?.uuid).filter(Boolean),
+                autofire: this._autoFire,
+              },
+            },
+          },
+        }, this.rollMode ? { rollMode: this.rollMode } : undefined);
         if (this.roll?.sound) {
           foundry.audio.AudioHelper.play({ src: this.roll.sound }, true);
         }
@@ -497,6 +516,9 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         return;
       }
       this.dicePool = rolled.dicePool;
+      // Declared Auto-fire is a choice made in this dialog, not part of the assembled pool, so the
+      // rebuild has just dropped its difficulty die.
+      if (this._autoFire) this.dicePool.difficulty += 1;
       // Keep the chat card honest: the flavor line names the skill that was actually rolled.
       this.roll.skillName = rolled.label ?? this.roll.skillName;
       // The "(default - X)" characteristic option depends on the selected skill, so it is relabelled

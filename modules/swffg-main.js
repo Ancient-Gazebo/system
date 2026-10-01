@@ -69,6 +69,13 @@ import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
 import TalentTree from "./helpers/talent-tree.js";
 import { AE_MODES } from "./config/ffg-active-effect-modes.js";
+import RollRequestApp from "./apps/roll-request.js";
+import CharacterPilot from "./apps/character-pilot.js";
+import SpendResults from "./helpers/spend-results.js";
+import { registerCombatCarousel, registerCombatCarouselSettings } from "./apps/combat-carousel.js";
+import { registerDefenseSkillSettings } from "./settings/defense-skills-settings.js";
+import { registerStatusExpiry } from "./helpers/status-effects.js";
+import { registerToolControls } from "./helpers/tool-controls.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 
@@ -145,11 +152,16 @@ Hooks.once("init", async function () {
     // Bulk token disposition, for a hotbar macro: `game.ffg.promptDispositionChange()`.
     promptDispositionChange,
     setTokenDisposition,
+    // Table tools, for hotbar macros: `game.ffg.RollRequestApp.open()`, `game.ffg.CharacterPilot.open()`.
+    RollRequestApp,
+    CharacterPilot,
+    SpendResults,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered
   // during init or the button never appears.
   registerDispositionControls();
+  registerToolControls();
 
   // Define custom log prefix and logger
   CONFIG.module = "Starwars FFG";
@@ -327,6 +339,12 @@ Hooks.once("init", async function () {
   await foundry.applications.handlebars.loadTemplates(["systems/starwarsffg/templates/actors/ffg-character-sheet.html", "systems/starwarsffg/templates/actors/ffg-minion-sheet.html"]);
 
   SettingsHelpers.initLevelSettings();
+
+  // Table tools: their settings, and the one listener that has to exist before any chat arrives.
+  registerDefenseSkillSettings();
+  SpendResults.registerSettings();
+  registerCombatCarouselSettings();
+  RollRequestApp.register();
 
   const uitheme = game.settings.get("starwarsffg", "ui-uitheme");
 
@@ -1004,6 +1022,41 @@ Hooks.once("init", async function () {
         },
       ],
     });
+    // The two maneuvers the Character Pilot applies as statuses. Registered as ordinary statuses so
+    // a GM can also toggle them from the Token HUD, and so the defence dice the roll builder reads
+    // off a target need no special case.
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-cover",
+      img: "icons/svg/shield.svg",
+      name: "SWFFG.Status.Cover.Light",
+      changes: [
+        {
+          key: "system.stats.defence.ranged",
+          mode: AE_MODES.ADD,
+          value: "1",
+        },
+      ],
+    });
+    // Guarded Stance: +1 melee defence, and a setback on the character's own combat checks.
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-guarded-stance",
+      img: "icons/svg/holy-shield.svg",
+      name: "SWFFG.Status.GuardedStance",
+      changes: [
+        {
+          key: "system.stats.defence.melee",
+          mode: AE_MODES.ADD,
+          value: "1",
+        },
+        ...Object.entries(CONFIG.FFG.skills)
+          .filter(([, skill]) => skill?.type === "Combat")
+          .map(([skill]) => ({
+            key: `system.skills.${skill}.setback`,
+            mode: AE_MODES.ADD,
+            value: "1",
+          })),
+      ],
+    });
     CONFIG.statusEffects.push({
       id: "starwarsffg-defeated",
       img: "systems/starwarsffg/images/status/defeated.svg",
@@ -1371,6 +1424,15 @@ Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
   // ChatMessage document; both binders expect (message, jQuery html).
   ApplyDamage.bindChatMessage(app, html);
   ApplyCrit.bindChatMessage(app, html);
+  // Roll-request cards and the unspent-results strip. Bound here, after the content rewrite above,
+  // because that rewrite replaces the card's markup and would take these with it. Guarded so that a
+  // card these cannot decorate still gets the listeners bound below.
+  try {
+    RollRequestApp.bindChatMessage(app, html);
+    SpendResults.bindChatMessage(app, html);
+  } catch (err) {
+    CONFIG.logger.warn("Failed to decorate a chat message with the table tools", err);
+  }
 
   html.on("click", ".ffg-pool-to-player", () => {
     const poolData = messageData.message.flags.starwarsffg;
@@ -1988,6 +2050,11 @@ Hooks.once("ready", async () => {
   CriticalRollerFFG.registerChatListeners();
   // Item stack splitting + character-to-character trading (socket-relayed transfers).
   StackHelpers.registerSocket();
+  // Table tools: status lifetimes, spend requests, the pilot panel's live refresh, the carousel.
+  registerStatusExpiry();
+  SpendResults.register();
+  CharacterPilot.register();
+  registerCombatCarousel();
 
   if (game.settings.get("starwarsffg", "useGenericSlots")) {
 

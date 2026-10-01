@@ -608,6 +608,11 @@ export class ActorSheetFFG extends FFGActorSheet {
         (i.flags?.starwarsffg?.config?.enableQuantity === true || Number(i.system?.quantity?.value) > 1)
     );
 
+    // The handshake ("give") control on inventory rows, switchable per actor from Sheet Options.
+    // On unless explicitly turned off, so existing actors are unchanged. The same hand-over stays
+    // reachable from the row's right-click menu either way.
+    data.showTradeIcon = this.actor.flags?.starwarsffg?.config?.showTradeIcon !== false;
+
     // Same treatment for vehicle weapons (missiles, torpedoes, and other limited-count mounts).
     data.showShipWeaponQuantity = data.items.some(
       (i) =>
@@ -964,7 +969,20 @@ export class ActorSheetFFG extends FFGActorSheet {
       },
     };
 
-    this._bindContextMenuOnce(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, duplicateItemContextItem], {jQuery: false});
+    // Give an item to another character. The same hand-over as the row's handshake button
+    // (StackHelpers.promptTrade); it is offered here as well because the right-click menu is where
+    // players look for "what can I do with this item".
+    const giveItemContextItem = {
+      name: game.i18n.localize("SWFFG.Stacks.GiveTo"),
+      icon: '<i class="fas fa-handshake"></i>',
+      condition: (el) => {
+        const item = this.actor.items.get(el.getAttribute("data-item-id"));
+        return !!item && StackHelpers.TRADEABLE_TYPES.includes(item.type) && this.actor.isOwner;
+      },
+      callback: (el) => StackHelpers.promptTrade(this.actor, el.getAttribute("data-item-id")),
+    };
+
+    this._bindContextMenuOnce(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, giveItemContextItem, duplicateItemContextItem], {jQuery: false});
     this._bindContextMenuOnce(htmlElement, "li.item.forcepower", [sendToChatContextItem, rollForceToChatContextItem], {jQuery: false});
     this._bindContextMenuOnce(htmlElement, "div.item", [sendToChatContextItem], {jQuery: false});
 
@@ -1084,6 +1102,16 @@ export class ActorSheetFFG extends FFGActorSheet {
       this.sheetoptions.register("enableSensors", {
         name: game.i18n.localize("SWFFG.EnableSensors"),
         hint: game.i18n.localize("SWFFG.EnableSensorsHint"),
+        type: "Boolean",
+        default: true,
+      });
+    }
+
+    // Every sheet whose inventory rows carry the give control.
+    if (["character", "nemesis", "rival", "minion"].includes(this.actor.type)) {
+      this.sheetoptions.register("showTradeIcon", {
+        name: game.i18n.localize("SWFFG.ShowTradeIcon"),
+        hint: game.i18n.localize("SWFFG.ShowTradeIconHint"),
         type: "Boolean",
         default: true,
       });

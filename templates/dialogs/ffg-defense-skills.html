@@ -1,0 +1,36 @@
+{{!-- Deliberately a <div>, not a <form>: this window's content element IS the form
+     (window.contentTag = "form"). See language-settings.html. --}}
+<div class="ffg-defense-skills-body" autocomplete="off">
+  <p class="notes">{{localize "SWFFG.DefenseSkills.Settings.Intro"}}</p>
+  <input type="search" data-defense-search placeholder="{{localize "SWFFG.DefenseSkills.Settings.Search"}}" />
+  <div class="ffg-defense-skills-list">
+    <table>
+      <thead>
+        <tr>
+          <th>{{localize "SWFFG.DefenseSkills.Settings.Skill"}}</th>
+          <th>{{localize "SWFFG.DefenseSkills.Settings.None"}}</th>
+          <th>{{localize "SWFFG.DefenseSkills.Settings.Melee"}}</th>
+          <th>{{localize "SWFFG.DefenseSkills.Settings.Ranged"}}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each rows}}
+        <tr data-defense-row data-search="{{this.search}}">
+          <td class="skill-name">{{this.label}}{{#if this.type}} <span class="skill-type">{{this.type}}</span>{{/if}}</td>
+          {{#if this.native}}
+          <td colspan="3" class="native">{{this.nativeLabel}}</td>
+          {{else}}
+          <td><input type="radio" name="skill-{{this.index}}" value="none" {{checked this.isNone}} /></td>
+          <td><input type="radio" name="skill-{{this.index}}" value="melee" {{checked this.isMelee}} /></td>
+          <td><input type="radio" name="skill-{{this.index}}" value="ranged" {{checked this.isRanged}} /></td>
+          {{/if}}
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  <footer class="sheet-footer flexrow">
+    <button type="button" data-action="ffgSave"><i class="far fa-save"></i> {{localize 'SETTINGS.Save'}}</button>
+    <button type="button" name="reset"><i class="fas fa-undo"></i> {{localize 'SETTINGS.Reset'}}</button>
+  </footer>
+</div>

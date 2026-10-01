@@ -45,6 +45,16 @@ on purpose — they are not build output to be regenerated.
     Active Effects pipeline (suppression + apply overrides feed the dice pool).
   - `helpers/`, `apps/`, `config/`, `importer/` (OggDude/SWA import),
     `integrations/`, `settings/`, `tokens/`, `dice/`.
+  - **Table tools** (each behind its own toggle in Configure Settings → Table
+    Tools): `apps/roll-request.js` (GM roll requests, sent as a whispered chat
+    card), `helpers/spend-results.js` (spending advantage/threat/triumph/despair
+    from a roll card), `helpers/weapon-qualities.js` (Cumbersome, Auto-fire and
+    the active qualities), `apps/character-pilot.js` (turn bookkeeping panel),
+    `apps/combat-carousel.js` (initiative strip in `#ui-top`),
+    `settings/defense-skills-settings.js` (extra skills that face defence).
+    They share `helpers/status-effects.js` (stacking "next check" statuses and
+    statuses with a lifetime) and `helpers/combat-turns.js` (whose turn it is,
+    slot-aware). Their styles are in `styles/ffg-tools.css`.
 - `templates/` — Handlebars (`.html`) templates for sheets, chat, dialogs.
 - `lib/` — **vendored** third-party libs referenced directly by `system.json`
   (slimselect, datatables, jszip, jxon, pure, `@swrpg-online`). Treat as
@@ -125,6 +135,18 @@ npx eslint modules
   via Active Effects, so it is not what the XP box shows. Edit mode suspends
   those effects, so reading it there is base too. XP log entries record the
   *effective* value — derive from the newest log entry, not the field.
+- **The theme stylesheet outranks `system.json` styles.** V14 loads the styles
+  listed in `system.json` inside a CSS layer, while `mandar.css` is appended as a
+  plain `<link>`. Unlayered rules beat layered ones whatever their specificity,
+  so a rule in `ffg-tools.css` / `swffg-sheet2.css` that has to override the
+  theme (the black dice-symbol colours, for instance) needs `!important`.
+- **A player's turn starts at the claim, not the slot.** With generic slots,
+  `combat.turns[combat.turn]` is whoever rolled that initiative; the unit acting
+  is the slot's claimant. Go through `helpers/combat-turns.js` rather than
+  `combat.combatant`.
+- **Only sweep statuses, never `actor.effects`.** XP purchases, species and
+  talent modifiers are actor-level Active Effects too. Anything that "clears
+  effects" must go through `temporaryStatusEffects()` (helpers/status-effects.js).
 - **Never edit `lib/`.** It's vendored and shipped; fixes belong in `modules/`,
   not in third-party code.
 

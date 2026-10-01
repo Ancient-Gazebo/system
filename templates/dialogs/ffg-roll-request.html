@@ -1,0 +1,87 @@
+<div class="ffg-rr-body">
+  <section class="ffg-rr-section">
+    <h3>{{localize "SWFFG.RollRequest.Players"}}</h3>
+    <div class="ffg-rr-users">
+      {{#each players}}
+      <button type="button" class="ffg-rr-user{{#if this.selected}} selected{{/if}}" data-action="toggleUser" data-user-id="{{this.id}}" style="--ffg-user-color: {{this.color}};" {{#unless this.hasActor}}disabled{{/unless}}>
+        <img src="{{this.actorImg}}" alt="" />
+        <span class="ffg-rr-user-text">
+          <span class="ffg-rr-actor-name">{{this.actorName}}</span>
+          <span class="ffg-rr-user-name">{{this.name}}</span>
+        </span>
+      </button>
+      {{else}}
+      <p class="notes">{{localize "SWFFG.RollRequest.NoPlayers"}}</p>
+      {{/each}}
+    </div>
+  </section>
+
+  <section class="ffg-rr-section ffg-rr-fields">
+    <label>
+      <span>{{localize "SWFFG.RollRequest.Skill"}}</span>
+      <select name="skill">
+        <option value="">{{localize "SWFFG.RollRequest.PickSkill"}}</option>
+        {{#each skillGroups}}
+        <optgroup label="{{this.label}}">
+          {{#each this.skills}}
+          <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+          {{/each}}
+        </optgroup>
+        {{/each}}
+      </select>
+    </label>
+    <label>
+      <span>{{localize "SWFFG.RollRequest.Reason"}}</span>
+      <input type="text" name="label" value="{{state.label}}" placeholder="{{localize "SWFFG.RollRequest.ReasonPlaceholder"}}" />
+    </label>
+  </section>
+
+  <section class="ffg-rr-section ffg-rr-dice">
+    <div class="ffg-rr-difficulty">
+      <span class="ffg-rr-field-label">{{localize "SWFFG.RollRequest.Fields.difficulty"}}</span>
+      <div class="ffg-rr-difficulty-dice">
+        {{#each difficultyDice}}
+        <button type="button" class="ffg-rr-die{{#if this.active}} active{{/if}}" data-action="setDifficulty" data-value="{{this.value}}" aria-label="{{this.value}}">
+          <img src="{{../difficultyIcon}}" alt="" />
+        </button>
+        {{/each}}
+      </div>
+    </div>
+    <div class="ffg-rr-steppers">
+      {{#each steppers}}
+      <div class="ffg-rr-stepper">
+        <span class="ffg-rr-field-label">{{this.label}}</span>
+        <div class="ffg-rr-stepper-controls">
+          <button type="button" data-action="step" data-field="{{this.field}}" data-delta="-1" {{#if this.atMin}}disabled{{/if}}>&minus;</button>
+          <output>{{this.value}}</output>
+          <button type="button" data-action="step" data-field="{{this.field}}" data-delta="1" {{#if this.atMax}}disabled{{/if}}>+</button>
+        </div>
+      </div>
+      {{/each}}
+    </div>
+    <div class="ffg-rr-final">
+      <span class="ffg-rr-field-label">{{localize "SWFFG.RollRequest.FinalDifficulty"}}</span>
+      <div class="dice-pool" data-final-difficulty></div>
+    </div>
+  </section>
+
+  <section class="ffg-rr-section">
+    <h3>{{localize "SWFFG.RollRequest.Preview"}}</h3>
+    <div class="ffg-rr-preview" data-preview></div>
+  </section>
+
+  <section class="ffg-rr-section ffg-rr-fields">
+    <label>
+      <span>{{localize "SWFFG.RollRequest.Visibility"}}</span>
+      <select name="rollMode">
+        {{#each rollModes}}
+        <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+        {{/each}}
+      </select>
+    </label>
+  </section>
+
+  <footer class="ffg-rr-footer">
+    <button type="button" data-action="send"><i class="fa-solid fa-paper-plane"></i> {{localize "SWFFG.RollRequest.Send"}}</button>
+  </footer>
+</div>

@@ -28,6 +28,7 @@
   "styles": [
     "styles/starwarsffg.css",
     "styles/swffg-sheet2.css",
+    "styles/ffg-tools.css",
     "lib/pure/grids-min.css"
   ],
   "socket": true,

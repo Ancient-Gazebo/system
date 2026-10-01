@@ -112,26 +112,33 @@ export class ActiveEffectFFG extends ActiveEffect {
    * (module id "statuscounter"). The counter is stored as a flag on the effect, so it can be read
    * synchronously during data preparation without the module needing to expose an API.
    *
-   * Returns 1 when the module is absent, no counter is set, or the value is not a usable positive
-   * integer, so behaviour is identical to a stack of one and unchanged when the module isn't used.
+   * Returns 1 when no counter is set anywhere, or the value is not a usable positive integer, so
+   * behaviour is identical to a stack of one and unchanged when nothing has been stacked.
    *
    * The current module stores the value at flags.statuscounter.value; a legacy nesting
    * (flags.statuscounter.counter.value) is read as a fallback for older installs.
    *
+   * The system keeps a count of its own as well, at flags.starwarsffg.stacks, written when a
+   * next-check status is granted more than once (Aim twice, a boost passed along from Spend Results
+   * - see helpers/status-effects.js). That is what makes stacking work with no module installed.
+   * When Status Icon Counters is running its value wins, because its badge on the token is the thing
+   * a GM edits by hand; the system mirrors every write of its own into that flag to keep them equal.
+   *
    * @returns {number} integer >= 1
    */
   getStackCount() {
+    const own = Number(this.flags?.starwarsffg?.stacks);
+    const native = Number.isFinite(own) && own >= 1 ? Math.floor(own) : 1;
     // Document#getFlag validates the scope against installed+active packages and
     // THROWS for an absent module - on a module-free world that exploded every
     // actor data-prep with an ADD-mode change (surfaced as "Failed data
-    // preparation" on item drop). Gate on the module being active (no module =
-    // no stacking UI = stack of 1) and read the flag data directly off the
-    // document, which needs no scope validation.
-    if (!game.modules?.get?.("statuscounter")?.active) return 1;
+    // preparation" on item drop). Gate on the module being active and read the
+    // flag data directly off the document, which needs no scope validation.
+    if (!game.modules?.get?.("statuscounter")?.active) return native;
     const raw = this.flags?.statuscounter?.value
       ?? this.flags?.statuscounter?.counter?.value;
     const count = Number(raw);
-    return Number.isFinite(count) && count >= 1 ? Math.floor(count) : 1;
+    return Number.isFinite(count) && count >= 1 ? Math.floor(count) : native;
   }
 
   /**

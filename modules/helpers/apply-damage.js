@@ -6,6 +6,7 @@
  * entry in the right-click context menu of the public card.
  */
 import { applyToTargetActor } from "./gm-bridge.js";
+import WeaponQualities from "./weapon-qualities.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
 
@@ -234,14 +235,20 @@ export class ApplyDamage {
     // Which track the damage lands on. This is a plain <select> row in the same grid as every other
     // field rather than the pair of .form-group radios it used to be: the radios stopped showing up
     // once the form grew, and a row here cannot be laid out away by dialog form styling.
+    // A Stun Damage weapon deals its damage as strain, and an Ion weapon deals it to a vehicle's
+    // system strain, so open on that track instead of making the GM switch it every time.
+    const strainFirst = WeaponQualities.defaultDamagePool(itemData, isVehicleTarget) === "strain";
     const poolRow = canChoosePool
       ? `<label>${applyToLabel}:</label>
          <select name="pool" style="width:100%;">
-           <option value="wounds" selected>${woundLabel}</option>
-           <option value="strain">${strainLabel}</option>
+           <option value="wounds" ${strainFirst ? "" : "selected"}>${woundLabel}</option>
+           <option value="strain" ${strainFirst ? "selected" : ""}>${strainLabel}</option>
          </select>`
       : `<label>${applyToLabel}:</label>
          <div><strong>${woundLabel}</strong></div>`;
+    // Extra hits bought from Spend Results (Auto-fire, Linked) are resolved as their own hits here,
+    // each against soak, which is exactly what the Hits field already does.
+    const defaultHits = 1 + (Math.max(0, parseInt(message.getFlag(game.system.id, "spend")?.extraHits, 10)) || 0);
 
     const blockOptions = BLOCK_TIERS.map((t) => `<option value="${t.value}">${game.i18n.localize(t.label)}</option>`).join("");
     const strainOptions = STRAIN_PER_USE_OPTIONS.map((n) => `<option value="${n}">${n}</option>`).join("");
@@ -250,7 +257,7 @@ export class ApplyDamage {
       <div style="display:grid; grid-template-columns: 170px 1fr; gap:6px 10px; align-items:center;">
         ${poolRow}
         <label>${hitsLabel}:</label>
-        <input type="number" name="hits" value="1" min="1" style="width:100%;"/>
+        <input type="number" name="hits" value="${defaultHits}" min="1" style="width:100%;"/>
         <label>${damageLabel}:</label>
         <input type="number" name="damage" value="${autoDamage}" min="0" style="width:100%;"/>
         <label>${pierceLabel}:</label>

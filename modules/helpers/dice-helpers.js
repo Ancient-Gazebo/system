@@ -4,6 +4,8 @@ import ModifierHelpers from "../helpers/modifiers.js";
 import ImportHelpers from "../importer/import-helpers.js";
 import RollProfiles from "../helpers/roll-profiles.js";
 import { getGroupSkillRank, isVehicleGroup } from "../helpers/minions.js";
+import { additionalDefenseKind } from "../settings/defense-skills-settings.js";
+import WeaponQualities from "./weapon-qualities.js";
 
 export default class DiceHelpers {
   /**
@@ -127,7 +129,9 @@ export default class DiceHelpers {
       incoming,
       baseDifficulty,
       extraSetback: extraSetback + defenseDice,
-      extraDifficulty,
+      // Cumbersome is a property of who is holding the weapon, so it belongs with the pool rather
+      // than on the quality item: it has to be re-derived whenever the pool is.
+      extraDifficulty: extraDifficulty + WeaponQualities.cumbersomePenalty(item, actorData),
       consumeUpgrades,
     });
 
@@ -309,10 +313,16 @@ export default class DiceHelpers {
       const key = normalize(skill?.value);
       let isRanged = ["rangedlight", "rangedheavy", "gunnery"].includes(key);
       let isMelee = ["melee", "brawl", "lightsaber"].includes(key);
+      // Skills the GM has opted in as attacks (Configure Settings -> Additional Defence Skills): a
+      // Force power skill, a custom combat skill, a renamed one in another skill theme. These face
+      // defence whenever they are rolled at a target, with or without a weapon behind the roll.
+      const configured = !isRanged && !isMelee ? additionalDefenseKind(skill?.value) : null;
+      if (configured === "ranged") isRanged = true;
+      else if (configured === "melee") isMelee = true;
       // `shipweapon` counts as a weapon here: a vehicle weapon fired at a personal-scale target
       // still faces that target's ranged defence. Omitting it meant gunnery attacks silently
       // ignored defence while the equivalent personal attack applied it.
-      if (itemData?.type === "weapon" || itemData?.type === "shipweapon" || itemData?.metaData?.tags?.includes("weapon")) {
+      if (configured || itemData?.type === "weapon" || itemData?.type === "shipweapon" || itemData?.metaData?.tags?.includes("weapon")) {
         if (game.user.targets.size > 0) {
           for (const target of game.user.targets) {
             // Personal ranged/melee defense only exists on actors that carry a stats.defence
@@ -372,7 +382,9 @@ export default class DiceHelpers {
   }
 
   static async rollItem(itemId, actorId, flavorText, sound) {
-    const actor = game.actors.get(actorId);
+    // An Actor may be passed in place of its id: an unlinked token's actor is not in game.actors,
+    // so it cannot be reached by id at all.
+    const actor = actorId instanceof Actor ? actorId : game.actors.get(actorId);
     const actorSheet = await actor.sheet.getData();
 
     const item = actor.items.get(itemId);

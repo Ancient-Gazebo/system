@@ -959,6 +959,53 @@ export class CombatFFG extends Combat {
   }
 
   /**
+   * Claim a slot for the token the current user is acting with: the one token they have selected,
+   * or the only token they own. Shared by the sidebar tracker and the combat carousel, so both
+   * apply the same rules about which token may take which slot.
+   * @param slotIndex - INT - index of the slot in this.turns
+   * @returns {Promise<void>}
+   */
+  async claimSlotWithToken(slotIndex) {
+    const slot = this.turns[slotIndex];
+    if (!slot) {
+      return;
+    }
+    const tokenCount = canvas.tokens.controlled.length;
+    const ownedTokenCount = canvas.tokens.ownedTokens.length;
+    // you must have a single token selected to claim a slot
+    if (tokenCount !== 1 && ownedTokenCount !== 1) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.OneToken"));
+      return;
+    }
+    const token = ownedTokenCount === 1 ? canvas.tokens.ownedTokens[0] : canvas.tokens.controlled[0];
+    // Match the combatant for THIS specific token first, only falling back to an actor-wide match.
+    // A minion group (or any actor with multiple tokens in the encounter) has several combatants
+    // sharing one actorId; the plain actor lookup returns whichever is first, so the claim - and the
+    // turn marker that follows it (Token#_refreshTurnMarker matches combatant.tokenId) - would land
+    // on the wrong token, making the marker appear to jump to a different/next token on claim.
+    // A token granted extra turns has several combatants of its own (see CombatFFG#addExtraTurn), so
+    // pick the one that has not claimed a slot yet this round. That keeps the claims map
+    // one-claim-per-combatant, which findSlotClaims()/hasClaims() both assume - they search by value
+    // and return the first hit, so pointing two slots at a single combatant id would leave a claim
+    // dangling on removal and make the header portrait dim after only the first of the turns.
+    const forToken = this.combatants.filter(i => i.tokenId === token.document.id);
+    const candidates = forToken.length ? forToken : this.combatants.filter(i => i.actorId === token.actor.id);
+    const combatant = candidates.find(i => !this.findSlotClaims(this.round, i.id)) ?? candidates[0];
+    if (!combatant) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.Combatant"));
+      return;
+    }
+    // ensure combatant is permitted in this type of slot
+    const combatantDisposition = combatant?.token?.disposition ?? combatant?.actor?.token?.disposition ?? token?.document?.disposition ?? 0;
+    const slotDisposition = slot?.token?.disposition ?? slot?.actor?.token?.disposition ?? slot?.disposition ?? 0;
+    if (slotDisposition !== combatantDisposition) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.SlotType"));
+      return;
+    }
+    await this.claimSlot(this.round, slot.id, combatant.id);
+  }
+
+  /**
    * Un-claim a slot for a given combatant
    * @param round - INT - the round
    * @param slot_id - STRING - the ID of the native combatant for this turn
@@ -1520,40 +1567,7 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
    */
   async _claimInitiativeSlot(event) {
     const slot = $(event.currentTarget).data('claim-slot');
-    const slotId = this.viewed.turns[slot].id;
-    const tokenCount = canvas.tokens.controlled.length;
-    const ownedTokenCount = canvas.tokens.ownedTokens.length;
-    // you must have a single token selected to claim a slot
-    if (tokenCount !== 1 && ownedTokenCount !== 1) {
-      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.OneToken"));
-      return;
-    }
-    const token = ownedTokenCount === 1 ? canvas.tokens.ownedTokens[0] : canvas.tokens.controlled[0];
-    // Match the combatant for THIS specific token first, only falling back to an actor-wide match.
-    // A minion group (or any actor with multiple tokens in the encounter) has several combatants
-    // sharing one actorId; the plain actor lookup returns whichever is first, so the claim - and the
-    // turn marker that follows it (Token#_refreshTurnMarker matches combatant.tokenId) - would land
-    // on the wrong token, making the marker appear to jump to a different/next token on claim.
-    // A token granted extra turns has several combatants of its own (see CombatFFG#addExtraTurn), so
-    // pick the one that has not claimed a slot yet this round. That keeps the claims map
-    // one-claim-per-combatant, which findSlotClaims()/hasClaims() both assume - they search by value
-    // and return the first hit, so pointing two slots at a single combatant id would leave a claim
-    // dangling on removal and make the header portrait dim after only the first of the turns.
-    const forToken = this.viewed.combatants.filter(i => i.tokenId === token.document.id);
-    const candidates = forToken.length ? forToken : this.viewed.combatants.filter(i => i.actorId === token.actor.id);
-    const combatant = candidates.find(i => !this.viewed.findSlotClaims(this.viewed.round, i.id)) ?? candidates[0];
-    if (!combatant) {
-      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.Combatant"));
-      return;
-    }
-    // ensure combatant is permitted in this type of slot
-    const combatantDisposition = combatant?.token?.disposition ?? combatant?.actor?.token?.disposition ?? token?.document?.disposition ?? 0;
-    const slotDisposition = this.viewed.turns[slot]?.token?.disposition ?? this.viewed.turns[slot]?.actor?.token?.disposition ?? this.viewed.turns[slot]?.disposition ?? 0;
-    if (slotDisposition !== combatantDisposition) {
-      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.SlotType"));
-      return;
-    }
-    await this.viewed.claimSlot(this.viewed.round, slotId, combatant.id);
+    await this.viewed.claimSlotWithToken(slot);
   }
 
   /** @override */

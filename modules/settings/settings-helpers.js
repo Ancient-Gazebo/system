@@ -2,6 +2,7 @@ import {
   rulesetSettings,
   uiSettings,
   combatSettings,
+  toolsSettings,
   actorSettings,
   xpSpendingSettings,
   localizationSettings,
@@ -58,6 +59,29 @@ export default class SettingsHelpers {
       type: combatSettings,
       restricted: true,
     });
+
+    game.settings.registerMenu("starwarsffg", "toolsSettings", {
+      name: game.i18n.localize("SWFFG.Settings.tools.Name"),
+      hint: game.i18n.localize("SWFFG.Settings.tools.Hint"),
+      label: game.i18n.localize("SWFFG.Settings.tools.Label"),
+      icon: "fa-solid fa-toolbox",
+      type: toolsSettings,
+      restricted: true,
+    });
+
+    // Table tools. Each is independent and can be switched off on its own. The scene-control buttons
+    // and chat hooks are wired once at load, so toggling any of these reloads every client.
+    for (const key of ["enableRollRequests", "enableSpendResults", "enableWeaponQualities", "enableCharacterPilot", "enableCombatCarousel"]) {
+      game.settings.register("starwarsffg", key, {
+        name: game.i18n.localize(`SWFFG.Settings.tools.${key}.Name`),
+        hint: game.i18n.localize(`SWFFG.Settings.tools.${key}.Hint`),
+        scope: "world",
+        config: false,
+        default: true,
+        type: Boolean,
+        onChange: this.debouncedReload,
+      });
+    }
 
     game.settings.registerMenu("starwarsffg", "actorSettings", {
       name: game.i18n.localize("SWFFG.Settings.actor.Name"),

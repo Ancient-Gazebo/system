@@ -526,9 +526,23 @@ export default class StackHelpers {
       return;
     }
 
-    const options = candidates
-      .map((a) => `<option value="${a.uuid}">${a.name}</option>`)
-      .join("");
+    // The characters of the players at the table right now come first, each labelled with who is
+    // playing it: that is almost always who an item is being handed to, and it used to mean
+    // scrolling an alphabetical list of every actor in the world to find them. Everyone else
+    // (offline allies, NPCs, ships and homesteads for stashing) follows in a second group.
+    const playing = new Map();
+    for (const user of game.users) {
+      if (!user.active || user.isGM || user.id === game.user.id) continue;
+      if (user.character && user.character.id !== actor.id) playing.set(user.character.id, user.name);
+    }
+    const option = (a) =>
+      `<option value="${a.uuid}">${a.name}${playing.has(a.id) ? ` (${playing.get(a.id)})` : ""}</option>`;
+    const online = candidates.filter((a) => playing.has(a.id));
+    const others = candidates.filter((a) => !playing.has(a.id));
+    const options = online.length
+      ? `<optgroup label="${this._t("SWFFG.Stacks.OnlinePlayers", "Players online")}">${online.map(option).join("")}</optgroup>` +
+        (others.length ? `<optgroup label="${this._t("SWFFG.Stacks.OtherRecipients", "Everyone else")}">${others.map(option).join("")}</optgroup>` : "")
+      : candidates.map(option).join("");
     const qtyRow =
       total > 1
         ? `<div class="form-group" style="display:flex;align-items:center;gap:8px;">

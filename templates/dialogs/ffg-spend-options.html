@@ -1,0 +1,32 @@
+{{#*inline "optionRow"}}
+<div class="ffg-spend-option-row" data-option-row>
+  <input type="hidden" name="id" value="{{this.id}}" />
+  <div class="ffg-spend-option-row-main">
+    <input type="text" name="title" value="{{this.title}}" placeholder="{{localize "SWFFG.Spend.Settings.TitlePlaceholder"}}" />
+    <input type="number" name="cost" value="{{this.cost}}" min="1" max="20" step="1" />
+    <select name="symbol">
+      {{#each this.symbols}}
+      <option value="{{this.value}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    <a data-remove-option title="{{localize "SWFFG.Spend.Settings.Remove"}}"><i class="fas fa-trash"></i></a>
+  </div>
+  <input type="text" name="description" value="{{this.description}}" placeholder="{{localize "SWFFG.Spend.Settings.DescriptionPlaceholder"}}" />
+</div>
+{{/inline}}
+
+{{!-- Deliberately a <div>, not a <form>: this window's content element IS the form
+     (window.contentTag = "form"). See language-settings.html. --}}
+<div class="ffg-spend-options-body" autocomplete="off">
+  <input type="hidden" name="spend-options-form" value="1" />
+  <p class="notes">{{localize "SWFFG.Spend.Settings.Intro"}}</p>
+  <div class="ffg-spend-options-list" data-option-list>
+    {{#each options}}{{> optionRow}}{{/each}}
+  </div>
+  <template data-option-template>{{> optionRow blank}}</template>
+  <button type="button" data-add-option><i class="fas fa-plus"></i> {{localize "SWFFG.Spend.Settings.Add"}}</button>
+  <footer class="sheet-footer flexrow">
+    <button type="button" data-action="ffgSave"><i class="far fa-save"></i> {{localize 'SETTINGS.Save'}}</button>
+    <button type="button" name="reset"><i class="fas fa-undo"></i> {{localize 'SETTINGS.Reset'}}</button>
+  </footer>
+</div>

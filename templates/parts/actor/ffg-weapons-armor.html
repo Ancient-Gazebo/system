@@ -6,7 +6,7 @@
   quantity, split/give/edit/delete, drag from .items-list .item) keeps working.
 --}}
 {{!-- Weapons List --}}
-<ul class="items weapon-items">
+<ul class="items weapon-items{{#if @root.showTradeIcon}} has-trade-icon{{/if}}">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsWeapons"}}</div>
     <div class="wpn-col-equipped">{{localize "SWFFG.CarriedEquipped"}}</div>
@@ -92,7 +92,7 @@
       {{/if}}
       <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>
@@ -145,7 +145,7 @@
       {{/if}}
       <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>
@@ -156,7 +156,7 @@
 </ul>
 
 {{!-- Armour List --}}
-<ul class="items armor-items">
+<ul class="items armor-items{{#if @root.showTradeIcon}} has-trade-icon{{/if}}">
   <li class="items-header flexrow">
     <div class="header-name">{{localize "SWFFG.ItemsArmor"}}</div>
     <div class="arm-col-equipped">{{localize "SWFFG.CarriedEquipped"}}</div>
@@ -228,7 +228,7 @@
       {{> "systems/starwarsffg/templates/parts/actor/ffg-adjusted-value.html" (object cls="arm-col-hp" value=item.system.hardpoints.value adjusted=item.system.hardpoints.current show=(and (ne item.system.hardpoints.adjusted item.system.hardpoints.current) (or (gt item.system.hardpoints.current.length 0) (gt item.system.hardpoints.current 0))) sources=item.system.hardpoints.sources)}}
       <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>
@@ -269,7 +269,7 @@
       {{> "systems/starwarsffg/templates/parts/actor/ffg-adjusted-value.html" (object cls="arm-col-hp" value=item.system.hardpoints.value adjusted=item.system.hardpoints.current show=(and (ne item.system.hardpoints.adjusted item.system.hardpoints.current) (or (gt item.system.hardpoints.current.length 0) (gt item.system.hardpoints.current 0))) sources=item.system.hardpoints.sources)}}
       <div class="item-controls gear-col-actions">
         {{#iff item.system.quantity.value '>' '1'}}<a class="item-control item-split" title="{{localize "SWFFG.Stacks.SplitTitle"}}"><i class="fas fa-divide"></i></a>{{/iff}}
-        <a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>
+        {{#if @root.showTradeIcon}}<a class="item-control item-give" title="{{localize "SWFFG.Stacks.TradeTitle"}}"><i class="fas fa-handshake"></i></a>{{/if}}
         <a class="item-control item-edit" title="Edit Item"><i class="fas fa-edit"></i></a>
         <a class="item-control item-delete" title="Delete Item"><i class="fas fa-trash"></i></a>
       </div>

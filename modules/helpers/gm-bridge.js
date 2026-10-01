@@ -16,6 +16,7 @@
  */
 
 import { destroyShip, killMinion } from "./minions.js";
+import { applyNextCheckLocal, applyStatusLocal } from "./status-effects.js";
 
 const FFG_SOCKET = "system.starwarsffg";
 const APPLY_EVENT = "ffgApplyToTarget";
@@ -25,13 +26,18 @@ const APPLY_EVENT = "ffgApplyToTarget";
  * is allowed to modify.
  * @param {Actor} actor
  * @param {object} op
- * @param {"damage"|"crit"|"kill-minion"|"destroy-ship"} op.type
+ * @param {"damage"|"crit"|"kill-minion"|"destroy-ship"|"next-check"|"status"} op.type
  * @param {string} [op.path]    For "damage": the numeric system path to bump.
  * @param {number} [op.delta]   For "damage": the amount to add to the current value.
  * @param {{path: string, delta: number}[]} [op.deltas] For "damage": several paths to bump in a
  *   single update. Used when one application touches two tracks at once (wounds from the hit plus
  *   strain paid for Block / Deflect). Takes precedence over path/delta when present.
+ * @param {boolean} [op.floor]  For "damage": clamp the result at zero. Recovering strain is a
+ *   negative delta, and a track never reads below zero.
  * @param {object[]} [op.items] For "crit": item data objects to embed.
+ * @param {string} [op.kind]    For "next-check": boost / setback / upgradeAbility / upgradeDifficulty.
+ * @param {number} [op.amount]  For "next-check": how many stacks to add.
+ * @param {object} [op.status]  For "status": the spec handed to applyStatusLocal.
  * @returns {Promise<void>}
  */
 async function performApply(actor, op) {
@@ -45,7 +51,7 @@ async function performApply(actor, op) {
       // Two deltas can name the same path (damage applied to strain plus the Block / Deflect
       // strain cost), so accumulate onto the pending value rather than re-reading the actor.
       const base = path in update ? update[path] : Number(foundry.utils.getProperty(actor, path)) || 0;
-      update[path] = base + delta;
+      update[path] = op.floor ? Math.max(0, base + delta) : base + delta;
     }
     if (Object.keys(update).length) await actor.update(update);
   } else if (op.type === "crit") {
@@ -54,6 +60,10 @@ async function performApply(actor, op) {
     await killMinion(actor);
   } else if (op.type === "destroy-ship") {
     await destroyShip(actor);
+  } else if (op.type === "next-check") {
+    await applyNextCheckLocal(actor, op.kind, op.amount);
+  } else if (op.type === "status") {
+    await applyStatusLocal(actor, op.status);
   }
 }
 

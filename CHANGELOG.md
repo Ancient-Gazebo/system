@@ -32,6 +32,21 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`3.0.2`
+* Enhancements:
+  * Added a set of table tools, each with its own switch under Configure Settings -> Table Tools:
+    * Roll Request. A new button in the GM's token controls asks one or more online players for a skill check: pick the players, the skill, the difficulty, upgrades, boost, setback and the roll's visibility. Each player gets a pop-up and a whispered chat card, and rolls through the normal roll dialog with their own character's ranks and modifiers (`game.ffg.RollRequestApp.open()`).
+    * Spend Results. Roll cards show the advantage, threat, triumph and despair still unspent, with a Spend button. The dialog offers the combat table during an encounter and a shorter general table otherwise, the weapon's active qualities when the roll was an attack, and any options the GM has added (Configure Settings -> Spend Results Options). Spending is recorded on the roll and announced in chat, and mechanical effects are applied: strain recovered or suffered, a boost / setback / upgrade on someone's next check, Prone, and the weapon-quality conditions. Players spend advantage and triumph; threat and despair are the GM's.
+    * Weapon quality automation. Cumbersome adds its difficulty when the wielder's Brawn falls short, Auto-fire is a tick box in the roll dialog, and the active qualities (Auto-fire, Linked, Blast, Burn, Concussive, Disorient, Ensnare, Guided, Knockdown, Stun, Sunder) can be triggered from Spend Results. Extra hits from Auto-fire and Linked pre-fill the Hits field of Apply Damage, which also opens on strain for a Stun Damage weapon and on system strain for an Ion weapon against a vehicle. Qualities that only make sense against a body are not offered against a vehicle.
+    * Character Pilot. A panel (token controls or Token HUD) that tracks a character's action and maneuvers for the turn and puts Aim, Guarded Stance, Take Cover, Stand Up, Assist, Draw / Holster, weapon attacks and End Turn one click away, with GM tools for the targeted token (`game.ffg.CharacterPilot.open()`).
+    * Combat Carousel. The round's initiative slots as a strip along the top of the canvas, with a Claim button on the open slot. Each user can collapse it.
+  * Additional Defence Skills (Configure Settings): any skill can be set to face a target's Melee or Ranged Defence when it is rolled with a token targeted, for Force power skills and custom combat skills.
+  * "Next Check" statuses now stack without any module: a second Boost Next Check raises a count on the existing status instead of being lost. With Status Icon Counters installed the count is the module's own badge.
+  * New Cover (+1 ranged defence) and Guarded Stance (+1 melee defence, a setback on the character's own combat checks) statuses.
+  * Items can be given from an inventory row's right-click menu ("Give to..."), and the recipient list puts the characters of players who are online first. The handshake button on inventory rows can be hidden per actor with the new "Show Trade Icon" sheet option.
+* Fixes:
+  * A stacked item's inventory row holds four controls (split, give, edit, delete), which did not fit the actions column, so that row's quantity and equipped columns sat out from under their headers. The column is now wide enough whenever the give control is shown.
+
 `3.0.1`
 * Enhancements:
   * The Armour list on the Combat tab can be organized into named, collapsible tabs with drag-and-drop ordering, the same way the Gear, Weapons, Talents and Abilities lists can (the folder icon in the list header). Each list keeps its own tabs.

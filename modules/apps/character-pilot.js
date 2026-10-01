@@ -412,8 +412,14 @@ export default class CharacterPilot extends ApplicationV2 {
       case "sheet":
         return actor.sheet?.render(true);
 
-      case "claim":
-        return activeCombat()?.claimSlotWithToken?.(activeCombat().turn);
+      case "claim": {
+        const combat = activeCombat();
+        // Claim for the character this panel is open on, not for whichever token is selected on the
+        // canvas: a GM piloting a minion with a player's token selected would otherwise claim (or be
+        // refused) for the wrong one. Without a token in view the usual selection rules apply.
+        const token = actor.token?.object ?? actor.getActiveTokens?.()[0] ?? null;
+        return combat?.claimSlotWithToken?.(combat.turn, token);
+      }
 
       case "toggle-action": {
         if (!Pilot.canAct(actor)) return;

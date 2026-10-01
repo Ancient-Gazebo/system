@@ -1610,6 +1610,7 @@
   "SWFFG.Spend.Quality.ensnare.Summary": "{target} is immobilized for {rank} round(s).",
   "SWFFG.Spend.Quality.knockdown.Description": "The target is knocked prone. Costs one more [AD] for each point of silhouette above 1.",
   "SWFFG.Spend.Quality.knockdown.Summary": "{target} is knocked prone.",
+  "SWFFG.Spend.Quality.Silhouette": "This target counts as silhouette {silhouette}, going by the size of its token.",
   "SWFFG.Spend.Quality.stun.Description": "The target suffers {rank} strain.",
   "SWFFG.Spend.Quality.stun.Summary": "{target} suffers {rank} strain from Stun.",
   "SWFFG.Spend.Quality.stun.SummaryWounds": "{target} has no strain track and suffers {rank} wounds from Stun.",

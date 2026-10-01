@@ -32,6 +32,11 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`3.0.4`
+* Fixes:
+  * The Character Pilot's Claim Slot button claims for the character the panel is open on. It used to claim for whichever token was selected on the canvas, so a GM piloting one character with another's token selected claimed for the wrong one, or was refused for the wrong disposition.
+  * Knockdown's extra advantage for larger targets now applies. Only vehicles record a silhouette, so for everything else the target's token size stands in for it (a 2x2 token counts as silhouette 2), and the option says so when it raises the price.
+
 `3.0.3`
 * Fixes:
   * Strain from the table tools follows the actor that takes it. Minions and rivals (and a nemesis or character whose Strain Threshold is switched off) have no strain track: strain they suffer - Suffer Strain in Spend Results, the Stun quality, the Character Pilot's second maneuver, the GM's target tools - is now taken as wounds instead of being written to a track nothing reads, and Recover Strain is shown as unavailable rather than charging advantage for nothing. Apply Damage treats a nemesis without a strain threshold the same way.

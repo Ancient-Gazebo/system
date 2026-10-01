@@ -106,6 +106,21 @@ function canonicalQuality(name) {
   return null;
 }
 
+/**
+ * A target's silhouette. Only vehicles record one. For everything else the token's footprint in grid
+ * squares stands in for it - a 2x2 token is treated as silhouette 2 - rounded down, so a token that
+ * is merely drawn a little large is never charged for.
+ * @param {?Actor} actor
+ * @returns {number} 1 or more
+ */
+function silhouetteOf(actor) {
+  const recorded = Number(actor?.system?.stats?.silhouette?.value);
+  if (Number.isFinite(recorded) && recorded > 0) return recorded;
+  const token = actor?.token ?? actor?.getActiveTokens?.(false, true)?.[0] ?? null;
+  const footprint = Math.max(Number(token?.width) || 1, Number(token?.height) || 1);
+  return Math.max(1, Math.floor(footprint));
+}
+
 export default class WeaponQualities {
   /** @returns {boolean} whether the GM has the feature switched on */
   static get enabled() {
@@ -277,9 +292,12 @@ export default class WeaponQualities {
 
       let advantage = definition.advantage;
       if (key === "blast" && !context.hit) advantage = definition.missAdvantage;
+      let description = game.i18n.format(`SWFFG.Spend.Quality.${key}.Description`, this._qualityData(context, key, quality.rank));
       if (definition.perSilhouette) {
-        const silhouette = Number(targetActor?.system?.stats?.silhouette?.value) || 1;
-        advantage += Math.max(0, silhouette - 1);
+        const silhouette = silhouetteOf(targetActor);
+        advantage += silhouette - 1;
+        // say where the higher price came from, since nothing on the sheet shows it
+        if (silhouette > 1) description += ` ${game.i18n.format("SWFFG.Spend.Quality.Silhouette", { silhouette })}`;
       }
 
       const ranked = quality.rank > 1 || ["blast", "burn", "concussive", "disorient", "ensnare", "linked", "stun", "guided"].includes(key);
@@ -287,7 +305,7 @@ export default class WeaponQualities {
         id: `quality-${key}`,
         group: "weapon",
         title: game.i18n.format("SWFFG.Spend.Quality.Activate", { quality: ranked ? `${game.i18n.localize(`SWFFG.Qualities.Name.${key}`)} ${quality.rank}` : game.i18n.localize(`SWFFG.Qualities.Name.${key}`) }),
-        description: game.i18n.format(`SWFFG.Spend.Quality.${key}.Description`, this._qualityData(context, key, quality.rank)),
+        description,
         costs: { advantage, triumph: 1 },
         max: definition.max === "rank" ? quality.rank : definition.max,
         target: definition.target ? "target" : null,

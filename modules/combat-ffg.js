@@ -963,21 +963,26 @@ export class CombatFFG extends Combat {
    * or the only token they own. Shared by the sidebar tracker and the combat carousel, so both
    * apply the same rules about which token may take which slot.
    * @param slotIndex - INT - index of the slot in this.turns
+   * @param claimingToken - Token - claim for this token instead (the Character Pilot names the
+   *   character it is open on, which need not be the token selected on the canvas)
    * @returns {Promise<void>}
    */
-  async claimSlotWithToken(slotIndex) {
+  async claimSlotWithToken(slotIndex, claimingToken = null) {
     const slot = this.turns[slotIndex];
     if (!slot) {
       return;
     }
-    const tokenCount = canvas.tokens.controlled.length;
-    const ownedTokenCount = canvas.tokens.ownedTokens.length;
-    // you must have a single token selected to claim a slot
-    if (tokenCount !== 1 && ownedTokenCount !== 1) {
-      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.OneToken"));
-      return;
+    let token = claimingToken;
+    if (!token) {
+      const tokenCount = canvas.tokens.controlled.length;
+      const ownedTokenCount = canvas.tokens.ownedTokens.length;
+      // you must have a single token selected to claim a slot
+      if (tokenCount !== 1 && ownedTokenCount !== 1) {
+        ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.OneToken"));
+        return;
+      }
+      token = ownedTokenCount === 1 ? canvas.tokens.ownedTokens[0] : canvas.tokens.controlled[0];
     }
-    const token = ownedTokenCount === 1 ? canvas.tokens.ownedTokens[0] : canvas.tokens.controlled[0];
     // Match the combatant for THIS specific token first, only falling back to an actor-wide match.
     // A minion group (or any actor with multiple tokens in the encounter) has several combatants
     // sharing one actorId; the plain actor lookup returns whichever is first, so the claim - and the

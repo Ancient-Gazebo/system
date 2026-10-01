@@ -227,7 +227,11 @@ export default class CharacterPilot extends ApplicationV2 {
     const state = CharacterPilot.turnState(actor);
     const max = CharacterPilot.maxManeuvers(actor);
     const capacity = CharacterPilot.capacity(actor, state);
-    const strain = actor.system?.stats?.strain;
+    // Where this actor takes strain: its strain track, or wounds for a minion or rival. The card and
+    // the second-maneuver cost both follow it, so an adversary is never shown (or charged on) a
+    // strain track it does not really have.
+    const strainKey = strainTrack(actor, true);
+    const strain = strainKey ? actor.system.stats[strainKey] : null;
     const blocked = !!combat && !ownTurn;
 
     const button = (action, label, icon, { disabled = false, active = false, data = "" } = {}) =>
@@ -258,7 +262,12 @@ export default class CharacterPilot extends ApplicationV2 {
     const guarded = !!findStatusEffect(actor, STATUS.guardedStance);
     const prone = !!findStatusEffect(actor, STATUS.prone);
 
-    const weapons = actor.items.filter((item) => item.type === "weapon" && item.system?.equippable?.equipped);
+    // A character attacks with what is in hand. Adversaries are stat blocks: their weapons are
+    // rarely flagged equipped at all, so for them (and for a character with nothing equipped) the
+    // list is every weapon they are carrying.
+    const carried = actor.items.filter((item) => item.type === "weapon" && item.system?.equippable?.carried !== false);
+    const equipped = carried.filter((item) => item.system?.equippable?.equipped);
+    const weapons = actor.type === "character" && equipped.length ? equipped : carried;
     const weaponButtons = weapons.length
       ? weapons.map((item) => button("attack", item.name, "fa-solid fa-crosshairs", { data: `data-item-id="${item.id}"` })).join("")
       : `<span class="notes">${loc("SWFFG.Pilot.NoWeapons")}</span>`;
@@ -313,7 +322,7 @@ export default class CharacterPilot extends ApplicationV2 {
       <section class="ffg-pilot-state">
         <div class="ffg-pilot-stat ${state.actionUsed ? "spent" : "ready"}"><span>${loc("SWFFG.Pilot.Action")}</span><strong>${loc(state.actionUsed ? "SWFFG.Pilot.Used" : "SWFFG.Pilot.Available")}</strong></div>
         <div class="ffg-pilot-stat ${state.maneuversUsed < capacity ? "ready" : "spent"}"><span>${loc("SWFFG.Pilot.Maneuvers")}</span><strong>${state.maneuversUsed} / ${capacity}</strong><small>${loc("SWFFG.Pilot.Limit", { max })}</small></div>
-        <div class="ffg-pilot-stat"><span>${loc("SWFFG.Strain")}</span><strong>${strain ? `${Number(strain.value) || 0} / ${Number(strain.max) || 0}` : "&mdash;"}</strong></div>
+        <div class="ffg-pilot-stat"><span>${loc(strainKey === "wounds" ? "SWFFG.Wounds" : "SWFFG.Strain")}</span><strong>${strain ? `${Number(strain.value) || 0} / ${Number(strain.max) || 0}` : "&mdash;"}</strong></div>
       </section>
 
       <section class="ffg-pilot-section">
@@ -321,7 +330,7 @@ export default class CharacterPilot extends ApplicationV2 {
         <div class="ffg-pilot-grid">
           ${button("toggle-action", t(state.actionUsed ? "Turn.RestoreAction" : "Turn.UseAction"), "fa-solid fa-burst", { disabled: blocked })}
           ${button("convert-action", t("Turn.ActionToManeuver"), "fa-solid fa-arrow-right-arrow-left", { disabled: blocked || state.actionUsed || capacity >= max })}
-          ${button("extra-maneuver", t("Turn.ExtraManeuver", { cost: EXTRA_MANEUVER_STRAIN }), "fa-solid fa-forward", { disabled: blocked || capacity >= max || !strain })}
+          ${button("extra-maneuver", t(strainKey === "wounds" ? "Turn.ExtraManeuverWounds" : "Turn.ExtraManeuver", { cost: EXTRA_MANEUVER_STRAIN }), "fa-solid fa-forward", { disabled: blocked || capacity >= max || !strain })}
           ${button("reset-turn", t("Turn.Reset"), "fa-solid fa-rotate-left")}
         </div>
       </section>
@@ -436,8 +445,11 @@ export default class CharacterPilot extends ApplicationV2 {
         if (!Pilot.canAct(actor)) return;
         const state = Pilot.turnState(actor);
         if (Pilot.capacity(actor, state) >= Pilot.maxManeuvers(actor)) return;
-        const strain = Number(actor.system?.stats?.strain?.value) || 0;
-        await actor.update({ "system.stats.strain.value": strain + EXTRA_MANEUVER_STRAIN });
+        // suffered as wounds by the adversaries that have no strain track
+        const track = strainTrack(actor, true);
+        if (!track) return;
+        const current = Number(actor.system.stats[track]?.value) || 0;
+        await actor.update({ [`system.stats.${track}.value`]: current + EXTRA_MANEUVER_STRAIN });
         state.extraManeuvers += 1;
         return Pilot.saveTurn(actor, state);
       }

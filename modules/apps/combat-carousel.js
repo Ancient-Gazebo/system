@@ -155,6 +155,61 @@ function centerActive(root) {
   track.scrollLeft = Math.max(0, card.offsetLeft - (track.clientWidth - card.offsetWidth) / 2);
 }
 
+/** Space left between whatever is docked above the strip and the strip itself, in px. */
+const DOCK_GAP = 6;
+
+let dockObserver = null;
+let hostObserver = null;
+
+/**
+ * Things other modules pin over the top of #ui-top: elements positioned out of the flow there
+ * (Simple Timekeeping & Calendar's bar, for one). Anything IN the flow already pushes the strip
+ * down by itself; these do not, so the strip would be drawn straight over them.
+ * @param {HTMLElement} host
+ * @param {HTMLElement} root  the carousel
+ * @returns {HTMLElement[]}
+ */
+function dockedAbove(host, root) {
+  return [...host.children].filter((element) => {
+    if (element === root || !element.offsetHeight) return false;
+    const position = getComputedStyle(element).position;
+    if (position !== "absolute" && position !== "fixed") return false;
+    // only what sits at the top edge; something pinned lower down is not in the strip's way
+    return element.getBoundingClientRect().top - host.getBoundingClientRect().top < 40;
+  });
+}
+
+/**
+ * Drop the strip below anything docked over the top of its column, and keep it there as those
+ * elements change height (the calendar's event list opening) or come and go.
+ */
+function positionCarousel() {
+  const root = document.getElementById(ELEMENT_ID);
+  const host = root?.parentElement;
+  if (!root || !host || host === document.body) return;
+
+  const obstacles = dockedAbove(host, root);
+  // #ui-middle is scaled with the interface, so screen pixels have to be turned back into the
+  // layout pixels a margin is measured in.
+  const hostRect = host.getBoundingClientRect();
+  const scale = host.offsetWidth ? hostRect.width / host.offsetWidth : 1;
+  let clearance = 0;
+  for (const element of obstacles) {
+    clearance = Math.max(clearance, (element.getBoundingClientRect().bottom - hostRect.top) / (scale || 1));
+  }
+  root.style.marginTop = clearance > 0 ? `${Math.ceil(clearance) + DOCK_GAP}px` : "";
+
+  dockObserver ??= new ResizeObserver(() => positionCarousel());
+  dockObserver.disconnect();
+  for (const element of obstacles) dockObserver.observe(element);
+
+  // A module's bar may be added (or re-added) after the strip was drawn.
+  if (!hostObserver) {
+    hostObserver = new MutationObserver(() => positionCarousel());
+    hostObserver.observe(host, { childList: true });
+  }
+}
+
 function render({ center = false } = {}) {
   const combat = activeCombat();
   const sceneId = combat?.scene?.id ?? null;
@@ -229,6 +284,7 @@ function render({ center = false } = {}) {
   const host = document.getElementById("ui-top") ?? document.body;
   if (previous) previous.replaceWith(root);
   else host.prepend(root);
+  positionCarousel();
 
   const track = root.querySelector(".ffg-cc-track");
   if (track) {

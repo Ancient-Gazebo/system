@@ -24,16 +24,22 @@
  * any of that would disagree with it.
  */
 import { applyToTargetActor } from "./gm-bridge.js";
-import { STATUS } from "./status-effects.js";
+import { STATUS, strainTrack } from "./status-effects.js";
 import { escapeHTML } from "./html.js";
 
 /**
- * Canonical quality keys and the names they are recognised by. Matched on the leading words of the
- * quality item's name, so "Burn 2", "Burn Quality" and "Burn" all resolve. Order matters where one
- * name is a prefix of another ("Stun Damage" before "Stun").
+ * Canonical quality keys and the names they are recognised by.
+ *
+ * A name matches when it is the quality's name and nothing else, give or take a rank and the word
+ * "Quality": "Burn", "Burn 2", "Burn Quality" and "Burn Quality 2" are all Burn. It is NOT matched
+ * on its first word - "Stun Setting" (the weapon may be switched to stun) is a different quality
+ * from "Stun 3" (advantage inflicts strain), and reading one as the other offered a Stun activation
+ * on weapons that have none. Anything unrecognised is simply left alone.
  */
 const QUALITY_ALIASES = [
   ["stundamage", ["stun damage"]],
+  // recognised only so that it is never mistaken for Stun; nothing is automated for it
+  ["stunsetting", ["stun setting"]],
   ["slowfiring", ["slow-firing", "slow firing"]],
   ["limitedammo", ["limited ammo"]],
   ["autofire", ["auto-fire", "auto fire", "autofire"]],
@@ -80,7 +86,7 @@ function normalizeName(value) {
     .replace(/<[^>]*>/g, " ")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/\p{M}/gu, "")
     .replace(/[^a-z0-9-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -89,8 +95,13 @@ function normalizeName(value) {
 function canonicalQuality(name) {
   const normalized = normalizeName(name);
   if (!normalized) return null;
+  // the name with any rank and any "quality" suffix taken off
+  const bare = normalized
+    .split(" ")
+    .filter((word) => word !== "quality" && !/^[0-9]+$/.test(word))
+    .join(" ");
   for (const [key, aliases] of QUALITY_ALIASES) {
-    if (aliases.some((alias) => normalized === alias || normalized.startsWith(`${alias} `))) return key;
+    if (aliases.includes(bare)) return key;
   }
   return null;
 }
@@ -347,13 +358,12 @@ export default class WeaponQualities {
         await applyStatus({ statusId: STATUS.prone });
         break;
       case "stun": {
-        // Strain, or wounds for the adversaries that have no strain track of their own.
-        const stats = actor.system?.stats ?? {};
-        const path = stats.strain ? "system.stats.strain.value" : stats.wounds ? "system.stats.wounds.value" : null;
-        if (!path) return { summary: summary("NoTrack") };
-        const result = await applyToTargetActor(actor, { type: "damage", path, delta: rank });
+        // Strain, or wounds for the adversaries (minions, rivals) that take strain that way.
+        const track = strainTrack(actor, true);
+        if (!track) throw new Error(summary("NoTrack"));
+        const result = await applyToTargetActor(actor, { type: "damage", path: `system.stats.${track}.value`, delta: rank });
         if (!result) throw new Error(game.i18n.localize("SWFFG.GMBridge.NoGM"));
-        break;
+        return { summary: summary(track === "wounds" ? "SummaryWounds" : "Summary") };
       }
     }
     return { summary: summary() };

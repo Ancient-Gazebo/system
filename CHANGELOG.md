@@ -32,6 +32,13 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`3.0.3`
+* Fixes:
+  * Strain from the table tools follows the actor that takes it. Minions and rivals (and a nemesis or character whose Strain Threshold is switched off) have no strain track: strain they suffer - Suffer Strain in Spend Results, the Stun quality, the Character Pilot's second maneuver, the GM's target tools - is now taken as wounds instead of being written to a track nothing reads, and Recover Strain is shown as unavailable rather than charging advantage for nothing. Apply Damage treats a nemesis without a strain threshold the same way.
+  * A quality is recognised by its whole name, not its first word, so "Stun Setting" is no longer offered as a Stun activation in Spend Results.
+  * The Character Pilot lists an adversary's weapons even though NPC weapons are never flagged as equipped.
+  * The Combat Carousel sits below anything another module pins to the top of the screen (Simple Timekeeping & Calendar's bar) instead of over it.
+
 `3.0.2`
 * Enhancements:
   * Added a set of table tools, each with its own switch under Configure Settings -> Table Tools:

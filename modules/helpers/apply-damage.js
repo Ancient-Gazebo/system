@@ -7,6 +7,7 @@
  */
 import { applyToTargetActor } from "./gm-bridge.js";
 import WeaponQualities from "./weapon-qualities.js";
+import { strainTrack } from "./status-effects.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
 
@@ -145,7 +146,9 @@ export class ApplyDamage {
       soakValue = Number(a.system.stats?.armour?.value) || 0;
       woundPath = "system.stats.hullTrauma.value";
       strainPath = "system.stats.systemStrain.value";
-    } else if (type === "minion" || type === "rival") {
+    } else if (type === "minion" || type === "rival" || (["character", "nemesis"].includes(type) && strainTrack(a, true) !== "strain")) {
+      // Minions and rivals have no strain track, and neither does a nemesis (or character) whose
+      // Strain Threshold has been switched off in its sheet options.
       canChoosePool = false;
       woundLabel = game.i18n.localize("SWFFG.Wounds");
       strainLabel = null;

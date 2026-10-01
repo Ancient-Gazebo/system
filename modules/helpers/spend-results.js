@@ -369,6 +369,29 @@ export default class SpendResults {
     return options;
   }
 
+  /**
+   * Why an option cannot do anything for this roll right now, or null when it can. Checked before a
+   * spend is charged, and shown in the dialog in place of the pay buttons: strain cannot be
+   * recovered by something with no strain track (a minion or rival takes strain as wounds, and has
+   * none to give back), nor by a character who has not suffered any.
+   * @param {ChatMessage} message
+   * @param {object} option
+   * @returns {?string}
+   */
+  static unavailableReason(message, option) {
+    const automation = option?.automation;
+    if (automation?.type !== "strain") return null;
+    const roller = this.targetChoices(message, "self")[0];
+    if (!roller) return game.i18n.localize("SWFFG.Spend.Errors.NoRoller");
+    const suffering = automation.delta > 0;
+    const track = strainTrack(roller.actor, suffering);
+    if (!track) return game.i18n.format(suffering ? "SWFFG.Spend.Errors.NoTrack" : "SWFFG.Spend.Summary.NoStrainTrack", { actor: roller.name });
+    if (!suffering && !(Number(roller.actor.system?.stats?.[track]?.value) > 0)) {
+      return game.i18n.format("SWFFG.Spend.Summary.NoStrainTrack", { actor: roller.name });
+    }
+    return null;
+  }
+
   /* -------------------------------------------- */
   /*  Chat card strip                             */
   /* -------------------------------------------- */
@@ -459,6 +482,8 @@ export default class SpendResults {
     const cost = option?.costs?.[symbol];
     if (!option || !cost) return fail("SWFFG.Spend.Errors.OptionMissing");
     if (!this.symbolsFor(user).includes(symbol)) return fail("SWFFG.Spend.Errors.GMOnly");
+    const blocked = this.unavailableReason(message, option);
+    if (blocked) return this._feedback(user.id, blocked);
 
     if (this._locks.has(message.id)) return fail("SWFFG.Spend.Errors.Busy");
     this._locks.add(message.id);
@@ -524,13 +549,12 @@ export default class SpendResults {
       const stats = actor.system?.stats ?? {};
       // Strain, a vehicle's system strain, or wounds for the adversaries that take strain that way.
       const track = strainTrack(actor, automation.delta > 0);
-      if (!track) return { summary: game.i18n.format("SWFFG.Spend.Summary.NoStrainTrack", { actor: target.name }) };
       const before = Number(stats[track]?.value) || 0;
+      // Normally caught by unavailableReason() before anything is charged; this is the backstop.
+      if (!track || (automation.delta < 0 && before <= 0)) throw new Error(this.unavailableReason(message, option) ?? game.i18n.localize("SWFFG.Spend.Errors.Failed"));
       const after = Math.max(0, before + automation.delta);
-      if (after !== before) {
-        const applied = await applyToTargetActor(actor, { type: "damage", path: `system.stats.${track}.value`, delta: automation.delta, floor: true });
-        if (!applied) throw noGM();
-      }
+      const applied = await applyToTargetActor(actor, { type: "damage", path: `system.stats.${track}.value`, delta: automation.delta, floor: true });
+      if (!applied) throw noGM();
       const key = automation.delta < 0 ? "StrainRecovered" : track === "wounds" ? "StrainAsWounds" : "StrainSuffered";
       return { summary: game.i18n.format(`SWFFG.Spend.Summary.${key}`, { actor: target.name, before, after }) };
     }
@@ -817,7 +841,8 @@ export class SpendResultsDialog extends ApplicationV2 {
     const row = (option) => {
       const used = state.history.filter((entry) => entry.option === option.id).length;
       const exhausted = !!option.max && used >= option.max;
-      const targetOk = this._targetAvailable(option, message);
+      const blocked = SpendResults.unavailableReason(message, option);
+      const targetOk = !blocked && this._targetAvailable(option, message);
       const buttons = Object.entries(option.costs)
         .filter(([symbol]) => allowed.includes(symbol))
         .map(([symbol, cost]) => {
@@ -832,7 +857,7 @@ export class SpendResultsDialog extends ApplicationV2 {
           <div class="ffg-spend-option-text">
             <div class="ffg-spend-option-title">${escapeHTML(option.title)}${count}</div>
             ${option.description ? `<div class="ffg-spend-option-desc">${richText(option.description)}</div>` : ""}
-            ${this._targetControl(option, message)}
+            ${blocked ? `<div class="ffg-spend-target missing">${escapeHTML(blocked)}</div>` : this._targetControl(option, message)}
           </div>
           <div class="ffg-spend-option-pay">${buttons}</div>
         </div>`;

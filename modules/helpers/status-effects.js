@@ -48,16 +48,25 @@ export const STATUS = Object.freeze({
  * rivals have neither: by the rules strain they suffer is taken as wounds, and they have nothing
  * to recover.
  *
+ * This is decided by actor TYPE, not by which fields exist. The minion data model declares a
+ * `stats.strain` block that nothing reads and no sheet shows, so "has a strain field" sent a
+ * minion's strain into a number nobody could see. A character or nemesis whose strain threshold has
+ * been switched off in Sheet Options is treated like the adversaries that have none.
+ *
  * @param {?Actor} actor
  * @param {boolean} suffering  whether strain is being added (true) or recovered (false)
  * @returns {?("strain"|"systemStrain"|"wounds")} the key under `system.stats`, or null
  */
 export function strainTrack(actor, suffering) {
-  const stats = actor?.system?.stats ?? {};
-  if (stats.strain) return "strain";
-  if (stats.systemStrain) return "systemStrain";
-  if (suffering && stats.wounds) return "wounds";
-  return null;
+  if (!actor) return null;
+  const stats = actor.system?.stats ?? {};
+  if (actor.type === "vehicle") return stats.systemStrain ? "systemStrain" : null;
+  const usesStrain =
+    ["character", "nemesis"].includes(actor.type) &&
+    !!stats.strain &&
+    actor.flags?.starwarsffg?.config?.enableStrainThreshold !== false;
+  if (usesStrain) return "strain";
+  return suffering && stats.wounds ? "wounds" : null;
 }
 
 /**

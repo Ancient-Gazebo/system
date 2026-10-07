@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.1`
+* Fixes:
+  * Send to Chat on a talent learned from a specialization tree posts the tree's wording, the same text the sheet shows. It used to post the talent the tree was imported from, usually a compendium copy, so after editing a talent and syncing it into trees (for example with FFG Tree Sync, which never changes compendiums), chat kept showing the old text. The card keeps the talent's icon and now shows the character's rank for ranked talents. Talents already synced are covered with no re-sync; cards posted earlier keep their old text.
+
 `4.0.0`
 * New table tool - Destiny Rerolls (house rule):
   * Right-click a roll card and choose Destiny Reroll to spend a Destiny Point and reroll the same dice pool with the same added symbols. Each character gets 1 per session (Configure Settings → Table Tools → Destiny Rerolls Per Session). A confirmation shows the cost first.

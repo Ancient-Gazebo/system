@@ -72,6 +72,7 @@ import { AE_MODES } from "./config/ffg-active-effect-modes.js";
 import RollRequestApp from "./apps/roll-request.js";
 import CharacterPilot from "./apps/character-pilot.js";
 import SpendResults from "./helpers/spend-results.js";
+import BondInvocation from "./helpers/bond-invocation.js";
 import { registerCombatCarousel, registerCombatCarouselSettings } from "./apps/combat-carousel.js";
 import { registerDefenseSkillSettings } from "./settings/defense-skills-settings.js";
 import { registerStatusExpiry } from "./helpers/status-effects.js";
@@ -156,6 +157,8 @@ Hooks.once("init", async function () {
     RollRequestApp,
     CharacterPilot,
     SpendResults,
+    // `game.ffg.BondInvocation.resetSession({notify: true})` starts a new session's bond count.
+    BondInvocation,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered
@@ -343,6 +346,8 @@ Hooks.once("init", async function () {
   // Table tools: their settings, and the one listener that has to exist before any chat arrives.
   registerDefenseSkillSettings();
   SpendResults.registerSettings();
+  BondInvocation.registerSettings();
+  BondInvocation.registerContextMenu();
   registerCombatCarouselSettings();
   RollRequestApp.register();
 
@@ -1429,6 +1434,7 @@ Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
   // card these cannot decorate still gets the listeners bound below.
   try {
     RollRequestApp.bindChatMessage(app, html);
+    BondInvocation.bindChatMessage(app, html);
     SpendResults.bindChatMessage(app, html);
   } catch (err) {
     CONFIG.logger.warn("Failed to decorate a chat message with the table tools", err);
@@ -1489,6 +1495,8 @@ async function rerollMessage(li, { escalate = false } = {}) {
   // equipment, manual pool additions) so the reroll carries identical modifiers.
   const added = {};
   for (const result of original.addedResults ?? []) {
+    // A bond was paid for with a Destiny Point on that roll; the reroll does not get it for free.
+    if (result.source === "bond") continue;
     const key = result.type.toLowerCase();
     added[key] = (added[key] ?? 0) + (result.negative ? -result.value : result.value);
   }
@@ -2026,6 +2034,11 @@ Hooks.once("ready", async () => {
           user: game.user.id,
           content: messageText,
         });
+
+        // Rolling for destiny is how a session starts, so the bonds come back with it.
+        if (BondInvocation.enabled) {
+          BondInvocation.resetSession().catch((err) => CONFIG.logger.warn("Failed to reset bond invocations", err));
+        }
       },
       minimumRole: CONST.USER_ROLES.GAMEMASTER,
     },
@@ -2041,6 +2054,15 @@ Hooks.once("ready", async () => {
       minimumRole: CONST.USER_ROLES.PLAYER,
     },
   ];
+  if (BondInvocation.enabled) {
+    // For tables that start a session without rolling for destiny.
+    defaultDestinyMenu.push({
+      name: game.i18n.localize("SWFFG.Bond.Reset.MenuEntry"),
+      icon: '<i class="fa-solid fa-link-slash"></i>',
+      callback: () => BondInvocation.resetSession({ notify: true }),
+      minimumRole: CONST.USER_ROLES.GAMEMASTER,
+    });
+  }
   const dTracker = new DestinyTracker(undefined, { menu: defaultDestinyMenu });
 
   dTracker.render(true);
@@ -2053,6 +2075,7 @@ Hooks.once("ready", async () => {
   // Table tools: status lifetimes, spend requests, the pilot panel's live refresh, the carousel.
   registerStatusExpiry();
   SpendResults.register();
+  BondInvocation.register();
   CharacterPilot.register();
   registerCombatCarousel();
 

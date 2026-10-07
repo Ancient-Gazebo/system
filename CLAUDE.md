@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `3.0.5`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `3.0.6`, compatibility minimum 13 /
 verified `"14.368"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -48,7 +48,10 @@ on purpose — they are not build output to be regenerated.
   - **Table tools** (each behind its own toggle in Configure Settings → Table
     Tools): `apps/roll-request.js` (GM roll requests, sent as a whispered chat
     card), `helpers/spend-results.js` (spending advantage/threat/triumph/despair
-    from a roll card), `helpers/weapon-qualities.js` (Cumbersome, Auto-fire and
+    from a roll card), `helpers/bond-invocation.js` (house rule: spend a Destiny
+    Point to add a Stylish Relationship Tracker bond's symbols to a roll; it
+    rewrites the stored roll, so everything reading `roll.ffg` follows),
+    `helpers/weapon-qualities.js` (Cumbersome, Auto-fire and
     the active qualities), `apps/character-pilot.js` (turn bookkeeping panel),
     `apps/combat-carousel.js` (initiative strip in `#ui-top`),
     `settings/defense-skills-settings.js` (extra skills that face defence).

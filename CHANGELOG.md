@@ -32,6 +32,14 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`3.0.6`
+* New table tool - Bond Invocations (house rule, needs Stylish Relationship Tracker):
+  * Right-click a roll card and choose Invoke a Bond to spend a Destiny Point on one of the roller's bonds. The bond's symbols are added to the roll as if they had been rolled: level 1-5 adds a success and an advantage, 6-9 a success and two advantages, 10 two triumphs. They cancel failure and threat like dice symbols do, and the card, Spend Results, Apply Damage and the weapon damage line all update.
+  * A bond's level is its rank in the Relationship Tracker. Only bonds the tracker shows that player are offered; organizations, negative relationships and rank 0 are left out.
+  * One bond per roll. Each character can invoke 2 per session (Configure Settings → Table Tools → Bond Invocations Per Session). Request Destiny Roll starts a new session, and GMs can also use Reset Bond Invocations in the destiny tracker's menu.
+  * A character owned by a player spends a light side point, and an NPC a dark side point. A GM must be connected, and the GM's client makes the change.
+  * Rerolling a roll that had a bond invoked on it does not carry the bond's symbols over.
+
 `3.0.5`
 * Fixes:
   * Buying several of an item from a Stylish Shop gives the buyer that many. Stylish Shop looked for item quantity at `system.quantity`, which in this system holds the quantity's fields rather than the number, so every multi-unit purchase arrived as a single item. Bought items also never stacked with ones already owned, and item requirements counted each stack as 1. When the GM loads the world, the system now sets Stylish Shop's Item Quantity Path to `system.quantity.value`, unless a GM has already chosen a different path there.

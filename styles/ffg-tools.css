@@ -41,11 +41,11 @@
  * !important because the theme file is loaded unlayered, which outranks anything in the system's
  * style layer whatever its specificity.
  */
-:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-combat-carousel) span.dietype {
+:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-bond-strip, .ffg-bond-card, .ffg-bond-dialog, .ffg-combat-carousel) span.dietype {
   font-size: 1.05em;
   line-height: 1;
 }
-:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-combat-carousel) span.dietype:is(.advantage, .threat, .triumph, .despair, .success, .failure, .light, .dark) {
+:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-bond-strip, .ffg-bond-card, .ffg-bond-dialog, .ffg-combat-carousel) span.dietype:is(.advantage, .threat, .triumph, .despair, .success, .failure, .light, .dark) {
   color: currentColor !important;
 }
 :is(.ffg-spend-card, .ffg-spend-dialog) span.dietype.setback {
@@ -536,6 +536,129 @@
 }
 .ffg-spend-options .ffg-spend-option-row-main select {
   flex: 0 0 120px;
+}
+
+/* -------------------------------------------- */
+/*  Bond Invocations                            */
+/* -------------------------------------------- */
+
+.ffg-bond-grant {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+/* the mark on a roll card a bond was invoked on */
+.ffg-bond-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+  font-size: 0.9em;
+}
+
+.ffg-bond-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ffg-bond-card .ffg-bond-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ffg-bond-card .ffg-bond-card-auto {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  font-size: 0.9em;
+}
+.ffg-bond-card .ffg-bond-card-by {
+  font-size: 0.8em;
+  opacity: 0.6;
+  text-align: right;
+}
+
+.ffg-bond-dialog .window-content {
+  padding: 8px;
+}
+.ffg-bond-dialog .ffg-bond-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ffg-bond-dialog .ffg-bond-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ffg-bond-dialog .ffg-bond-actor {
+  flex: 1;
+  font-weight: 700;
+  font-size: 1.1em;
+}
+.ffg-bond-dialog .notes,
+.ffg-bond-dialog .ffg-bond-blocked {
+  margin: 0;
+  font-size: 0.85em;
+}
+.ffg-bond-dialog .ffg-bond-blocked {
+  font-style: italic;
+}
+.ffg-bond-dialog .ffg-bond-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.ffg-bond-dialog .ffg-bond-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+}
+.ffg-bond-dialog .ffg-bond-row:nth-child(even) {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+.ffg-bond-dialog .ffg-bond-portrait {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 4px;
+}
+.ffg-bond-dialog .ffg-bond-text {
+  flex: 1;
+  min-width: 0;
+}
+.ffg-bond-dialog .ffg-bond-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ffg-bond-dialog .ffg-bond-level {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.ffg-bond-dialog .ffg-bond-row .ffg-bond-grant {
+  font-size: 1.15em;
+}
+.ffg-bond-dialog .ffg-bond-invoke {
+  flex: 0 0 auto;
+  width: auto;
+  height: 28px;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 
 /* -------------------------------------------- */

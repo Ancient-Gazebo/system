@@ -203,6 +203,8 @@ export class toolsSettings extends ffgSettings {
     const includeSettingsNames = [
       "starwarsffg.enableRollRequests",
       "starwarsffg.enableSpendResults",
+      "starwarsffg.enableBondInvocations",
+      "starwarsffg.bondInvocationsPerSession",
       "starwarsffg.enableWeaponQualities",
       "starwarsffg.enableCharacterPilot",
       "starwarsffg.enableCombatCarousel",

@@ -921,7 +921,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       icon: '<i class="far fa-comment"></i>',
       callback: (el) => {
         let itemId = el.getAttribute("data-item-id");
-        this._itemDetailsToChat(itemId);
+        this._itemDetailsToChat(itemId, el.getAttribute("data-item-name"));
       },
     };
 
@@ -2745,17 +2745,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       const details = li.children(".item-details");
       details.slideUp(200, () => details.remove());
     } else {
-      // Match getItemDetails()'s {ranks} / {ranks|word} substitution so rank-scaled talents read as
-      // a number instead of the literal placeholder.
-      const rankCount = Number(talentData?.rank);
-      const substitute = (text) => {
-        if (!Number.isFinite(rankCount)) return String(text ?? "");
-        return String(text ?? "").replace(/\{\s*ranks\s*(?:\|([^}]*))?\}/gi, (match, suffix) => {
-          const word = (suffix ?? "").trim();
-          return word ? `${rankCount} ${word}` : `${rankCount}`;
-        });
-      };
-      const description = substitute(talentData?.description);
+      const description = this._substituteTalentRanks(talentData?.description, talentData?.rank);
       const div = $(`<div class="item-details">${await PopoutEditor.renderDiceImages(description, this.actor)}</div>`);
       const props = $(`<div class="item-properties"></div>`);
       if (talentData?.isForceTalent) props.append(`<span class="tag">${game.i18n.localize("SWFFG.ForceTalent")}</span>`);
@@ -2765,6 +2755,20 @@ export class ActorSheetFFG extends FFGActorSheet {
       div.slideDown(200);
     }
     li.toggleClass("expanded");
+  }
+
+  /**
+   * Match getItemDetails()'s {ranks} / {ranks|word} substitution for a talent that has no Item
+   * document, so rank-scaled talents read as a number instead of the literal placeholder.
+   * @private
+   */
+  _substituteTalentRanks(text, rank) {
+    const rankCount = Number(rank);
+    if (!Number.isFinite(rankCount)) return String(text ?? "");
+    return String(text ?? "").replace(/\{\s*ranks\s*(?:\|([^}]*))?\}/gi, (match, suffix) => {
+      const word = (suffix ?? "").trim();
+      return word ? `${rankCount} ${word}` : `${rankCount}`;
+    });
   }
 
   /**
@@ -2791,32 +2795,28 @@ export class ActorSheetFFG extends FFGActorSheet {
    * Send details of an item to chat.
    * @private
    */
-  async _itemDetailsToChat(itemId) {
-    let item = this.actor.items.get(itemId);
-    if (!item) {
-      item = game.items.get(itemId);
-    }
-    if (!item) {
-      item = await ImportHelpers.findCompendiumEntityById("Item", itemId);
-      if (!item) {
-        const talentItemData = this.actor?.talentList.find(talent => talent.itemId === itemId);
-        if (talentItemData) {
-          item = await ImportHelpers.findCompendiumEntityByName("Item", talentItemData.name);
-        }
-      }
-    }
+  async _itemDetailsToChat(itemId, itemName) {
+    let item = this.actor.items.get(itemId) ?? game.items.get(itemId);
 
-    let itemDetails = await item?.getItemDetails();
+    // Talents granted by a specialization have no standalone Item document: their text lives in the
+    // tree box, which is what the sheet shows (_talentDisplayDetails) and what FFG Tree Sync rewrites.
+    // The box's itemId only points back at the talent the tree was built from - for imported trees a
+    // compendium entry - so building the card from that document posted the pack's text, stale as soon
+    // as the tree's wording changed. Read the actor's talentList instead, as the sheet does. A box
+    // filled in by hand has no itemId, so those are matched by name.
+    const talentData = item ? undefined : this.actor?.talentList?.find((t) => (itemId ? t.itemId === itemId : !!itemName && t.name === itemName));
 
-    if (!itemDetails) {
-      // this is likely a talent from a specialization, which otherwise returns null
-      const talentData = this.actor.talentList.find(i => i.itemId === itemId);
+    let itemDetails;
+    if (talentData) {
+      // The box stores no image. Take the source talent's from the pack indexes, which hold `img`
+      // without loading a document from every pack.
+      const indexed = itemId ? game.packs.find((p) => p.documentName === "Item" && p.index.has(itemId))?.index.get(itemId) : undefined;
       itemDetails = {
-        prettyDesc: talentData?.enrichedDescription,
+        description: this._substituteTalentRanks(talentData.description, talentData.rank),
       };
       item = {
         name: talentData.name,
-        img: "icons/svg/mystery-man.svg",
+        img: indexed?.img || "icons/svg/mystery-man.svg",
         type: "talent",
         system: {
           activation: {
@@ -2830,14 +2830,17 @@ export class ActorSheetFFG extends FFGActorSheet {
           isConflictTalent: talentData.isConflictTalent,
         }
       };
+    } else {
+      if (!item && itemId) item = await ImportHelpers.findCompendiumEntityById("Item", itemId);
+      itemDetails = await item?.getItemDetails();
     }
+    if (!item || !itemDetails) return;
 
     if (item.type === "talent" && itemDetails.description) {
       // getItemDetails() resolves itemDetails.description to the long description when one
-      // has been entered and falls back to the short description otherwise. Render it through
-      // renderDiceImages so dice symbols display, matching what the sheet shows.
-      // (Talents sourced from a specialization take the fallback above and have no
-      // itemDetails.description, so the guard preserves their pre-set prettyDesc.)
+      // has been entered and falls back to the short description otherwise; a specialization
+      // talent carries its box's description. Render it through renderDiceImages so dice
+      // symbols display, matching what the sheet shows.
       itemDetails.prettyDesc = await PopoutEditor.renderDiceImages(itemDetails.description, this.actor);
     }
 

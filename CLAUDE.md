@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `3.0.6`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.0`, compatibility minimum 13 /
 verified `"14.368"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -51,13 +51,18 @@ on purpose — they are not build output to be regenerated.
     from a roll card), `helpers/bond-invocation.js` (house rule: spend a Destiny
     Point to add a Stylish Relationship Tracker bond's symbols to a roll; it
     rewrites the stored roll, so everything reading `roll.ffg` follows),
+    `helpers/destiny-reroll.js` (house rule: a paid, per-session reroll; a
+    separate menu entry - the plain Reroll stays free for talents),
     `helpers/weapon-qualities.js` (Cumbersome, Auto-fire and
     the active qualities), `apps/character-pilot.js` (turn bookkeeping panel),
     `apps/combat-carousel.js` (initiative strip in `#ui-top`),
     `settings/defense-skills-settings.js` (extra skills that face defence).
     They share `helpers/status-effects.js` (stacking "next check" statuses and
     statuses with a lifetime) and `helpers/combat-turns.js` (whose turn it is,
-    slot-aware). Their styles are in `styles/ffg-tools.css`.
+    slot-aware); the two Destiny Point rules also share
+    `helpers/destiny-session.js` (paying from the pool, per-session counts and
+    their reset), and every reroll is rebuilt by `dice/reroll.js`. Their styles
+    are in `styles/ffg-tools.css`.
 - `templates/` — Handlebars (`.html`) templates for sheets, chat, dialogs.
 - `lib/` — **vendored** third-party libs referenced directly by `system.json`
   (slimselect, datatables, jszip, jxon, pure, `@swrpg-online`). Treat as

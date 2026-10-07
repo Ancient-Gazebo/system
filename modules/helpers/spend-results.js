@@ -179,6 +179,8 @@ export default class SpendResults {
   /** Whether a user may spend from this roll at all. */
   static canSpend(user, message) {
     if (!user || !message || this._isInitiative(message)) return false;
+    // A Destiny Reroll replaced this roll (helpers/destiny-reroll.js); its results are the new roll's.
+    if (message.flags?.starwarsffg?.destinyRerolledAs) return false;
     if (user.isGM) return true;
     const authorId = message.author?.id ?? message.user?.id ?? message.user;
     if (authorId === user.id) return true;

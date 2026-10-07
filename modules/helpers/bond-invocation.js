@@ -22,16 +22,15 @@
  * Spend Results, Apply Damage and the weapon card's damage all read the roll, so they all follow. A
  * roll takes one bond at most, as a check takes one Destiny Point.
  *
- * A character some player owns spends a light side point; one no player owns, a dark side point. The
- * destiny pool is a world setting and the roll may be someone else's message, so the invocation is
- * carried out by the active GM; requests travel over the system socket, as Spend Results' do.
- *
- * Sessions: the invocations made this session are counted per character in a world setting. The
- * GM's Request Destiny Roll - how an FFG session starts - begins a new session, and the destiny
- * tracker's menu has Reset Bond Invocations for tables that do not roll for destiny.
+ * Paying for it and counting it per session are shared with Destiny Rerolls (helpers/destiny-session.js):
+ * a player's character spends a light side point, an NPC a dark side one, and the GM's Request Destiny
+ * Roll starts a new session. The destiny pool is a world setting and the roll may be someone else's
+ * message, so the invocation is carried out by the active GM; requests travel over the system socket,
+ * as Spend Results' do.
  */
 import PopoutEditor from "../popout-editor.js";
 import SpendResults from "./spend-results.js";
+import DestinySession from "./destiny-session.js";
 import { escapeHTML, loc } from "./html.js";
 
 const { ApplicationV2 } = foundry.applications.api;
@@ -42,7 +41,6 @@ const FEEDBACK_EVENT = "ffgBondFeedback";
 const FLAG = "bond";
 const ENABLE_SETTING = "enableBondInvocations";
 const LIMIT_SETTING = "bondInvocationsPerSession";
-const STATE_SETTING = "bondInvocations";
 const TRACKER_ID = "stylish-relationship-tracker";
 const TRACKER_FLAG = "relationshipData";
 
@@ -58,11 +56,6 @@ const ADDED = {
   success: { type: "Success", symbol: "[SU]" },
   advantage: { type: "Advantage", symbol: "[AD]" },
   triumph: { type: "Triumph", symbol: "[TR]" },
-};
-
-const POOL = {
-  light: { setting: "dPoolLight", label: "destiny-pool-light", flipTo: "dark" },
-  dark: { setting: "dPoolDark", label: "destiny-pool-dark", flipTo: "light" },
 };
 
 /** @returns {?object} what a bond of this rank grants, or null when it grants nothing */
@@ -150,6 +143,8 @@ export default class BondInvocation {
     // The initiative order was settled when the dice were rolled; changing the card would not move it.
     if (message.flags?.core?.initiativeRoll) return "SWFFG.Bond.Errors.Initiative";
     if (this.invoked(message)) return "SWFFG.Bond.Errors.AlreadyInvoked";
+    // A Destiny Reroll replaced this roll; the bond belongs on the new one.
+    if (message.flags?.starwarsffg?.destinyRerolledAs) return "SWFFG.Bond.Errors.Rerolled";
     if (!this.rollerActor(message)) return "SWFFG.Bond.Errors.NoActor";
     return null;
   }
@@ -244,44 +239,12 @@ export default class BondInvocation {
   }
 
   /* -------------------------------------------- */
-  /*  Sessions and the destiny pool               */
+  /*  Session uses and the destiny pool           */
   /* -------------------------------------------- */
-
-  /** @returns {{session: ?string, started: ?number, uses: Object<string, object[]>}} */
-  static state() {
-    const stored = game.settings.get("starwarsffg", STATE_SETTING);
-    const uses = stored?.uses && typeof stored.uses === "object" ? stored.uses : {};
-    return { session: stored?.session ?? null, started: stored?.started ?? null, uses };
-  }
 
   /** How many bonds an actor has invoked this session. */
   static used(actor) {
-    const list = this.state().uses[actor?.uuid];
-    return Array.isArray(list) ? list.length : 0;
-  }
-
-  /** Start a new session: every character can invoke bonds again. GM only. */
-  static async resetSession({ notify = false } = {}) {
-    if (!game.user.isGM) return;
-    await game.settings.set("starwarsffg", STATE_SETTING, { session: foundry.utils.randomID(), started: Date.now(), uses: {} });
-    if (notify) ui.notifications.info(game.i18n.format("SWFFG.Bond.Reset.Done", { limit: this.limit }));
-  }
-
-  /** Players spend light side points; the GM, for a character no player owns, dark side ones. */
-  static side(actor) {
-    return actor?.hasPlayerOwner ? "light" : "dark";
-  }
-
-  static poolLabel(side) {
-    return game.i18n.localize(game.settings.get("starwarsffg", POOL[side].label));
-  }
-
-  /** @returns {{light: number, dark: number}} */
-  static pool() {
-    return {
-      light: Math.trunc(Number(game.settings.get("starwarsffg", POOL.light.setting))) || 0,
-      dark: Math.trunc(Number(game.settings.get("starwarsffg", POOL.dark.setting))) || 0,
-    };
+    return DestinySession.used(actor, "bond");
   }
 
   /**
@@ -290,11 +253,8 @@ export default class BondInvocation {
    */
   static blockedReason(message) {
     const actor = this.rollerActor(message);
-    const used = this.used(actor);
-    if (used >= this.limit) return game.i18n.format("SWFFG.Bond.Errors.NoUses", { actor: this.rollerName(message), limit: this.limit });
-    const side = this.side(actor);
-    if (this.pool()[side] < 1) return game.i18n.format("SWFFG.Bond.Errors.NoDestiny", { side: this.poolLabel(side) });
-    return null;
+    if (this.used(actor) >= this.limit) return game.i18n.format("SWFFG.Bond.Errors.NoUses", { actor: this.rollerName(message), limit: this.limit });
+    return DestinySession.emptyReason(DestinySession.side(actor));
   }
 
   /* -------------------------------------------- */
@@ -312,7 +272,7 @@ export default class BondInvocation {
       return true;
     }
     if (!game.users.activeGM) {
-      ui.notifications.warn(game.i18n.localize("SWFFG.Bond.Errors.NoGM"));
+      ui.notifications.warn(game.i18n.localize("SWFFG.DestinySession.Errors.NoGM"));
       return false;
     }
     game.socket.emit(SOCKET, { event: REQUEST_EVENT, request });
@@ -356,29 +316,17 @@ export default class BondInvocation {
       const blocked = this.blockedReason(message);
       if (blocked) return this._feedback(user.id, blocked);
       const used = this.used(actor);
-      const side = this.side(actor);
-      const pool = this.pool();
+      const side = DestinySession.side(actor);
 
       // The symbols first, the costs second: an invocation that could not be applied costs nothing.
       const rolls = this._rollsWithGrant(message, bond.grant);
       if (!rolls) return fail("SWFFG.Bond.Errors.NoRoll");
-      const time = Date.now();
       await message.update({
         rolls,
-        [`flags.starwarsffg.${FLAG}`]: { relationshipId: bond.id, name: bond.name, rank: bond.rank, grant: bond.grant, actorUuid: actor.uuid, side, userId: user.id, time },
+        [`flags.starwarsffg.${FLAG}`]: { relationshipId: bond.id, name: bond.name, rank: bond.rank, grant: bond.grant, actorUuid: actor.uuid, side, userId: user.id, time: Date.now() },
       });
-
-      const after = { ...pool, [side]: pool[side] - 1, [POOL[side].flipTo]: pool[POOL[side].flipTo] + 1 };
-      await game.settings.set("starwarsffg", POOL.light.setting, after.light);
-      await game.settings.set("starwarsffg", POOL.dark.setting, after.dark);
-
-      const state = this.state();
-      const previous = Array.isArray(state.uses[actor.uuid]) ? state.uses[actor.uuid] : [];
-      await game.settings.set("starwarsffg", STATE_SETTING, {
-        session: state.session ?? foundry.utils.randomID(),
-        started: state.started ?? time,
-        uses: { ...state.uses, [actor.uuid]: [...previous, { messageId: message.id, relationshipId: bond.id, time }] },
-      });
+      const after = await DestinySession.spend(side);
+      await DestinySession.record(actor, "bond", { messageId: message.id, relationshipId: bond.id });
 
       await this._announce(message, user, bond, side, after, used + 1);
       if (user.id === game.user.id) BondInvocationDialog.settle();
@@ -396,13 +344,7 @@ export default class BondInvocation {
       <div class="ffg-bond-card">
         <div class="ffg-bond-card-title"><i class="fa-solid fa-link"></i> <strong>${loc("SWFFG.Bond.Card.Title")}</strong> <span class="ffg-bond-grant">${grantIcons(bond.grant)}</span></div>
         <div>${loc("SWFFG.Bond.Card.Body", { actor: this.rollerName(message), bond: bond.name, rank: bond.rank })}</div>
-        <div class="ffg-bond-card-auto">${loc("SWFFG.Bond.Card.Destiny", {
-          side: this.poolLabel(side),
-          light: pool.light,
-          dark: pool.dark,
-          lightLabel: this.poolLabel("light"),
-          darkLabel: this.poolLabel("dark"),
-        })}</div>
+        <div class="ffg-bond-card-auto">${escapeHTML(DestinySession.spentText(side, pool))}</div>
         <div class="ffg-bond-card-by">${loc("SWFFG.Bond.Card.By", { user: user.name, used, limit: this.limit })}</div>
       </div>`;
     const data = { content, speaker: message.speaker };
@@ -455,13 +397,6 @@ export default class BondInvocation {
       type: Number,
       range: { min: 1, max: 5, step: 1 },
       onChange: () => BondInvocationDialog.refresh(),
-    });
-    game.settings.register("starwarsffg", STATE_SETTING, {
-      name: STATE_SETTING,
-      scope: "world",
-      config: false,
-      default: {},
-      type: Object,
     });
   }
 
@@ -519,9 +454,8 @@ export default class BondInvocation {
     Hooks.on("deleteChatMessage", (message) => BondInvocationDialog.instances.get(message.id)?.close());
 
     // The pool and the session count decide whether the Invoke buttons are live.
-    const watched = [POOL.light.setting, POOL.dark.setting, STATE_SETTING].map((key) => `starwarsffg.${key}`);
     const onSetting = (setting) => {
-      if (watched.includes(setting?.key)) BondInvocationDialog.refresh();
+      if (DestinySession.WATCHED_SETTINGS.includes(setting?.key)) BondInvocationDialog.refresh();
     };
     Hooks.on("createSetting", onSetting);
     Hooks.on("updateSetting", onSetting);
@@ -610,9 +544,9 @@ export class BondInvocationDialog extends ApplicationV2 {
     const name = BondInvocation.rollerName(message);
     const used = BondInvocation.used(actor);
     const limit = BondInvocation.limit;
-    const side = BondInvocation.side(actor);
-    const sideLabel = BondInvocation.poolLabel(side);
-    const points = BondInvocation.pool()[side];
+    const side = DestinySession.side(actor);
+    const sideLabel = DestinySession.poolLabel(side);
+    const points = DestinySession.pool()[side];
     const blocked = BondInvocation.blockedReason(message);
     const bonds = BondInvocation.bonds(actor, game.user);
 

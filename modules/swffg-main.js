@@ -73,6 +73,9 @@ import RollRequestApp from "./apps/roll-request.js";
 import CharacterPilot from "./apps/character-pilot.js";
 import SpendResults from "./helpers/spend-results.js";
 import BondInvocation from "./helpers/bond-invocation.js";
+import DestinyReroll from "./helpers/destiny-reroll.js";
+import DestinySession from "./helpers/destiny-session.js";
+import { buildReroll } from "./dice/reroll.js";
 import { registerCombatCarousel, registerCombatCarouselSettings } from "./apps/combat-carousel.js";
 import { registerDefenseSkillSettings } from "./settings/defense-skills-settings.js";
 import { registerStatusExpiry } from "./helpers/status-effects.js";
@@ -157,8 +160,10 @@ Hooks.once("init", async function () {
     RollRequestApp,
     CharacterPilot,
     SpendResults,
-    // `game.ffg.BondInvocation.resetSession({notify: true})` starts a new session's bond count.
+    // House-rule Destiny Point spends. `game.ffg.DestinySession.reset()` starts a new session's count.
     BondInvocation,
+    DestinyReroll,
+    DestinySession,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered
@@ -346,7 +351,10 @@ Hooks.once("init", async function () {
   // Table tools: their settings, and the one listener that has to exist before any chat arrives.
   registerDefenseSkillSettings();
   SpendResults.registerSettings();
+  DestinySession.registerSettings();
   BondInvocation.registerSettings();
+  DestinyReroll.registerSettings();
+  DestinyReroll.registerContextMenu();
   BondInvocation.registerContextMenu();
   registerCombatCarouselSettings();
   RollRequestApp.register();
@@ -1435,6 +1443,7 @@ Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
   try {
     RollRequestApp.bindChatMessage(app, html);
     BondInvocation.bindChatMessage(app, html);
+    DestinyReroll.bindChatMessage(app, html);
     SpendResults.bindChatMessage(app, html);
   } catch (err) {
     CONFIG.logger.warn("Failed to decorate a chat message with the table tools", err);
@@ -1491,47 +1500,7 @@ async function rerollMessage(li, { escalate = false } = {}) {
   const { message, original } = getMessageRollFFG(li);
   if (!original) return;
 
-  // Rebuild the fixed symbols that were layered on top of the dice (talents,
-  // equipment, manual pool additions) so the reroll carries identical modifiers.
-  const added = {};
-  for (const result of original.addedResults ?? []) {
-    // A bond was paid for with a Destiny Point on that roll; the reroll does not get it for free.
-    if (result.source === "bond") continue;
-    const key = result.type.toLowerCase();
-    added[key] = (added[key] ?? 0) + (result.negative ? -result.value : result.value);
-  }
-
-  // Count the FFG dice back into a DicePoolFFG so Escalate can upgrade them.
-  // Non-FFG terms (standard dice, numeric modifiers) are carried over verbatim
-  // using their `expression` ("2d20") rather than `formula`, because the FFG dice
-  // override the latter with a display shorthand ("5p") the parser cannot read.
-  const denomToPool = { p: "proficiency", a: "ability", c: "challenge", i: "difficulty", b: "boost", s: "setback", f: "force" };
-  const poolCounts = {};
-  const extraParts = [];
-  let lastOperator = "+";
-  for (const t of original.terms) {
-    if (t instanceof foundry.dice.terms.OperatorTerm) {
-      lastOperator = t.operator;
-    } else if (game.ffg.diceterms.includes(t.constructor)) {
-      const key = denomToPool[t.constructor.DENOMINATION];
-      poolCounts[key] = (poolCounts[key] ?? 0) + t.number;
-    } else {
-      extraParts.push({ op: lastOperator, expr: t.expression });
-    }
-  }
-
-  const pool = new DicePoolFFG(poolCounts);
-  if (escalate) {
-    pool.upgrade(1);
-    pool.upgradeDifficulty(1);
-  }
-
-  let formula = pool.renderDiceExpression();
-  for (const part of extraParts) {
-    formula = formula ? `${formula} ${part.op} ${part.expr}` : part.op === "-" ? `-${part.expr}` : part.expr;
-  }
-
-  const reroll = new RollFFG(formula, original.data, added, original.flavorText);
+  const reroll = buildReroll(original, { escalate });
 
   // Preserve the original message's visibility instead of the user's current roll mode.
   let rollMode = "publicroll";
@@ -2008,6 +1977,9 @@ Hooks.once("ready", async () => {
   // Display Destiny Pool
   let destinyPool = { light: game.settings.get("starwarsffg", "dPoolLight"), dark: game.settings.get("starwarsffg", "dPoolDark") };
 
+  // The house-rule Destiny Point spends that are limited per session, as a localization key suffix.
+  const sessionLimits = [BondInvocation.enabled && "Bonds", DestinyReroll.enabled && "Rerolls"].filter(Boolean).join("");
+
   // future functionality to allow multiple menu items to be passed to destiny pool
   const defaultDestinyMenu = [
     {
@@ -2035,9 +2007,9 @@ Hooks.once("ready", async () => {
           content: messageText,
         });
 
-        // Rolling for destiny is how a session starts, so the bonds come back with it.
-        if (BondInvocation.enabled) {
-          BondInvocation.resetSession().catch((err) => CONFIG.logger.warn("Failed to reset bond invocations", err));
+        // Rolling for destiny is how a session starts, so bonds and Destiny Rerolls come back with it.
+        if (sessionLimits) {
+          DestinySession.reset().catch((err) => CONFIG.logger.warn("Failed to start a new destiny session", err));
         }
       },
       minimumRole: CONST.USER_ROLES.GAMEMASTER,
@@ -2054,12 +2026,12 @@ Hooks.once("ready", async () => {
       minimumRole: CONST.USER_ROLES.PLAYER,
     },
   ];
-  if (BondInvocation.enabled) {
+  if (sessionLimits) {
     // For tables that start a session without rolling for destiny.
     defaultDestinyMenu.push({
-      name: game.i18n.localize("SWFFG.Bond.Reset.MenuEntry"),
-      icon: '<i class="fa-solid fa-link-slash"></i>',
-      callback: () => BondInvocation.resetSession({ notify: true }),
+      name: game.i18n.localize(`SWFFG.DestinySession.Reset.${sessionLimits}`),
+      icon: '<i class="fa-solid fa-rotate-left"></i>',
+      callback: () => DestinySession.reset({ notify: game.i18n.localize("SWFFG.DestinySession.Reset.Done") }),
       minimumRole: CONST.USER_ROLES.GAMEMASTER,
     });
   }
@@ -2076,6 +2048,7 @@ Hooks.once("ready", async () => {
   registerStatusExpiry();
   SpendResults.register();
   BondInvocation.register();
+  DestinyReroll.register();
   CharacterPilot.register();
   registerCombatCarousel();
 

@@ -539,7 +539,7 @@
 }
 
 /* -------------------------------------------- */
-/*  Bond Invocations                            */
+/*  Bond Invocations and Destiny Rerolls        */
 /* -------------------------------------------- */
 
 .ffg-bond-grant {
@@ -549,8 +549,9 @@
   white-space: nowrap;
 }
 
-/* the mark on a roll card a bond was invoked on */
-.ffg-bond-strip {
+/* the mark on a roll card a bond was invoked on, and on the two cards of a Destiny Reroll */
+.ffg-bond-strip,
+.ffg-destiny-reroll-strip {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -559,6 +560,14 @@
   padding-top: 5px;
   border-top: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
   font-size: 0.9em;
+}
+.ffg-destiny-reroll-strip {
+  flex-wrap: nowrap;
+  align-items: baseline;
+}
+.ffg-destiny-reroll-strip.replaced {
+  font-style: italic;
+  opacity: 0.75;
 }
 
 .ffg-bond-card {

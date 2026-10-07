@@ -32,6 +32,14 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.0`
+* New table tool - Destiny Rerolls (house rule):
+  * Right-click a roll card and choose Destiny Reroll to spend a Destiny Point and reroll the same dice pool with the same added symbols. Each character gets 1 per session (Configure Settings → Table Tools → Destiny Rerolls Per Session). A confirmation shows the cost first.
+  * The new card belongs to the player who asked for it, with the old card's speaker and visibility, and says which point was spent. As with bonds, a character owned by a player spends a light side point and an NPC a dark side point; a GM must be connected, and nothing is charged unless the reroll was made.
+  * The roll it replaces is marked as replaced: it cannot be destiny-rerolled again, a bond cannot be invoked on it, and its results can no longer be spent from Spend Results.
+  * The plain Reroll entry is unchanged and free, for talents and other effects that grant a reroll. Escalate is unchanged too.
+* Bond Invocations and Destiny Rerolls now share one session: Request Destiny Roll starts a new one for both, and the destiny tracker's reset entry (now Reset Bonds and Rerolls) clears both. Bond invocations counted under 3.0.6 start from zero.
+
 `3.0.6`
 * New table tool - Bond Invocations (house rule, needs Stylish Relationship Tracker):
   * Right-click a roll card and choose Invoke a Bond to spend a Destiny Point on one of the roller's bonds. The bond's symbols are added to the roll as if they had been rolled: level 1-5 adds a success and an advantage, 6-9 a success and two advantages, 10 two triumphs. They cancel failure and threat like dice symbols do, and the card, Spend Results, Apply Damage and the weapon damage line all update.

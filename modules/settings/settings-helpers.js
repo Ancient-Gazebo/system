@@ -71,7 +71,7 @@ export default class SettingsHelpers {
 
     // Table tools. Each is independent and can be switched off on its own. The scene-control buttons
     // and chat hooks are wired once at load, so toggling any of these reloads every client.
-    for (const key of ["enableRollRequests", "enableSpendResults", "enableBondInvocations", "enableDestinyRerolls", "enableWeaponQualities", "enableCharacterPilot", "enableCombatCarousel"]) {
+    for (const key of ["enableRollRequests", "enableSpendResults", "enableBondInvocations", "enableDestinyRerolls", "enableImprovisedDetonation", "enableWeaponQualities", "enableCharacterPilot", "enableCombatCarousel"]) {
       game.settings.register("starwarsffg", key, {
         name: game.i18n.localize(`SWFFG.Settings.tools.${key}.Name`),
         hint: game.i18n.localize(`SWFFG.Settings.tools.${key}.Hint`),

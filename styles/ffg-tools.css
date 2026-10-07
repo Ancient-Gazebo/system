@@ -1,6 +1,7 @@
 /*
  * Table tools: Roll Request, Spend Results, Character Pilot, Combat Carousel, the weapon quality
- * panel in the roll dialog, and the Additional Defence Skills / custom spend option settings.
+ * panel in the roll dialog, the Improvised Detonation builder, and the Additional Defence Skills /
+ * custom spend option settings.
  *
  * Loaded on its own (see system.json) rather than added to starwarsffg.css, because the UI theme
  * switch disables that file in favour of mandar.css - anything living in either would be missing
@@ -41,11 +42,11 @@
  * !important because the theme file is loaded unlayered, which outranks anything in the system's
  * style layer whatever its specificity.
  */
-:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-bond-strip, .ffg-bond-card, .ffg-bond-dialog, .ffg-combat-carousel) span.dietype {
+:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-bond-strip, .ffg-bond-card, .ffg-bond-dialog, .ffg-combat-carousel, .ffg-improvised-detonation) span.dietype {
   font-size: 1.05em;
   line-height: 1;
 }
-:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-bond-strip, .ffg-bond-card, .ffg-bond-dialog, .ffg-combat-carousel) span.dietype:is(.advantage, .threat, .triumph, .despair, .success, .failure, .light, .dark) {
+:is(.ffg-spend-strip, .ffg-spend-card, .ffg-spend-dialog, .ffg-bond-strip, .ffg-bond-card, .ffg-bond-dialog, .ffg-combat-carousel, .ffg-improvised-detonation) span.dietype:is(.advantage, .threat, .triumph, .despair, .success, .failure, .light, .dark) {
   color: currentColor !important;
 }
 :is(.ffg-spend-card, .ffg-spend-dialog) span.dietype.setback {
@@ -668,6 +669,236 @@
   height: 28px;
   padding: 0 10px;
   white-space: nowrap;
+}
+
+/* -------------------------------------------- */
+/*  Improvised Detonation builder               */
+/* -------------------------------------------- */
+
+.ffg-improvised-detonation .ffg-id-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.ffg-improvised-detonation .ffg-id-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ffg-improvised-detonation .ffg-id-header img {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border: none;
+  border-radius: 4px;
+  object-fit: cover;
+  object-position: top;
+}
+.ffg-improvised-detonation .ffg-id-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ffg-improvised-detonation .ffg-id-stats {
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+.ffg-improvised-detonation .ffg-id-tiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ffg-improvised-detonation .ffg-id-tier {
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 10px;
+  font-size: 0.8em;
+  line-height: 1.6;
+  opacity: 0.45;
+}
+.ffg-improvised-detonation .ffg-id-tier.owned {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  opacity: 1;
+}
+.ffg-improvised-detonation .ffg-id-notice {
+  margin: 0;
+  padding: 4px 8px;
+  border-left: 3px solid #d98e04;
+  border-radius: 4px;
+  background: color-mix(in srgb, #d98e04 15%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-section h3 {
+  margin: 0 0 4px;
+  font-size: 0.95em;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+.ffg-improvised-detonation .notes {
+  margin: 2px 0 6px;
+}
+.ffg-improvised-detonation .ffg-id-qualities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+}
+.ffg-improvised-detonation .ffg-id-quality {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name controls" "rating controls";
+  align-items: center;
+  column-gap: 6px;
+  min-height: 38px;
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 4px;
+}
+.ffg-improvised-detonation .ffg-id-quality.picked {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-quality-name {
+  grid-area: name;
+  font-weight: 700;
+}
+.ffg-improvised-detonation .ffg-id-quality-rating {
+  grid-area: rating;
+  font-size: 0.8em;
+  opacity: 0.75;
+}
+.ffg-improvised-detonation .ffg-id-quality > .ffg-id-stepper,
+.ffg-improvised-detonation .ffg-id-quality > .ffg-id-toggle {
+  grid-area: controls;
+}
+.ffg-improvised-detonation .ffg-id-stepper {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.ffg-improvised-detonation .ffg-id-stepper button,
+.ffg-improvised-detonation .ffg-id-toggle {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  line-height: 1;
+}
+.ffg-improvised-detonation .ffg-id-toggle i {
+  margin: 0;
+}
+.ffg-improvised-detonation .ffg-id-toggle.active {
+  background: color-mix(in srgb, currentColor 20%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-stepper output {
+  min-width: 18px;
+  text-align: center;
+  font-weight: 700;
+}
+.ffg-improvised-detonation .ffg-id-check,
+.ffg-improvised-detonation .ffg-id-result {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-check .notes {
+  margin: 0;
+}
+.ffg-improvised-detonation .ffg-id-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ffg-improvised-detonation .ffg-id-label {
+  flex: 0 0 80px;
+  font-weight: 700;
+  font-size: 0.9em;
+}
+.ffg-improvised-detonation .ffg-id-label-wide {
+  flex: 1 1 auto;
+}
+.ffg-improvised-detonation .ffg-id-value strong {
+  font-size: 1.15em;
+}
+.ffg-improvised-detonation .ffg-id-formula {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+.ffg-improvised-detonation .dice-pool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  min-height: 26px;
+}
+.ffg-improvised-detonation .dice-pool img {
+  width: 26px;
+  height: 26px;
+  border: none;
+}
+.ffg-improvised-detonation .ffg-id-result-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.ffg-improvised-detonation .ffg-id-result-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 0.9em;
+}
+.ffg-improvised-detonation .ffg-id-result-fields input {
+  width: 100%;
+  text-align: center;
+}
+.ffg-improvised-detonation .ffg-id-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-left: 3px solid currentColor;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-outcome.built {
+  border-left-color: #3a9d4a;
+  background: color-mix(in srgb, #3a9d4a 14%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-outcome.failed {
+  border-left-color: #b03030;
+  background: color-mix(in srgb, #b03030 12%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-outcome.premature {
+  border-left-color: #d98e04;
+  background: color-mix(in srgb, #d98e04 16%, transparent);
+}
+.ffg-improvised-detonation .ffg-id-breakdown {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+.ffg-improvised-detonation .ffg-id-footer {
+  display: flex;
+  gap: 6px;
+}
+.ffg-improvised-detonation .ffg-id-footer button {
+  flex: 1;
+}
+.ffg-improvised-detonation .ffg-id-footer .ffg-id-primary {
+  flex: 1.6;
+  font-weight: 700;
+}
+
+/* the Build / Finish button on the talent's card and on the check's card */
+.ffg-detonation-actions button {
+  flex: 1 1 0;
+  font-size: 0.85em;
+  padding: 2px 8px;
+  cursor: pointer;
 }
 
 /* -------------------------------------------- */

@@ -207,6 +207,7 @@ export class toolsSettings extends ffgSettings {
       "starwarsffg.bondInvocationsPerSession",
       "starwarsffg.enableDestinyRerolls",
       "starwarsffg.destinyRerollsPerSession",
+      "starwarsffg.enableImprovisedDetonation",
       "starwarsffg.enableWeaponQualities",
       "starwarsffg.enableCharacterPilot",
       "starwarsffg.enableCombatCarousel",

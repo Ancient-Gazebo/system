@@ -6,7 +6,7 @@
  * entry in the right-click context menu of the public card.
  */
 import { applyToTargetActor } from "./gm-bridge.js";
-import WeaponQualities from "./weapon-qualities.js";
+import WeaponQualities, { hasFixedDamage } from "./weapon-qualities.js";
 import { strainTrack } from "./status-effects.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
@@ -174,7 +174,8 @@ export class ApplyDamage {
     const adjusted = Number(itemSystem.damage?.adjusted) || 0;
     const baseValue = Number(itemSystem.damage?.value) || 0;
     const baseDamage = adjusted !== 0 ? adjusted : baseValue;
-    const successes = Number(message.rolls?.[0]?.ffg?.success) || 0;
+    // A device built by Improvised Detonation already counts the successes of the check that built it.
+    const successes = hasFixedDamage(itemData) ? 0 : Number(message.rolls?.[0]?.ffg?.success) || 0;
     const autoDamage = baseDamage + successes;
 
     // The rendered qualities live at system.doNotSubmit.qualities with computed

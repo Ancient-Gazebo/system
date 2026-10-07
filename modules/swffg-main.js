@@ -74,6 +74,7 @@ import CharacterPilot from "./apps/character-pilot.js";
 import SpendResults from "./helpers/spend-results.js";
 import BondInvocation from "./helpers/bond-invocation.js";
 import DestinyReroll from "./helpers/destiny-reroll.js";
+import ImprovisedDetonation from "./apps/improvised-detonation.js";
 import DestinySession from "./helpers/destiny-session.js";
 import { buildReroll } from "./dice/reroll.js";
 import { registerCombatCarousel, registerCombatCarouselSettings } from "./apps/combat-carousel.js";
@@ -164,6 +165,8 @@ Hooks.once("init", async function () {
     BondInvocation,
     DestinyReroll,
     DestinySession,
+    // `game.ffg.ImprovisedDetonation.open(actor)` opens the explosive builder for a character with the talent.
+    ImprovisedDetonation,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered
@@ -1444,6 +1447,7 @@ Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
     RollRequestApp.bindChatMessage(app, html);
     BondInvocation.bindChatMessage(app, html);
     DestinyReroll.bindChatMessage(app, html);
+    ImprovisedDetonation.bindChatMessage(app, html);
     SpendResults.bindChatMessage(app, html);
   } catch (err) {
     CONFIG.logger.warn("Failed to decorate a chat message with the table tools", err);
@@ -2049,6 +2053,7 @@ Hooks.once("ready", async () => {
   SpendResults.register();
   BondInvocation.register();
   DestinyReroll.register();
+  ImprovisedDetonation.register();
   CharacterPilot.register();
   registerCombatCarousel();
 

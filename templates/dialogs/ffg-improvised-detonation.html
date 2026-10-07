@@ -1,0 +1,99 @@
+<div class="ffg-id-body">
+  <header class="ffg-id-header">
+    <img src="{{actor.img}}" alt="" />
+    <div class="ffg-id-who">
+      <strong>{{actor.name}}</strong>
+      <span class="ffg-id-stats">{{statsText}}</span>
+      <div class="ffg-id-tiers">
+        {{#each tiers}}
+        <span class="ffg-id-tier{{#if this.owned}} owned{{/if}}">{{#if this.owned}}<i class="fa-solid fa-check"></i> {{/if}}{{this.label}}</span>
+        {{/each}}
+      </div>
+    </div>
+  </header>
+
+  {{#if usedNotice}}
+  <p class="ffg-id-notice"><i class="fa-solid fa-hourglass-half"></i> {{usedNotice}}</p>
+  {{/if}}
+
+  {{#if supreme}}
+  <section class="ffg-id-section">
+    <h3>{{localize "SWFFG.ImprovisedDetonation.Qualities"}}</h3>
+    <p class="notes">{{qualityHint}}</p>
+    <div class="ffg-id-qualities">
+      {{#each qualities}}
+      <div class="ffg-id-quality{{#if this.count}} picked{{/if}}">
+        <span class="ffg-id-quality-name">{{this.label}}</span>
+        {{#if this.ranked}}
+        <div class="ffg-id-stepper">
+          <button type="button" data-action="pick" data-key="{{this.key}}" data-delta="-1" {{#if this.atMin}}disabled{{/if}}>&minus;</button>
+          <output>{{this.count}}</output>
+          <button type="button" data-action="pick" data-key="{{this.key}}" data-delta="1" {{#if this.atMax}}disabled{{/if}}>+</button>
+        </div>
+        {{else}}
+        {{#if this.count}}
+        <button type="button" class="ffg-id-toggle active" data-action="pick" data-key="{{this.key}}" data-delta="-1" {{#if this.atMin}}disabled{{/if}} aria-pressed="true"><i class="fa-solid fa-check"></i></button>
+        {{else}}
+        <button type="button" class="ffg-id-toggle" data-action="pick" data-key="{{this.key}}" data-delta="1" {{#if this.atMax}}disabled{{/if}} aria-pressed="false"></button>
+        {{/if}}
+        {{/if}}
+        <span class="ffg-id-quality-rating">{{this.rating}}</span>
+      </div>
+      {{/each}}
+    </div>
+  </section>
+  {{/if}}
+
+  <section class="ffg-id-section ffg-id-check">
+    <div class="ffg-id-row">
+      <span class="ffg-id-label">{{localize "SWFFG.ImprovisedDetonation.Difficulty"}}</span>
+      <div class="dice-pool">
+        {{#each difficultyDice}}
+        <img src="{{this}}" alt="" />
+        {{/each}}
+      </div>
+      <span class="ffg-id-value">{{difficultyName}}</span>
+    </div>
+    <div class="ffg-id-row">
+      <span class="ffg-id-label">{{localize "SWFFG.ImprovisedDetonation.Damage"}}</span>
+      <span class="ffg-id-value">{{{damageText}}}</span>
+    </div>
+    <p class="notes">{{localize "SWFFG.ImprovisedDetonation.DamageHint"}}</p>
+  </section>
+
+  {{#if rolled}}
+  <section class="ffg-id-section ffg-id-result">
+    <h3>{{localize "SWFFG.ImprovisedDetonation.Result"}}</h3>
+    {{#if resultSource}}<p class="notes">{{resultSource}}</p>{{/if}}
+    <div class="ffg-id-result-fields">
+      {{#each resultFields}}
+      <label>
+        <span>{{{this.icon}}} {{this.label}}</span>
+        <input type="number" name="{{this.name}}" value="{{this.value}}" min="0" step="1" />
+      </label>
+      {{/each}}
+    </div>
+    {{#if canSpendTriumph}}
+    <div class="ffg-id-row">
+      <span class="ffg-id-label ffg-id-label-wide">{{spendLabel}}</span>
+      <div class="ffg-id-stepper">
+        <button type="button" data-action="spend" data-delta="-1" {{#if spendAtMin}}disabled{{/if}}>&minus;</button>
+        <output>{{spent}}</output>
+        <button type="button" data-action="spend" data-delta="1" {{#if spendAtMax}}disabled{{/if}}>+</button>
+      </div>
+    </div>
+    {{/if}}
+    <div class="ffg-id-outcome {{outcomeClass}}">{{{outcomeText}}}</div>
+  </section>
+  {{/if}}
+
+  <footer class="ffg-id-footer">
+    {{#if rolled}}
+    <button type="button" data-action="startOver"><i class="fa-solid fa-rotate-left"></i> {{localize "SWFFG.ImprovisedDetonation.StartOver"}}</button>
+    <button type="button" class="ffg-id-primary" data-action="addToSheet" {{#unless canBuild}}disabled{{/unless}}><i class="fa-solid fa-bomb"></i> {{localize "SWFFG.ImprovisedDetonation.AddToSheet"}}</button>
+    {{else}}
+    <button type="button" data-action="manual"><i class="fa-solid fa-keyboard"></i> {{localize "SWFFG.ImprovisedDetonation.EnterResult"}}</button>
+    <button type="button" class="ffg-id-primary" data-action="roll"><i class="fa-solid fa-dice"></i> {{localize "SWFFG.ImprovisedDetonation.Roll"}}</button>
+    {{/if}}
+  </footer>
+</div>

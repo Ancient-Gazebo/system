@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.1`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.2`, compatibility minimum 13 /
 verified `"14.368"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -56,6 +56,10 @@ on purpose — they are not build output to be regenerated.
     `helpers/weapon-qualities.js` (Cumbersome, Auto-fire and
     the active qualities), `apps/character-pilot.js` (turn bookkeeping panel),
     `apps/combat-carousel.js` (initiative strip in `#ui-top`),
+    `apps/improvised-detonation.js` (builds the Improvised Detonation talents'
+    explosive: difficulty, Supreme qualities, the check, damage; the device is
+    flagged `fixedDamage`, which the weapon card, Apply Damage and Blast honour
+    by not adding a later roll's successes),
     `settings/defense-skills-settings.js` (extra skills that face defence).
     They share `helpers/status-effects.js` (stacking "next check" statuses and
     statuses with a lifetime) and `helpers/combat-turns.js` (whose turn it is,

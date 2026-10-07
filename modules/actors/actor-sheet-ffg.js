@@ -38,6 +38,7 @@ import {
   isVehicleGroup,
 } from "../helpers/minions.js";
 import { FFGActorSheet } from "../apps/ffg-actor-sheet.js";
+import ImprovisedDetonation, { talentTier } from "../apps/improvised-detonation.js";
 import {itemPillHover} from "../swffg-main.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 
@@ -982,7 +983,15 @@ export class ActorSheetFFG extends FFGActorSheet {
       callback: (el) => StackHelpers.promptTrade(this.actor, el.getAttribute("data-item-id")),
     };
 
-    this._bindContextMenuOnce(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, giveItemContextItem, duplicateItemContextItem], {jQuery: false});
+    // Open the explosive builder from any of the Improvised Detonation talents' rows.
+    const improvisedDetonationContextItem = {
+      name: game.i18n.localize("SWFFG.ImprovisedDetonation.MenuEntry"),
+      icon: '<i class="fa-solid fa-bomb"></i>',
+      condition: (el) => ImprovisedDetonation.enabled && this.actor.isOwner && !!talentTier(el.getAttribute("data-item-name")),
+      callback: () => ImprovisedDetonation.open(this.actor),
+    };
+
+    this._bindContextMenuOnce(htmlElement, "li.item:not(.forcepower)", [sendToChatContextItem, improvisedDetonationContextItem, giveItemContextItem, duplicateItemContextItem], {jQuery: false});
     this._bindContextMenuOnce(htmlElement, "li.item.forcepower", [sendToChatContextItem, rollForceToChatContextItem], {jQuery: false});
     this._bindContextMenuOnce(htmlElement, "div.item", [sendToChatContextItem], {jQuery: false});
 

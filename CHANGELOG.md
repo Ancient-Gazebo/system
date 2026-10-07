@@ -32,6 +32,17 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.2`
+* New table tool - Improvised Detonation builder:
+  * Characters with Improvised Detonation get a Build Explosive button on the talent's chat card (Send to Chat) and a Build Improvised Explosive entry on the talent's right-click menu. Both open a builder for that character.
+  * The builder works out the check's difficulty: Hard, or Average with Improvised Detonation (Improved). With Improvised Detonation (Supreme), Burn +1, Concussive +1, Ensnare +1, Ion, Knockdown, Pierce +2, Stun +2 and Stun Damage can be added, the ranked ones up to three times each. Every choice makes the check one step harder, and once it reaches five difficulty dice each further step upgrades one to a challenge die, to five challenge dice at most.
+  * Roll Mechanics Check opens the normal roll dialog at that difficulty, so the character's own modifiers still apply. The result is read back from the chat card, including a bond invoked on it or a Destiny Reroll that replaced it. A check rolled some other way can be entered by hand with Enter Result.
+  * Damage is Intellect + Mechanics (twice Mechanics with Improved) + the check's successes, plus 2 for each triumph spent on it, which the builder lets you choose before the device is made. Blast equals the damage. A despair says the device goes off in the builder's face and for how much; a failed check without a despair builds nothing.
+  * Add to Sheet puts the device on the character as an Improvised Explosive weapon: Mechanics, Engaged, no critical rating, encumbrance, rarity, price or hard points, undamaged, with Blast and the chosen qualities attached. Its description records how it was built.
+  * The device's damage is final. Attacking with it later (to set it off, or to spend advantage on its qualities) shows that damage on the card and in Apply Damage instead of adding the new roll's successes again, and its Blast likewise deals just its rating.
+  * The builder reminds you if the character already used the talent this session (a new session starts with Request Destiny Roll). It is only a reminder and blocks nothing.
+  * Can be switched off under Configure Settings → Table Tools → Improvised Detonation Builder.
+
 `4.0.1`
 * Fixes:
   * Send to Chat on a talent learned from a specialization tree posts the tree's wording, the same text the sheet shows. It used to post the talent the tree was imported from, usually a compendium copy, so after editing a talent and syncing it into trees (for example with FFG Tree Sync, which never changes compendiums), chat kept showing the old text. The card keeps the talent's icon and now shows the character's rank for ranked talents. Talents already synced are covered with no re-sync; cards posted earlier keep their old text.

@@ -92,14 +92,32 @@ function normalizeName(value) {
     .trim();
 }
 
-function canonicalQuality(name) {
-  const normalized = normalizeName(name);
-  if (!normalized) return null;
-  // the name with any rank and any "quality" suffix taken off
-  const bare = normalized
+/**
+ * A quality's name with any rank and any "Quality" taken off, lower case: "Burn Quality 2" -> "burn".
+ * @param {string} name
+ * @returns {string}
+ */
+export function bareQualityName(name) {
+  return normalizeName(name)
     .split(" ")
-    .filter((word) => word !== "quality" && !/^[0-9]+$/.test(word))
+    .filter((word) => word && word !== "quality" && !/^[0-9]+$/.test(word))
     .join(" ");
+}
+
+/**
+ * Whether a weapon's damage is already final, so an attack with it does not add the roll's successes.
+ * Set on devices whose damage was settled by the check that built them (apps/improvised-detonation.js).
+ * Works on a live Item and on the copy embedded in an attack's chat message alike.
+ * @param {Item|object} item
+ * @returns {boolean}
+ */
+export function hasFixedDamage(item) {
+  return Boolean(item?.flags?.starwarsffg?.fixedDamage);
+}
+
+function canonicalQuality(name) {
+  const bare = bareQualityName(name);
+  if (!bare) return null;
   for (const [key, aliases] of QUALITY_ALIASES) {
     if (aliases.includes(bare)) return key;
   }
@@ -261,6 +279,8 @@ export default class WeaponQualities {
       baseDamage: shown(system.damage),
       crit: shown(system.crit),
       successes,
+      // what the roll adds to the damage: nothing for a device whose damage is already final
+      damageSuccesses: hasFixedDamage(item) ? 0 : successes,
       hit: successes > 0,
       qualities: this.qualities(item),
       autofireDeclared: message.flags?.starwarsffg?.attack?.autofire,
@@ -319,7 +339,7 @@ export default class WeaponQualities {
     return {
       rank,
       weapon: context.name,
-      damage: key === "blast" ? rank + (context.hit ? context.successes : 0) : context.baseDamage,
+      damage: key === "blast" ? rank + (context.hit ? context.damageSuccesses : 0) : context.baseDamage,
     };
   }
 

@@ -55,6 +55,13 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
      * as a legacy roll mode string. null leaves it to the roller's own chat setting.
      */
     this.rollMode = rollOptions?.rollMode ?? null;
+    /**
+     * For a tool that opens the dialog and needs the result back (the Improvised Detonation builder):
+     * extra `flags.starwarsffg` keys for the rolled message, and a callback given that message once it
+     * exists. Neither applies to a pool sent to another player instead of rolled.
+     */
+    this.messageFlags = rollOptions?.messageFlags ?? null;
+    this.onRolled = rollOptions?.onRolled ?? null;
     /** Whether Auto-fire has been declared for this attack (see WeaponQualities.decorateRollBuilder). */
     this._autoFire = false;
     this.adversaryRanks = RollBuilderFFG._computeAdversaryRanks();
@@ -437,7 +444,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         if (this.roll.item && this.roll.item.hasOwnProperty('crew') && Object.keys(this.roll.item).length > 1) {
           await this.roll.item.update({"flags": {"starwarsffg": {"crew": this.roll.item.crew}}})
         }
-        await roll.toMessage({
+        const message = await roll.toMessage({
           user: game.user.id,
           speaker: {
             actor: game.actors.get(this.roll.data?.actor?._id),
@@ -449,6 +456,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
           // weapon qualities act on "the target" long after the roller has clicked on something else.
           flags: {
             starwarsffg: {
+              ...(this.messageFlags ?? {}),
               attack: {
                 targets: Array.from(game.user.targets ?? []).map((token) => token.document?.uuid).filter(Boolean),
                 autofire: this._autoFire,
@@ -458,6 +466,14 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         }, this.rollMode ? { rollMode: this.rollMode } : undefined);
         if (this.roll?.sound) {
           foundry.audio.AudioHelper.play({ src: this.roll.sound }, true);
+        }
+
+        if (this.onRolled && message) {
+          try {
+            await this.onRolled(message, roll);
+          } catch (error) {
+            CONFIG.logger.warn("A roll callback failed", error);
+          }
         }
 
         await this.close();

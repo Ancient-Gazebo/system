@@ -4,10 +4,16 @@
   {{/iff}}
   <h2 class="item-name">{{system.name}}</h2>
   {{#if ffg.success}}
+  {{#if system.flags.starwarsffg.fixedDamage}}
+  {{!-- A device built by Improvised Detonation: its damage already counts the check that built it. --}}
+  <h4 class="item-damage">{{localize "SWFFG.ItemsDamage"}}: <input class="damage-value" type="text" value="{{#iff system.system.damage.adjusted '!=' 0 }}{{system.system.damage.adjusted}}{{else}}{{system.system.damage.value}}{{/iff}}" disabled /></h4>
+  <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{#iff system.system.crit.adjusted '!=' 0 }}{{system.system.crit.adjusted}}{{else}}{{system.system.crit.value}}{{/iff}}" disabled /></h4>
+  {{else}}
   {{#iff system.system.damage.adjusted '!=' 0 }}<h4 class="item-damage">{{localize "SWFFG.ItemsDamage"}}: <input class="damage-value" type="text" value="{{system.system.damage.adjusted}} + {{ffg.success}} = {{math system.system.damage.adjusted '+' ffg.success}}" disabled /></h4>
   <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{system.system.crit.adjusted}}" disabled /></h4>{{/iff}}
   {{#iff system.system.damage.adjusted '==' 0 }}<h4 class="item-damage">{{localize "SWFFG.ItemsDamage"}}: <input class="damage-value" type="text" value="{{system.system.damage.value}} + {{ffg.success}} = {{math system.system.damage.value '+' ffg.success}}" disabled /></h4>
   <h4 class="item-critical">{{localize "SWFFG.WeaponCardCritical"}}: <input class="damage-value" type="text" value="{{system.system.crit.value}}" disabled /></h4>{{/iff}}
+  {{/if}}
   <div class="ffg-chat-actions">
     <button type="button" class="ffg-apply-damage">
       <i class="fas fa-burst"></i> {{localize "SWFFG.ApplyDamage.Button"}}

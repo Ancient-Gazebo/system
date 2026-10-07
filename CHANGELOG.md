@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`3.0.5`
+* Fixes:
+  * Buying several of an item from a Stylish Shop gives the buyer that many. Stylish Shop looked for item quantity at `system.quantity`, which in this system holds the quantity's fields rather than the number, so every multi-unit purchase arrived as a single item. Bought items also never stacked with ones already owned, and item requirements counted each stack as 1. When the GM loads the world, the system now sets Stylish Shop's Item Quantity Path to `system.quantity.value`, unless a GM has already chosen a different path there.
+
 `3.0.4`
 * Fixes:
   * The Character Pilot's Claim Slot button claims for the character the panel is open on. It used to claim for whichever token was selected on the canvas, so a GM piloting one character with another's token selected claimed for the wrong one, or was refused for the wrong disposition.

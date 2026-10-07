@@ -26,11 +26,21 @@
  *   type        <- "sheet"
  *   integer     <- true (our currencies are whole-number)
  *   precision   <- 0
+ *
+ * Stylish Shop item quantity:
+ *   Stylish Shop reads and writes item quantity at a per-system path that defaults to
+ *   `system.quantity`. Ours is a { value, type } object, so the shop overwrote it with the bought
+ *   count, the DataModel cast that number back to an empty object, and every multi-unit purchase
+ *   arrived as a single item. The shop has no API for the path, only a world setting keyed by
+ *   system id, so the active GM seeds it with `system.quantity.value` (see seedStylishShopQuantityPath).
  */
 
 import { currencies as defaultCurrencies, defaultCurrency as shippedDefault } from "../config/ffg-currency.js";
 
 const GLITCHSMITH_ID = "glitchsmith-lib";
+const STYLISH_SHOP_ID = "stylish-shop";
+const STYLISH_SHOP_QUANTITY_PATHS = "itemQuantityPaths";
+const FFG_ITEM_QUANTITY_PATH = "system.quantity.value";
 
 /**
  * Resolve the currency configuration to advertise. Prefers the GM-edited world setting, then the
@@ -119,6 +129,28 @@ export function buildGlitchSmithPreset() {
 }
 
 /**
+ * Point Stylish Shop's item quantity path for this system at `system.quantity.value`. Only an unset
+ * entry or the module's own default (`system.quantity`, which can never work here) is replaced, so a
+ * path a GM chose in the shop's settings is left alone.
+ * @returns {Promise<boolean>} true when the setting was written
+ */
+export async function seedStylishShopQuantityPath() {
+  if (!game.modules.get(STYLISH_SHOP_ID)?.active) return false;
+  if (!game.users.activeGM?.isSelf) return false;
+  if (!game.settings.settings.has(`${STYLISH_SHOP_ID}.${STYLISH_SHOP_QUANTITY_PATHS}`)) return false;
+
+  const stored = game.settings.get(STYLISH_SHOP_ID, STYLISH_SHOP_QUANTITY_PATHS);
+  const paths = stored && typeof stored === "object" && !Array.isArray(stored) ? stored : {};
+  const systemId = game.system.id;
+  const current = typeof paths[systemId] === "string" ? paths[systemId].trim() : "";
+  if (current && current !== "system.quantity") return false;
+
+  await game.settings.set(STYLISH_SHOP_ID, STYLISH_SHOP_QUANTITY_PATHS, { ...paths, [systemId]: FFG_ITEM_QUANTITY_PATH });
+  CONFIG.logger?.log?.(`Set Stylish Shop's item quantity path to ${FFG_ITEM_QUANTITY_PATH}.`);
+  return true;
+}
+
+/**
  * Register the init-time hook listeners that hand our preset to GlitchSmith. Must run before
  * GlitchSmith's own init hook fires; calling this at the top of the system's init hook satisfies
  * that (systems initialize before modules).
@@ -146,5 +178,11 @@ export function registerGlitchSmithIntegration() {
     } catch (e) {
       CONFIG.logger?.warn?.(`GlitchSmith ready-fallback registration failed: ${e}`);
     }
+  });
+
+  Hooks.once("ready", () => {
+    seedStylishShopQuantityPath().catch((e) => {
+      CONFIG.logger?.warn?.(`Failed to set Stylish Shop's item quantity path: ${e}`);
+    });
   });
 }

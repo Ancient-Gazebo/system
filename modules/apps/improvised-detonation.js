@@ -8,7 +8,8 @@
  *    adds. Once that reaches five difficulty dice, each further step upgrades one of them instead, up
  *    to five challenge dice;
  *  - the damage: Intellect + Mechanics (twice Mechanics with Improved) + the check's successes, and
- *    two more for each triumph spent on it, with Blast at the same value;
+ *    two more for each triumph spent on it, with Blast at the same value - one more per rank of
+ *    Powerful Blast;
  *  - the qualities Supreme adds, the ranked ones each chosen up to three times.
  *
  * The builder works all of that out, rolls the check through the ordinary roll dialog (so the
@@ -86,6 +87,11 @@ export function talentTier(name) {
   if (/\bsupreme\b/.test(text)) return "supreme";
   if (/\bimproved\b/.test(text)) return "improved";
   return text === "improvised detonation" ? "base" : null;
+}
+
+/** Whether a talent is Powerful Blast, which adds its ranks to the Blast of the explosives the character uses. */
+function isPowerfulBlast(name) {
+  return String(name ?? "").toLowerCase().replace(/[^a-z]+/g, " ").trim() === "powerful blast";
 }
 
 /** Quality choices, as stored: only known keys, each within its limit. */
@@ -249,12 +255,35 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
     return tiers.base || tiers.improved || tiers.supreme;
   }
 
-  /** The two numbers the damage is built from, as the sheet shows them (Active Effects applied). */
+  /**
+   * The numbers the device is built from, as the sheet shows them (Active Effects applied): the two the
+   * damage comes from, and the ranks of Powerful Blast added to its Blast.
+   */
   static stats(actor) {
     return {
       intellect: count(actor?.system?.characteristics?.Intellect?.value),
       mechanics: count(actor?.system?.skills?.[SKILL]?.rank),
+      powerfulBlast: this.powerfulBlast(actor),
     };
+  }
+
+  /**
+   * Ranks of Powerful Blast. The talent list already adds up a ranked talent learned in several trees
+   * or carried as items; an unranked copy counts as one rank.
+   * @param {Actor} actor
+   * @returns {number}
+   */
+  static powerfulBlast(actor) {
+    const talents =
+      actor?.talentList ??
+      (actor?.items ?? [])
+        .filter((item) => item.type === "talent")
+        .map((item) => ({ name: item.name, isRanked: item.system?.ranks?.ranked, rank: item.system?.ranks?.current }));
+    let ranks = 0;
+    for (const talent of talents) {
+      if (isPowerfulBlast(talent?.name)) ranks += talent.isRanked ? Math.max(1, count(talent.rank)) : 1;
+    }
+    return ranks;
   }
 
   /**
@@ -274,15 +303,17 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
    * What the check's result makes of the device.
    *
    * A successful check builds it: base + successes, and two more per triumph spent, with Blast at the
-   * same value. A despair sets it off at once in the builder's face - with the full damage and Blast if
-   * the check would otherwise have succeeded, and with the base damage alone (no Blast) if it failed.
-   * A check that failed without a despair builds nothing.
+   * same value plus the builder's ranks of Powerful Blast. A despair sets it off at once in the
+   * builder's face - with the full damage and Blast if the check would otherwise have succeeded, and
+   * with the base damage alone (no Blast) if it failed. A check that failed without a despair builds
+   * nothing.
    *
    * @param {number} base  Intellect + Mechanics (twice Mechanics with Improved)
    * @param {?{success: number, triumph: number, despair: number}} result
    * @param {number} triumphsSpent
+   * @param {number} [powerfulBlast]  ranks of Powerful Blast
    */
-  static outcome(base, result, triumphsSpent) {
+  static outcome(base, result, triumphsSpent, powerfulBlast = 0) {
     if (!result) return null;
     const succeeded = result.success > 0;
     const spent = succeeded ? Math.clamp(triumphsSpent, 0, result.triumph) : 0;
@@ -291,7 +322,7 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
       succeeded,
       spent,
       damage,
-      blast: succeeded ? damage : 0,
+      blast: succeeded ? damage + powerfulBlast : 0,
       premature: result.despair > 0,
       canBuild: succeeded || result.despair > 0,
     };
@@ -405,7 +436,7 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
     const stats = ImprovisedDetonation.stats(this.actor);
     const multiplier = tiers.improved ? 2 : 1;
     const base = stats.intellect + multiplier * stats.mechanics;
-    const outcome = ImprovisedDetonation.outcome(base, this._state.result, this._state.triumphsSpent);
+    const outcome = ImprovisedDetonation.outcome(base, this._state.result, this._state.triumphsSpent, stats.powerfulBlast);
     return { tiers, picks, plan, stats, multiplier, base, outcome, result: this._state.result };
   }
 
@@ -427,6 +458,12 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
       if (outcome.spent) parts.push(`${TRIUMPH_DAMAGE * outcome.spent} (${outcome.spent} [TR])`);
     }
     return parts.join(" + ");
+  }
+
+  /** "Blast: 10 + 2 (Powerful Blast) = 12", or "" when Powerful Blast adds nothing */
+  static _blastBreakdown({ stats, outcome }) {
+    if (!outcome?.blast || !stats.powerfulBlast) return "";
+    return game.i18n.format("SWFFG.ImprovisedDetonation.BlastBreakdown", { damage: outcome.damage, ranks: stats.powerfulBlast, blast: outcome.blast });
   }
 
   static _difficultyName(plan) {
@@ -483,13 +520,20 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
         outcomeText = loc("SWFFG.ImprovisedDetonation.Outcome.Failed");
       }
       if (outcome.succeeded) outcomeText += `<span class="ffg-id-breakdown">${richText(`${ImprovisedDetonation._breakdown(computed)} = ${outcome.damage}`)}</span>`;
+      const blastBreakdown = ImprovisedDetonation._blastBreakdown(computed);
+      if (blastBreakdown) outcomeText += `<span class="ffg-id-breakdown">${escapeHTML(blastBreakdown)}</span>`;
     }
 
     const tierLabels = { base: "SWFFG.ImprovisedDetonation.Tier.base", improved: "SWFFG.ImprovisedDetonation.Tier.improved", supreme: "SWFFG.ImprovisedDetonation.Tier.supreme" };
 
     return {
       actor: { name: this.actor.name, img: this.actor.img },
-      statsText: game.i18n.format("SWFFG.ImprovisedDetonation.Stats", stats),
+      statsText: [
+        game.i18n.format("SWFFG.ImprovisedDetonation.Stats", stats),
+        stats.powerfulBlast ? game.i18n.format("SWFFG.ImprovisedDetonation.PowerfulBlast", { ranks: stats.powerfulBlast }) : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
       tiers: Object.entries(tierLabels).map(([tier, label]) => ({ label: game.i18n.localize(label), owned: tiers[tier] })),
       usedNotice,
       supreme: tiers.supreme,
@@ -497,6 +541,12 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
       qualityHint: game.i18n.format("SWFFG.ImprovisedDetonation.QualityHint", { max: MAX_PICKS }),
       difficultyDice: [...Array(plan.upgrades).fill(CONFIG.FFG.CHALLENGE_ICON), ...Array(plan.dice - plan.upgrades).fill(CONFIG.FFG.DIFFICULTY_ICON)],
       difficultyName: ImprovisedDetonation._difficultyName(plan),
+      damageHint: [
+        game.i18n.localize("SWFFG.ImprovisedDetonation.DamageHint"),
+        stats.powerfulBlast ? game.i18n.format("SWFFG.ImprovisedDetonation.PowerfulBlastHint", { ranks: stats.powerfulBlast }) : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
       damageText: `<strong>${base}</strong> + ${richText("[SU]")} <span class="ffg-id-formula">(${escapeHTML(ImprovisedDetonation._formula(computed))})</span>`,
       rolled,
       resultSource: state.source ? game.i18n.localize(`SWFFG.ImprovisedDetonation.Source.${state.source}`) : "",
@@ -667,6 +717,8 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
         damage,
       }),
     ];
+    const blastBreakdown = this._blastBreakdown(computed);
+    if (blastBreakdown) lines.push(`${blastBreakdown}.`);
     if (outcome.premature) lines.push(game.i18n.format("SWFFG.ImprovisedDetonation.Description.Premature", { actor: actor.name }));
     const description = lines.map((line) => `<p>${escapeHTML(line)}</p>`).join("");
 
@@ -697,6 +749,7 @@ export default class ImprovisedDetonation extends HandlebarsApplicationMixin(App
           [FLAG]: {
             intellect: stats.intellect,
             mechanics: stats.mechanics,
+            powerfulBlast: stats.powerfulBlast,
             improved: tiers.improved,
             successes: result.success,
             triumphsSpent: outcome.spent,

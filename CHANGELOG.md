@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.3`
+* Improvised Detonation builder: Powerful Blast now counts. The explosive's Blast is its damage plus 1 for each rank of Powerful Blast the character has, whether the talent comes from a specialization tree or is on the sheet directly. The builder shows the ranks next to Intellect and Mechanics and how the Blast was worked out, and the explosive's description records it. Explosives built under 4.0.2 keep the Blast they were made with.
+* The explosive's description no longer reads "on a Average Mechanics check".
+
 `4.0.2`
 * New table tool - Improvised Detonation builder:
   * Characters with Improvised Detonation get a Build Explosive button on the talent's chat card (Send to Chat) and a Build Improvised Explosive entry on the talent's right-click menu. Both open a builder for that character.

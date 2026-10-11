@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.4`
+* Verified on Foundry 14.369. The setup screen no longer flags the system as unverified on this build.
+* The fix for chat messages showing "11m 364d ago" now switches itself off on Foundry 14.369 and later, which fix the problem themselves. Nothing changes in play, and older builds keep the fix.
+
 `4.0.3`
 * Improvised Detonation builder: Powerful Blast now counts. The explosive's Blast is its damage plus 1 for each rank of Powerful Blast the character has, whether the talent comes from a specialization tree or is on the sheet directly. The builder shows the ranks next to Intellect and Mechanics and how the Blast was worked out, and the explosive's description records it. Explosives built under 4.0.2 keep the Blast they were made with.
 * The explosive's description no longer reads "on a Average Mechanics check".

@@ -41,14 +41,20 @@
 /**
  * Probe whether the running core build still mis-renders a negative duration.
  *
- * Tests the structural defect (a negative time decomposing into positive month
- * and day components) AND the visible symptom (a future time formatting
- * differently from "now"), so a core fix at either layer retires the guard on
- * its own without a version check.
+ * Tests `timeSince` itself, the structural defect (a negative time decomposing
+ * into positive month and day components) AND the visible symptom (a future
+ * time formatting differently from "now"), so a core fix at any layer retires
+ * the guard on its own without a version check. Core 14.369 fixed it in
+ * `timeSince` (it clamps the delta to zero), leaving the calendar as it was.
  * @param {CalendarData} calendar   The Earth calendar `timeSince` formats against.
  * @returns {boolean}               Whether the guard is needed on this build.
  */
 function isAffected(calendar) {
+  const timeSince = foundry.utils?.timeSince;
+  if (typeof timeSince === "function") {
+    const now = Date.now();
+    if (timeSince(now + 60 * 60 * 1000) === timeSince(now)) return false;
+  }
   const future = calendar.timeToComponents(-60);
   if (!(Number(future.year) < 0)) return false;
   if (!(Number(future.month) > 0 || Number(future.day) > 0)) return false;

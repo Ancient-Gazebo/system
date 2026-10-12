@@ -4498,6 +4498,18 @@ body.system-starwarsffg #context-menu.theme-light button:hover {
   white-space: nowrap !important;
 }
 
+/* Monk's Combat Details round markers ("Round Start", "Round 2", "Round End") were dark grey on a
+   dark sidebar, with or without Space Opera UI. The module takes the card away from behind a
+   marker, so it sits on the sidebar itself, yet picks its text colour from the chat log's theme -
+   and V14 always marks the chat log theme-light (for its cards), so the text came out #444. With a
+   dark interface, give the sidebar's markers light text. The pop-out chat window and the
+   notification pop-ups have a light backing and keep the module's own dark text. The module's rule
+   is !important, so this one is too: between important declarations the earlier layer (system)
+   wins over the later one (modules). */
+body.theme-dark #chat .chat-log .message.round-marker .message-header .flavor-text {
+  color: var(--color-light-2) !important;
+}
+
 /* Cap the dialog width so a long hint/notes line wraps onto multiple rows
    instead of stretching the auto-sized window horizontally. The 1fr label/notes
    grid column then wraps within this bound; short hints keep the dialog compact. */

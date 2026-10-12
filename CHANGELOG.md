@@ -32,6 +32,15 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.5`
+* Combat Carousel: the GM can right-click a card to un-claim or remove its slot, as in the sidebar tracker. Un-claim Initiative Slot (shown on a claimed slot) releases the claim. Remove Initiative Slot takes the slot out of the order after asking, and as in the tracker a claimed slot has to be un-claimed first. Both use the tracker's own code, so the two always agree.
+  * This is the quick way to clear the slots a fight leaves behind. With the default Remove Combatant Action (Combatant Only), a combatant removed mid-combat, including by deleting its token, leaves its slot behind as a generic one, and the carousel marks a side's spare slots as Unused. On Foundry 14.369, deleting the token of a combatant in an encounter linked to its scene does not remove the combatant at all (a core bug); Remove Initiative Slot clears those too.
+* New statuses: Failure Next Check and Threat Next Check. Like the other Next Check statuses, each adds its symbol to the character's next check and is removed once that check is rolled. Until now failure and threat could only be added for the whole combat.
+* Fixes:
+  * Monk's Combat Details' round markers in chat ("Round Start", "Round 2", "Round End") were dark grey on the dark sidebar and hard to read, with or without Space Opera UI. They now have light text there. The notification pop-ups and the popped-out chat window, where the markers have a light backing, keep their dark text.
+  * Deleting a token mid-combat put the slot it left behind on the side of the actor's default token, not the side the token was on: a friendly token of a hostile actor came back as an enemy slot. The slot now stays on the token's side.
+  * A slot left behind by a removed combatant was created without a side and only given one a moment later. Meanwhile the console logged "caught disposition issue" warnings and the carousel drew the slot as neutral. It now has its side from the start.
+
 `4.0.4`
 * Verified on Foundry 14.369. The setup screen no longer flags the system as unverified on this build.
 * The fix for chat messages showing "11m 364d ago" now switches itself off on Foundry 14.369 and later, which fix the problem themselves. Nothing changes in play, and older builds keep the fix.

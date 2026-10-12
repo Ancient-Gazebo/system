@@ -3,7 +3,8 @@
  *
  * It shows the same thing as the sidebar tracker - each slot, which side it belongs to, who has
  * claimed it, and which one is up - for players who keep the sidebar on chat during a fight, and it
- * lets the acting side claim the open slot without leaving the canvas.
+ * lets the acting side claim the open slot without leaving the canvas. The GM also gets the
+ * tracker's slot entries on a right-click of a card (un-claim the slot, remove it).
  *
  * It is a view over the combat document and nothing else: it stores no state of its own (beyond
  * whether this user has it collapsed), and every action goes through the same Combat methods the
@@ -12,6 +13,7 @@
  * Works with and without generic slots; without them every card is simply its combatant.
  */
 import PopoutEditor from "../popout-editor.js";
+import { CombatTrackerFFG } from "../combat-ffg.js";
 import { activeCombat, combatantDisposition, combatantHidden, slotClaimant, usesSlots } from "../helpers/combat-turns.js";
 import { escapeHTML, loc } from "../helpers/html.js";
 
@@ -89,6 +91,7 @@ function buildSlots(combat) {
     const hidden = claimant ? combatantHidden(claimant) && !game.user.isGM : false;
     return {
       index,
+      slotId: turn.id,
       side: sideOf(disposition),
       active,
       passed,
@@ -128,7 +131,7 @@ function slotMarkup(slot) {
   }
 
   return `
-    <div class="${classes.join(" ")}" data-index="${slot.index}">
+    <div class="${classes.join(" ")}" data-index="${slot.index}" data-slot-id="${escapeHTML(slot.slotId)}">
       ${body}
       <div class="ffg-cc-init">${slot.initiative}</div>
       ${slot.canClaim ? `<button type="button" class="ffg-cc-claim" data-claim="${slot.index}">${loc("SWFFG.Notifications.Combat.Claim.Claim")}</button>` : ""}
@@ -146,6 +149,35 @@ async function focusCombatant(combat, combatantId) {
   if (!token || (token.document.hidden && !game.user.isGM)) return;
   if (token.isOwner) token.control({ releaseOthers: true });
   await canvas.animatePan({ x: token.center.x, y: token.center.y, duration: 250 });
+}
+
+/**
+ * The GM's right-click menu on a card: the slot entries of the sidebar tracker's own menu, through the
+ * same Combat methods, so the slots that removed combatants leave behind can be cleared from here.
+ * @param {HTMLElement} root  the carousel
+ * @param {Combat} combat
+ */
+function attachSlotMenu(root, combat) {
+  // A card is looked up by its slot's id when an entry is picked, not by its position: the strip may
+  // have been redrawn (another removal, the next turn) while the menu was open.
+  const slotIdOf = (card) => card?.dataset?.slotId;
+  const claimed = (card) => combat.getSlotClaims(combat.round, slotIdOf(card)) !== undefined;
+  const { ContextMenu } = foundry.applications.ux;
+  new (ContextMenu.implementation ?? ContextMenu)(root, ".ffg-cc-slot[data-slot-id]", [
+    CombatTrackerFFG._makeEntry({
+      label: "SWFFG.Notifications.Combat.Claim.UnClaim",
+      icon: '<i class="fa-regular fa-xmark"></i>',
+      condition: claimed,
+      callback: async (card) => {
+        if (claimed(card)) await combat.unclaimSlot(combat.round, slotIdOf(card));
+      },
+    }),
+    CombatTrackerFFG._makeEntry({
+      label: "SWFFG.Notifications.Combat.Claim.RemoveSlot",
+      icon: '<i class="fa-regular fa-trash-alt"></i>',
+      callback: (card) => combat.removeInitiativeSlot(slotIdOf(card)),
+    }),
+  ], { jQuery: false, fixed: true });
 }
 
 function centerActive(root) {
@@ -272,6 +304,8 @@ function render({ center = false } = {}) {
   for (const button of root.querySelectorAll("[data-focus]")) {
     button.addEventListener("click", () => focusCombatant(combat, button.dataset.focus));
   }
+  // un-claiming is the GM's (CombatFFG#unclaimSlot), as is removing slots
+  if (game.user.isGM && usesSlots(combat)) attachSlotMenu(root, combat);
   // a mouse wheel over the strip scrolls it sideways
   root.querySelector(".ffg-cc-track")?.addEventListener("wheel", (event) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;

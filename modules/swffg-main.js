@@ -827,10 +827,36 @@ Hooks.once("init", async function () {
       }
     });
     CONFIG.statusEffects.push({
+      id: "starwarsffg-failure-once",
+      img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/failure.png`,
+      name: "SWFFG.Status.Failure.Next",
+      changes: allSkillChanges['failure'],
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
+      }
+    });
+    CONFIG.statusEffects.push({
       id: "starwarsffg-advantage-once",
       img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/advantage.png`,
       name: "SWFFG.Status.Advantage.Next",
       changes: allSkillChanges['advantage'],
+      // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
+      // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
+      flags: {
+        starwarsffg: {
+          duration: "once",
+        },
+      }
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-threat-once",
+      img: `systems/starwarsffg/images/dice/${CONFIG.FFG.theme}/threat.png`,
+      name: "SWFFG.Status.Threat.Next",
+      changes: allSkillChanges['threat'],
       // V14's strict ActiveEffectTypeDataModel strips unknown `system` keys, so the
       // per-roll/per-combat duration marker lives in flags (free-form) to survive creation.
       flags: {

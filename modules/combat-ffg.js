@@ -42,17 +42,16 @@ export class CombatFFG extends Combat {
       hidden: false,
       visible: true,
       initiative: initiative,
+      // Created with its side already set. These flags used to be added by two setFlag calls after
+      // the slot existed, so for two round trips every new slot had no disposition: each tracker
+      // pass meanwhile logged "caught disposition issue" and the carousel drew the slot as neutral.
+      // (Un-namespaced flag keys were sent as well; V14 turns those into empty objects.)
       flags: {
-        fake: true,
-        disposition: disposition,
+        starwarsffg: {fake: true, disposition},
       },
     };
 
-    const createdSlotId = (await this.createEmbeddedDocuments("Combatant", [data]))[0].id;
-    const createdSlot = this.combatants.get(createdSlotId);
-    await createdSlot.setFlag("starwarsffg", "fake", true);
-    await createdSlot.setFlag("starwarsffg", "disposition", disposition);
-    return createdSlotId;
+    return (await this.createEmbeddedDocuments("Combatant", [data]))[0].id;
   }
 
   /**
@@ -1129,6 +1128,90 @@ export class CombatFFG extends Combat {
     game.socket.emit("system.starwarsffg", {event: "trackerRender", combatId: this.id});
   }
 
+  /**
+   * Take one initiative slot out of the order, after asking. This is "Remove Initiative Slot" on both
+   * the sidebar tracker's menu and the combat carousel's, so the two remove a slot the same way.
+   *
+   * The slot's own combatant is deleted and nothing replaces it, unlike removing a combatant (see
+   * handleCombatantRemoval), which keeps the side's slot. That makes it the way to clear the generic
+   * slots removed combatants leave behind, or a combatant whose token has gone. A claimed slot is
+   * refused: the claim has to be released first.
+   * @param slotId - STRING - the id of the slot's own combatant (an entry of this.turns), not of its claimant
+   * @returns {Promise<boolean>} - whether the slot was removed
+   */
+  async removeInitiativeSlot(slotId) {
+    const combatant = this.combatants.get(slotId);
+    if (!combatant) {
+      CONFIG.logger.warn("Unable to resolve the initiative slot to remove");
+      return false;
+    }
+
+    // Refuse if another combatant has claimed this slot - the claim must be released first so we
+    // don't silently strip someone's activation out from under them.
+    const isClaimed = () => this.getSlotClaims(this.round, combatant.id) !== undefined;
+    if (isClaimed()) {
+      ui.notifications.warn("You must un-claim the slot before removing it");
+      return false;
+    }
+
+    const fakeTurn = combatant.getFlag("starwarsffg", "fake") || false;
+    const extraTurn = combatant.getFlag("starwarsffg", "extraTurn") || false;
+
+    // An extra turn is one of several slots belonging to a token, so removing it takes an activation
+    // away rather than removing anyone from the encounter - say so, or the prompt is alarming.
+    let removalPrompt;
+    if (extraTurn) {
+      removalPrompt = `Remove this extra turn? ${combatant.name} will go back to acting once per round.`;
+    } else if (fakeTurn) {
+      removalPrompt = "Remove this extra initiative slot?";
+    } else {
+      removalPrompt = "Remove this initiative slot? Its combatant will be removed from the initiative order.";
+    }
+
+    const confirmed = await DialogV2.confirm({
+      window: { title: "Remove Initiative Slot" },
+      content: `<p>${removalPrompt}</p>`,
+      no: { default: true },
+      rejectClose: false,
+    });
+    // the dialog waits on the user, and the slot can be removed or claimed in the meantime
+    if (!confirmed || !this.combatants.has(combatant.id)) {
+      return false;
+    }
+    if (isClaimed()) {
+      ui.notifications.warn("You must un-claim the slot before removing it");
+      return false;
+    }
+
+    const round = this.round;
+    // Capture the turn pointer before the delete so it can be corrected afterwards:
+    //   - removing a slot that is NOT the active one leaves the active combatant in place
+    //     (_restoreTurnPosition follows it by id).
+    //   - removing the ACTIVE slot advances the pointer to the next slot in initiative order, exactly
+    //     as if the turn had ended normally (_restoreTurnPosition's forward neighbor snap).
+    const priorTurn = this._captureTurnPosition();
+
+    // If this combatant had itself claimed another slot, release that claim so it doesn't dangle once
+    // the combatant is gone.
+    const claimedElsewhere = this.findSlotClaims(round, combatant.id);
+    if (claimedElsewhere) {
+      await this.unclaimSlot(round, claimedElsewhere);
+    }
+
+    // Delete exactly this slot. Suppress the preDeleteCombatant handler so the generic-slot removal
+    // flow (which would re-create a replacement slot or open the removal prompt) doesn't fire - this
+    // is an explicit, direct removal of the one slot that was picked.
+    await withoutRemovalHandler(() => combatant.delete());
+
+    await this._restoreTurnPosition(priorTurn);
+
+    // refresh the tracker (locally + on other clients) so the slot change shows immediately
+    this.setupTurns();
+    this.debounceRender();
+    game.socket.emit("system.starwarsffg", { event: "trackerRender", combatId: this.id });
+    return true;
+  }
+
   /** @override */
   async delete() {
     for (const combatant of this.combatants.contents) {
@@ -1795,70 +1878,13 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
       ui.notifications.error("Error detecting combat, try starting/ending combat?");
       return;
     }
-    const round = combat.round;
-    const turn = el.getAttribute("data-slot-index");
-    const combatant = combat.turns[turn];
+    const combatant = combat.turns[el.getAttribute("data-slot-index")];
     if (!combatant) {
       CONFIG.logger.warn("Unable to resolve the initiative slot to remove");
       return;
     }
-
-    // Refuse if another combatant has claimed this slot - the claim must be released first so we
-    // don't silently strip someone's activation out from under them.
-    if (combat.getSlotClaims(round, combatant.id) !== undefined) {
-      ui.notifications.warn("You must un-claim the slot before removing it");
-      return;
-    }
-
-    const fakeTurn = combatant?.flags?.fake || false;
-    const extraTurn = combatant?.flags?.starwarsffg?.extraTurn || false;
-
-    // An extra turn is one of several slots belonging to a token, so removing it takes an activation
-    // away rather than removing anyone from the encounter - say so, or the prompt is alarming.
-    let removalPrompt;
-    if (extraTurn) {
-      removalPrompt = `Remove this extra turn? ${combatant.name} will go back to acting once per round.`;
-    } else if (fakeTurn) {
-      removalPrompt = "Remove this extra initiative slot?";
-    } else {
-      removalPrompt = "Remove this initiative slot? Its combatant will be removed from the initiative order.";
-    }
-
-    const confirmed = await DialogV2.confirm({
-      window: { title: "Remove Initiative Slot" },
-      content: `<p>${removalPrompt}</p>`,
-      no: { default: true },
-      rejectClose: false,
-    });
-    if (!confirmed) {
-      return;
-    }
-
-    // Capture the turn pointer before the delete so it can be corrected afterwards:
-    //   - removing a slot that is NOT the active one leaves the active combatant in place
-    //     (_restoreTurnPosition follows it by id).
-    //   - removing the ACTIVE slot advances the pointer to the next slot in initiative order, exactly
-    //     as if the turn had ended normally (_restoreTurnPosition's forward neighbor snap).
-    const priorTurn = combat._captureTurnPosition();
-
-    // If this combatant had itself claimed another slot, release that claim so it doesn't dangle once
-    // the combatant is gone.
-    const claimedElsewhere = combat.findSlotClaims(round, combatant.id);
-    if (claimedElsewhere) {
-      await combat.unclaimSlot(round, claimedElsewhere);
-    }
-
-    // Delete exactly this slot. Suppress the preDeleteCombatant handler so the generic-slot removal
-    // flow (which would re-create a replacement slot or open the removal prompt) doesn't fire - this
-    // is an explicit, direct removal of the one slot that was right-clicked.
-    await withoutRemovalHandler(() => combatant.delete());
-
-    await combat._restoreTurnPosition(priorTurn);
-
-    // refresh the tracker (locally + on other clients) so the slot change shows immediately
-    combat.setupTurns();
-    combat.debounceRender();
-    game.socket.emit("system.starwarsffg", { event: "trackerRender", combatId: combat.id });
+    // shared with the combat carousel's menu
+    await combat.removeInitiativeSlot(combatant.id);
   }
 
   /**
@@ -1957,6 +1983,9 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
   }
 }
 
+/** The disposition each combatant's token last had, for once the token is gone (see CombatantFFG#disposition). */
+const tokenDispositions = new WeakMap();
+
 export default class CombatantFFG extends Combatant {
   /**
    * @override
@@ -1976,9 +2005,16 @@ export default class CombatantFFG extends Combatant {
   get disposition() {
     if (this.getFlag("starwarsffg", "fake")) {
       return this.getFlag("starwarsffg", "disposition");
-    } else {
-      return this?.token ? this.token?.disposition : this?.actor?.prototypeToken?.disposition;
     }
+    // Deleting a token removes its combatant only after the token is gone, and the slot that replaces
+    // the combatant takes its side from here. Falling back to the actor's prototype put a friendly
+    // token of a hostile actor back on the hostile side, so remember what the token itself last had.
+    const token = this.token;
+    if (token) {
+      tokenDispositions.set(this, token.disposition);
+      return token.disposition;
+    }
+    return tokenDispositions.get(this) ?? this.actor?.prototypeToken?.disposition;
   }
 
   /** @override  */

@@ -47,15 +47,52 @@ function initiativeMarkup(initiative) {
     .join("");
 }
 
-/** Units of a side that are alive and have not acted this round. */
+/**
+ * Whether a combatant is a unit that can still act: not a generic slot, not defeated, and not left
+ * behind by a deleted token.
+ * @param {Combatant} combatant
+ */
+function canAct(combatant) {
+  return !combatant.getFlag("starwarsffg", "fake") && !combatant.isDefeated && !(combatant.tokenId && !combatant.token);
+}
+
+/** Units of a side that can still act and have not acted this round. */
 function waitingCount(combat, disposition) {
   return combat.combatants.filter(
-    (combatant) =>
-      combatantDisposition(combatant) === disposition &&
-      !combatant.getFlag("starwarsffg", "fake") &&
-      !combatant.isDefeated &&
-      !combat.hasClaims(combatant.id)
+    (combatant) => combatantDisposition(combatant) === disposition && canAct(combatant) && !combat.hasClaims(combatant.id)
   ).length;
+}
+
+/**
+ * The open slots a side will not need this round. A side with more open slots than units left to
+ * act leaves that many unused: first the slots whose own unit is out (defeated, its token deleted,
+ * or a generic slot left by a removed combatant), and only then its last open slots. Taking the side's
+ * last slots regardless marked a living unit's slot unused while the fallen one's stayed open.
+ * Slots the round has already moved past are not counted: they were skipped, not held back.
+ * @param {Combat} combat
+ * @returns {Set<number>} indexes into combat.turns
+ */
+function unusedSlots(combat) {
+  const open = new Map();
+  (combat.turns ?? []).forEach((turn, index) => {
+    if (index < combat.turn || slotClaimant(combat, turn)) return;
+    const holder = combat.combatants.get(turn.id) ?? turn;
+    const disposition = combatantDisposition(holder) ?? CONST.TOKEN_DISPOSITIONS.NEUTRAL;
+    if (!open.has(disposition)) open.set(disposition, []);
+    open.get(disposition).push({ index, vacant: !canAct(holder) });
+  });
+
+  const unused = new Set();
+  for (const [disposition, slots] of open) {
+    let spare = slots.length - waitingCount(combat, disposition);
+    // latest first within each group, so the earliest open slots stay free for whoever acts next
+    const ranked = [...slots.filter((slot) => slot.vacant).reverse(), ...slots.filter((slot) => !slot.vacant).reverse()];
+    for (const slot of ranked) {
+      if (spare-- <= 0) break;
+      unused.add(slot.index);
+    }
+  }
+  return unused;
 }
 
 /**
@@ -64,8 +101,7 @@ function waitingCount(combat, disposition) {
  */
 function buildSlots(combat) {
   const slotMode = usesSlots(combat);
-  const freeSeen = new Map();
-  const waiting = new Map();
+  const unused = slotMode ? unusedSlots(combat) : new Set();
 
   // Without slots a hidden combatant is left out for players altogether, as the stock tracker does.
   // With slots the card stays (the slot itself is public knowledge) and only its occupant is masked.
@@ -78,16 +114,6 @@ function buildSlots(combat) {
     const active = combat.turn === index;
     const passed = index < combat.turn;
 
-    // A side with more slots than units left to act leaves its last open slots unused. Slots the
-    // round has already moved past are not counted: they were skipped, not held back.
-    let unused = false;
-    if (slotMode && !claimant && !passed) {
-      const seen = (freeSeen.get(disposition) ?? 0) + 1;
-      freeSeen.set(disposition, seen);
-      if (!waiting.has(disposition)) waiting.set(disposition, waitingCount(combat, disposition));
-      unused = seen > waiting.get(disposition);
-    }
-
     const hidden = claimant ? combatantHidden(claimant) && !game.user.isGM : false;
     return {
       index,
@@ -95,7 +121,7 @@ function buildSlots(combat) {
       side: sideOf(disposition),
       active,
       passed,
-      unused,
+      unused: unused.has(index),
       claimed: !!claimant,
       claimantId: claimant?.id ?? null,
       hidden,
@@ -103,7 +129,7 @@ function buildSlots(combat) {
       name: claimant ? (hidden ? game.i18n.localize("SWFFG.Combats.Actors.Hidden") : claimant.name) : null,
       img: claimant ? (hidden ? HIDDEN_IMG : claimant.img ?? claimant.token?.texture?.src ?? claimant.actor?.img ?? CONST.DEFAULT_TOKEN) : null,
       initiative: initiativeMarkup(holder.initiative),
-      canClaim: slotMode && active && !claimant && !unused && (game.user.isGM || disposition === CONST.TOKEN_DISPOSITIONS.FRIENDLY),
+      canClaim: slotMode && active && !claimant && !unused.has(index) && (game.user.isGM || disposition === CONST.TOKEN_DISPOSITIONS.FRIENDLY),
     };
   }).filter(visible);
 }
@@ -371,6 +397,8 @@ export function registerCombatCarousel() {
   Hooks.on("updateToken", (_token, changed) => {
     if ("hidden" in (changed ?? {})) queueRender();
   });
+  // a deleted token's slot has no unit behind it any more (core does not always remove the combatant)
+  Hooks.on("deleteToken", () => queueRender());
   // defeated is a status effect on the actor
   for (const hook of ["createActiveEffect", "deleteActiveEffect"]) {
     Hooks.on(hook, (effect) => {

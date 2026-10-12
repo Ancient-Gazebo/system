@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.6`
+* Fixes:
+  * Combat Carousel: when a combatant is marked defeated, its own slot is now the one shown as Unused. The carousel used to mark the side's last open slot instead, even when the defeated combatant's slot came earlier, so a living unit's slot showed as Unused while the fallen one's stayed open. The same applies to the slot of a combatant whose token was deleted, and to the generic slot a removed combatant leaves behind. A side's last open slots are only marked Unused when it still has more open slots than units left to act after that.
+
 `4.0.5`
 * Combat Carousel: the GM can right-click a card to un-claim or remove its slot, as in the sidebar tracker. Un-claim Initiative Slot (shown on a claimed slot) releases the claim. Remove Initiative Slot takes the slot out of the order after asking, and as in the tracker a claimed slot has to be un-claimed first. Both use the tracker's own code, so the two always agree.
   * This is the quick way to clear the slots a fight leaves behind. With the default Remove Combatant Action (Combatant Only), a combatant removed mid-combat, including by deleting its token, leaves its slot behind as a generic one, and the carousel marks a side's spare slots as Unused. On Foundry 14.369, deleting the token of a combatant in an encounter linked to its scene does not remove the combatant at all (a core bug); Remove Initiative Slot clears those too.

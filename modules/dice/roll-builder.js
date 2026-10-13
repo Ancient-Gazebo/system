@@ -2,6 +2,7 @@ import { getAdversaryLevel } from "../helpers/token.js";
 import { DicePoolFFG } from "./pool.js";
 import RollProfiles from "../helpers/roll-profiles.js";
 import WeaponQualities from "../helpers/weapon-qualities.js";
+import { adjustRollPool, chargeActionStrain } from "../helpers/crit-automation.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -38,7 +39,9 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       sound: rollSound,
       flavor: rollAdditionalFlavor,
     };
-    this.dicePool = rollDicePool;
+    // Critical injuries that change the dice (Scattered Senses, a vehicle's Tailspin) apply to the pool
+    // the dialog opens with, so they can still be adjusted by hand.
+    this.dicePool = adjustRollPool(rollDicePool, { actor: rollData?.document, item: rollItem });
     this.description = rollDescription;
     /**
      * Context for the skill / characteristic swap controls, or null when the caller did not offer
@@ -385,6 +388,14 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
       }
 
       try {
+        // At the Brink: the first check rolled on the character's own turn is its action.
+        const roller = this.roll.data?.document;
+        if (roller instanceof Actor) await chargeActionStrain(roller);
+      } catch (error) {
+        CONFIG.logger.warn(`Caught critical injury error in roller: ${error}`);
+      }
+
+      try {
         if (this?.roll?.item && this.roll.item.type === "weapon") {
           const item = await foundry.utils.fromUuid(this.roll.item.uuid);
           if (item) {
@@ -531,7 +542,7 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
         CONFIG.logger?.warn?.("Failed to rebuild the dice pool for the selected skill/characteristic", err);
         return;
       }
-      this.dicePool = rolled.dicePool;
+      this.dicePool = adjustRollPool(rolled.dicePool, { actor: this.roll.data?.document, item: this.roll.item });
       // Declared Auto-fire is a choice made in this dialog, not part of the assembled pool, so the
       // rebuild has just dropped its difficulty die.
       if (this._autoFire) this.dicePool.difficulty += 1;

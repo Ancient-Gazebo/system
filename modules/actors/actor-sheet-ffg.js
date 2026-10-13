@@ -43,6 +43,7 @@ import {itemPillHover} from "../swffg-main.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 
 import { GuardedDialogV2 as DialogV2 } from "../helpers/dialog-helpers.js";
+import { toggleSuppressed } from "../helpers/crit-automation.js";
 
 export class ActorSheetFFG extends FFGActorSheet {
   constructor(...args) {
@@ -1532,6 +1533,16 @@ export class ActorSheetFFG extends FFGActorSheet {
 
       await item.delete();
       li.slideUp(200, () => this.render(false));
+    });
+
+    // Switch a critical injury's penalties off or back on, for the talents and powers that let a
+    // character ignore critical injuries for a while (helpers/crit-automation.js).
+    html.find(".crit-suppress").click(async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const li = $(ev.currentTarget).parents(".item");
+      const item = this.actor.items.get(li.data("itemId"));
+      if (item) await toggleSuppressed(item);
     });
 
     // Edit Inventory Item

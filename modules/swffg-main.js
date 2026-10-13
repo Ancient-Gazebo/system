@@ -80,6 +80,7 @@ import { buildReroll } from "./dice/reroll.js";
 import { registerCombatCarousel, registerCombatCarouselSettings } from "./apps/combat-carousel.js";
 import { registerDefenseSkillSettings } from "./settings/defense-skills-settings.js";
 import { registerStatusExpiry } from "./helpers/status-effects.js";
+import { bindChatMessage as bindCritAutomationCard, registerCritAutomation, repairCriticalItems } from "./helpers/crit-automation.js";
 import { registerToolControls } from "./helpers/tool-controls.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
@@ -167,6 +168,8 @@ Hooks.once("init", async function () {
     DestinySession,
     // `game.ffg.ImprovisedDetonation.open(actor)` opens the explosive builder for a character with the talent.
     ImprovisedDetonation,
+    // Head Ringer's text and Compromised's modifier (run once by the 4.0.7 migration).
+    repairCriticalItems,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered
@@ -1475,6 +1478,7 @@ Hooks.on("renderChatMessageHTML", async (app, html, messageData) => {
     DestinyReroll.bindChatMessage(app, html);
     ImprovisedDetonation.bindChatMessage(app, html);
     SpendResults.bindChatMessage(app, html);
+    bindCritAutomationCard(app, html);
   } catch (err) {
     CONFIG.logger.warn("Failed to decorate a chat message with the table tools", err);
   }
@@ -2076,6 +2080,7 @@ Hooks.once("ready", async () => {
   StackHelpers.registerSocket();
   // Table tools: status lifetimes, spend requests, the pilot panel's live refresh, the carousel.
   registerStatusExpiry();
+  registerCritAutomation();
   SpendResults.register();
   BondInvocation.register();
   DestinyReroll.register();

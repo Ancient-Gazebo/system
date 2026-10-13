@@ -1269,3 +1269,75 @@ body > .ffg-combat-carousel {
   background: color-mix(in srgb, var(--ffg-cc-side) 35%, transparent);
   font-weight: 700;
 }
+
+/* Critical injury automation (helpers/crit-automation.js) */
+.ffg-crit-auto-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ffg-crit-auto-card .ffg-crit-auto-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: bold;
+}
+.ffg-crit-auto-card .ffg-crit-auto-header > i {
+  flex: 0 0 18px;
+  text-align: center;
+}
+.ffg-crit-auto-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ffg-crit-auto-card li {
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.ffg-crit-auto-card li > i {
+  width: 14px;
+  text-align: center;
+  opacity: 0.75;
+}
+.ffg-crit-auto-card .ffg-crit-auto-done li {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.ffg-crit-auto-card .ffg-crit-auto-notes li {
+  font-style: italic;
+  opacity: 0.85;
+}
+.ffg-crit-auto-card .ffg-crit-auto-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ffg-crit-auto-card .ffg-crit-auto-buttons button {
+  flex: 1 1 auto;
+  width: auto;
+  line-height: 22px;
+  font-size: 0.9em;
+}
+.ffg-crit-auto-card .ffg-crit-auto-hint {
+  margin: 0;
+  font-size: 0.8em;
+  opacity: 0.6;
+}
+
+/* a critical injury whose penalties have been switched off */
+.starwarsffg .injuries div.item.crit-suppressed .item-name,
+.starwarsffg .injuries div.item.crit-suppressed .severity {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+.starwarsffg .injuries .item-controls .crit-suppress {
+  margin-right: 2px;
+}
+
+.ffg-character-pilot .ffg-pilot-banner.ffg-pilot-crits {
+  background: color-mix(in srgb, #b3261e 22%, transparent);
+}

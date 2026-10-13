@@ -27,6 +27,7 @@ export const NEXT_CHECK = Object.freeze({
   setback: "starwarsffg-setback-once",
   upgradeAbility: "starwarsffg-upgrade-once",
   upgradeDifficulty: "starwarsffg-upgrade-difficulty-once",
+  difficulty: "starwarsffg-difficulty-once",
 });
 
 /** Statuses the tools apply by name. Prone keeps its historical id (it was once "Staggered"). */
@@ -40,6 +41,43 @@ export const STATUS = Object.freeze({
   blinded: "blinded",
   invisible: "invisible",
 });
+
+/**
+ * Conditions that are not registered statuses but free-form markers identified by their `tool` key
+ * (see {@link applyStatusLocal}). Staggered is one: Concussive applies it, and so do the critical
+ * injuries that stagger (helpers/crit-automation.js), all onto the same marker.
+ */
+export const MARKER = Object.freeze({
+  staggered: "staggered",
+});
+
+/**
+ * @param {?Actor} actor
+ * @param {string} key  a {@link MARKER} key, or any other free-form marker key
+ * @returns {?ActiveEffect} the actor's enabled marker effect with that key
+ */
+export function findMarkerEffect(actor, key) {
+  if (!actor || !key) return null;
+  return actor.effects.find((effect) => !effect.disabled && effect.flags?.starwarsffg?.tool === key) ?? null;
+}
+
+/**
+ * The actors registered as a vehicle's crew (`flags.starwarsffg.crew`, see helpers/crew.js). Crew are
+ * world actors, referenced by id.
+ * @param {?Actor} vehicle
+ * @returns {Actor[]}
+ */
+export function crewActors(vehicle) {
+  if (vehicle?.type !== "vehicle") return [];
+  const crew = vehicle.flags?.starwarsffg?.crew;
+  if (!Array.isArray(crew)) return [];
+  const actors = new Map();
+  for (const member of crew) {
+    const actor = game.actors.get(member?.actor_id);
+    if (actor) actors.set(actor.id, actor);
+  }
+  return [...actors.values()];
+}
 
 /**
  * The track an actor suffers or recovers strain on.
@@ -219,9 +257,16 @@ function roundsDuration(rounds) {
  * @param {?string} [spec.img]
  * @param {?number} [spec.rounds]    remove after this many full rounds of the current combat
  * @param {boolean} [spec.untilEndOfNextTurn]  remove when the actor's next turn ends
+ * @param {?string} [spec.turnOf]    with untilEndOfNextTurn: whose turn counts, by actor uuid. A
+ *                                   vehicle's crew are held "until the end of the pilot's next turn",
+ *                                   which is the vehicle's turn, not their own.
+ * @param {boolean} [spec.untilEndOfEncounter]  remove when the combat ends - the system's own
+ *                                   combat-length marker, cleared by CombatFFG#delete
+ * @param {?object[]} [spec.changes] changes for a free-form marker (a registered status brings its own)
+ * @param {?object} [spec.flags]     further `flags.starwarsffg` keys for the effect
  * @returns {Promise<?ActiveEffect>}
  */
-export async function applyStatusLocal(actor, { statusId = null, key = null, name = null, img = null, rounds = null, untilEndOfNextTurn = false } = {}) {
+export async function applyStatusLocal(actor, { statusId = null, key = null, name = null, img = null, rounds = null, untilEndOfNextTurn = false, turnOf = null, untilEndOfEncounter = false, changes = null, flags = null } = {}) {
   if (!actor) return null;
   const combat = game.combat;
   const data = {};
@@ -236,20 +281,27 @@ export async function applyStatusLocal(actor, { statusId = null, key = null, nam
     if (combat?.started) expiry = { type: "rounds", combatId: combat.id, endRound: combat.round + rounds };
   } else if (untilEndOfNextTurn && combat?.started) {
     expiry = { type: "afterNextTurn", combatId: combat.id, createdTurnKey: turnKey(combat), armed: false };
+    if (turnOf && turnOf !== actor.uuid) expiry.turnOf = turnOf;
   }
 
-  const toolFlags = { tool: key ?? statusId };
+  const toolFlags = { ...(flags ?? {}), tool: key ?? statusId };
   if (expiry) toolFlags.expiry = expiry;
+  if (untilEndOfEncounter) toolFlags.duration = "combat";
 
   const existing = statusId
     ? findStatusEffect(actor, statusId)
     : actor.effects.find((effect) => effect.flags?.starwarsffg?.tool === key) ?? null;
   if (existing) {
-    const update = { ...data, "flags.starwarsffg.tool": toolFlags.tool };
-    if (expiry) update["flags.starwarsffg.expiry"] = expiry;
+    const update = { ...data };
+    for (const [flag, value] of Object.entries(toolFlags)) update[`flags.starwarsffg.${flag}`] = value;
     await existing.update(update);
     // An effect re-applied WITHOUT a lifetime must stop expiring on the old one.
     if (!expiry && existing.flags?.starwarsffg?.expiry) await existing.unsetFlag("starwarsffg", "expiry");
+    // Likewise for "until the end of the encounter" - unless the status itself is combat-length.
+    const intrinsic = statusDefinition(statusId)?.flags?.starwarsffg?.duration;
+    if (!untilEndOfEncounter && existing.flags?.starwarsffg?.duration === "combat" && intrinsic !== "combat") {
+      await existing.unsetFlag("starwarsffg", "duration");
+    }
     return existing;
   }
 
@@ -263,6 +315,7 @@ export async function applyStatusLocal(actor, { statusId = null, key = null, nam
     name: name ?? key ?? "Effect",
     img: img ?? "icons/svg/aura.svg",
     disabled: false,
+    changes: changes ?? [],
     flags: { starwarsffg: toolFlags },
   };
   if (data.duration) marker.duration = data.duration;
@@ -312,13 +365,21 @@ async function deleteEffects(actor, effects) {
   if (ids.length) await actor.deleteEmbeddedDocuments("ActiveEffect", ids);
 }
 
+/** The combat's actors, and the crew of any vehicle in it (who may hold effects timed by it). */
 function combatActors(combat) {
   const actors = new Map();
   for (const combatant of combat.combatants) {
     const actor = combatant.actor;
-    if (actor) actors.set(actor.uuid, actor);
+    if (!actor) continue;
+    actors.set(actor.uuid, actor);
+    for (const member of crewActors(actor)) actors.set(member.uuid, member);
   }
   return [...actors.values()];
+}
+
+/** Whose turn an "afterNextTurn" lifetime is counted on: its own `turnOf`, else the holder's. */
+function turnOwner(expiry, holder) {
+  return expiry.turnOf ?? holder.uuid;
 }
 
 /**
@@ -328,7 +389,9 @@ function combatActors(combat) {
  *  - "rounds": removed once the combat has moved past the round the effect was due to end in.
  *  - "afterNextTurn": armed when its actor's next turn begins and removed when that turn ends. An
  *    effect created during the actor's own turn (Guarded Stance) is not armed by that same turn, so
- *    it survives until the end of the FOLLOWING one, as the rule reads.
+ *    it survives until the end of the FOLLOWING one, as the rule reads. An effect with a `turnOf`
+ *    follows that actor's turn instead; it is used for a vehicle's crew, so a vehicle's turn also
+ *    looks at the effects of the crew aboard it.
  */
 export function registerStatusExpiry() {
   // combat id -> { key, combatantId } of the turn last seen; in memory only, so a GM reload simply
@@ -349,17 +412,28 @@ export function registerStatusExpiry() {
       // the turn that just ended
       const leaving = previous?.combatantId ? combat.combatants.get(previous.combatantId)?.actor : null;
       if (leaving) {
-        await deleteEffects(leaving, expiringEffects(leaving, (expiry) => expiry.type === "afterNextTurn" && expiry.armed));
+        for (const holder of [leaving, ...crewActors(leaving)]) {
+          await deleteEffects(
+            holder,
+            expiringEffects(holder, (expiry) => expiry.type === "afterNextTurn" && expiry.armed && turnOwner(expiry, holder) === leaving.uuid)
+          );
+        }
       }
 
       // the turn that just began
       const entering = acting?.actor;
       if (entering) {
-        const toArm = expiringEffects(
-          entering,
-          (expiry) => expiry.type === "afterNextTurn" && !expiry.armed && expiry.createdTurnKey !== current.key
-        );
-        for (const effect of toArm) await effect.update({ "flags.starwarsffg.expiry.armed": true });
+        for (const holder of [entering, ...crewActors(entering)]) {
+          const toArm = expiringEffects(
+            holder,
+            (expiry) =>
+              expiry.type === "afterNextTurn" &&
+              !expiry.armed &&
+              expiry.createdTurnKey !== current.key &&
+              turnOwner(expiry, holder) === entering.uuid
+          );
+          for (const effect of toArm) await effect.update({ "flags.starwarsffg.expiry.armed": true });
+        }
       }
 
       // round-based lifetimes

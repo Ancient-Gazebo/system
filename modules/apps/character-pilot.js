@@ -17,6 +17,11 @@
  * the player and for a GM looking at the same character, and it resets itself whenever a new turn
  * of that character begins.
  *
+ * Critical injuries that change the turn are honoured (helpers/crit-automation.js turnRestrictions):
+ * no action while staggered, no free maneuver (Distracted, Hamstrung), one maneuver at most
+ * (Temporarily Lame), no second maneuver for strain (Winded), and a strain for the action (At the
+ * Brink).
+ *
  * "Whose turn is it" follows the initiative slots: a character's turn starts when it claims the
  * current slot, not when a slot it happened to roll comes up (see helpers/combat-turns.js).
  */
@@ -36,6 +41,7 @@ import {
 import { activeCombat, combatantDisposition, currentCombatant, isActorsTurn, turnKey, usesSlots } from "../helpers/combat-turns.js";
 import { escapeHTML, loc } from "../helpers/html.js";
 import { GuardedDialogV2 as DialogV2 } from "../helpers/dialog-helpers.js";
+import { chargeActionStrain, turnRestrictions } from "../helpers/crit-automation.js";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -170,9 +176,28 @@ export default class CharacterPilot extends ApplicationV2 {
     };
   }
 
-  /** Maneuvers available this turn: one free, plus those paid for, capped at the limit. */
+  /** The free maneuver: one, unless a critical injury has taken it away. */
+  static freeManeuvers(actor) {
+    return turnRestrictions(actor).noFreeManeuver ? 0 : 1;
+  }
+
+  /** The most maneuvers this turn may hold: the character's limit, or less for a critical injury. */
+  static maneuverLimit(actor) {
+    const max = this.maxManeuvers(actor);
+    const crit = turnRestrictions(actor).maxManeuvers;
+    return crit ? Math.min(max, crit) : max;
+  }
+
+  /** Maneuvers available this turn: the free one, plus those paid for, capped at the limit. */
   static capacity(actor, state) {
-    return Math.min(this.maxManeuvers(actor), 1 + state.extraManeuvers + (state.actionConverted ? 1 : 0));
+    return Math.min(this.maneuverLimit(actor), this.freeManeuvers(actor) + state.extraManeuvers + (state.actionConverted ? 1 : 0));
+  }
+
+  /** Staggered: no actions, not even one given up for a maneuver. @returns {boolean} whether one may be taken */
+  static mayTakeAction(actor) {
+    if (!turnRestrictions(actor).noAction) return true;
+    ui.notifications.warn(game.i18n.format("SWFFG.Pilot.Errors.Staggered", { name: actor.name }));
+    return false;
   }
 
   static async saveTurn(actor, state) {
@@ -206,6 +231,7 @@ export default class CharacterPilot extends ApplicationV2 {
     if (state.actionUsed) return;
     state.actionUsed = true;
     await this.saveTurn(actor, state);
+    await chargeActionStrain(actor);
   }
 
   /* -------------------------------------------- */
@@ -225,8 +251,9 @@ export default class CharacterPilot extends ApplicationV2 {
     const combat = activeCombat();
     const ownTurn = isActorsTurn(actor, combat);
     const state = CharacterPilot.turnState(actor);
-    const max = CharacterPilot.maxManeuvers(actor);
+    const max = CharacterPilot.maneuverLimit(actor);
     const capacity = CharacterPilot.capacity(actor, state);
+    const limits = turnRestrictions(actor);
     // Where this actor takes strain: its strain track, or wounds for a minion or rival. The card and
     // the second-maneuver cost both follow it, so an adversary is never shown (or charged on) a
     // strain track it does not really have.
@@ -269,7 +296,7 @@ export default class CharacterPilot extends ApplicationV2 {
     const equipped = carried.filter((item) => item.system?.equippable?.equipped);
     const weapons = actor.type === "character" && equipped.length ? equipped : carried;
     const weaponButtons = weapons.length
-      ? weapons.map((item) => button("attack", item.name, "fa-solid fa-crosshairs", { data: `data-item-id="${item.id}"` })).join("")
+      ? weapons.map((item) => button("attack", item.name, "fa-solid fa-crosshairs", { data: `data-item-id="${item.id}"`, disabled: limits.noAction && !state.actionUsed })).join("")
       : `<span class="notes">${loc("SWFFG.Pilot.NoWeapons")}</span>`;
 
     const effects = temporaryStatusEffects(actor).filter((effect) => !effect.disabled);
@@ -304,7 +331,7 @@ export default class CharacterPilot extends ApplicationV2 {
         </div>
       </section>
       <section class="ffg-pilot-section ffg-pilot-config">
-        <label>${loc("SWFFG.Pilot.MaxManeuvers")} <input type="number" min="${DEFAULT_MAX_MANEUVERS}" step="1" value="${max}" data-pilot-max /></label>
+        <label>${loc("SWFFG.Pilot.MaxManeuvers")} <input type="number" min="${DEFAULT_MAX_MANEUVERS}" step="1" value="${CharacterPilot.maxManeuvers(actor)}" data-pilot-max /></label>
       </section>`
       : "";
 
@@ -318,6 +345,7 @@ export default class CharacterPilot extends ApplicationV2 {
       </header>
 
       <div class="ffg-pilot-banner${blocked ? " blocked" : ""}">${banner}</div>
+      ${limits.sources.length ? `<div class="ffg-pilot-banner ffg-pilot-crits"><i class="fa-solid fa-user-injured"></i> ${escapeHTML(limits.sources.join(", "))}</div>` : ""}
 
       <section class="ffg-pilot-state">
         <div class="ffg-pilot-stat ${state.actionUsed ? "spent" : "ready"}"><span>${loc("SWFFG.Pilot.Action")}</span><strong>${loc(state.actionUsed ? "SWFFG.Pilot.Used" : "SWFFG.Pilot.Available")}</strong></div>
@@ -328,9 +356,9 @@ export default class CharacterPilot extends ApplicationV2 {
       <section class="ffg-pilot-section">
         <h3><i class="fa-solid fa-list-check"></i> ${loc("SWFFG.Pilot.Sections.Turn")}</h3>
         <div class="ffg-pilot-grid">
-          ${button("toggle-action", t(state.actionUsed ? "Turn.RestoreAction" : "Turn.UseAction"), "fa-solid fa-burst", { disabled: blocked })}
-          ${button("convert-action", t("Turn.ActionToManeuver"), "fa-solid fa-arrow-right-arrow-left", { disabled: blocked || state.actionUsed || capacity >= max })}
-          ${button("extra-maneuver", t(strainKey === "wounds" ? "Turn.ExtraManeuverWounds" : "Turn.ExtraManeuver", { cost: EXTRA_MANEUVER_STRAIN }), "fa-solid fa-forward", { disabled: blocked || capacity >= max || !strain })}
+          ${button("toggle-action", t(state.actionUsed ? "Turn.RestoreAction" : "Turn.UseAction"), "fa-solid fa-burst", { disabled: blocked || (!state.actionUsed && limits.noAction) })}
+          ${button("convert-action", t("Turn.ActionToManeuver"), "fa-solid fa-arrow-right-arrow-left", { disabled: blocked || state.actionUsed || capacity >= max || limits.noAction })}
+          ${button("extra-maneuver", t(strainKey === "wounds" ? "Turn.ExtraManeuverWounds" : "Turn.ExtraManeuver", { cost: EXTRA_MANEUVER_STRAIN }), "fa-solid fa-forward", { disabled: blocked || capacity >= max || !strain || limits.noStrainManeuver })}
           ${button("reset-turn", t("Turn.Reset"), "fa-solid fa-rotate-left")}
         </div>
       </section>
@@ -427,21 +455,24 @@ export default class CharacterPilot extends ApplicationV2 {
         if (state.actionUsed) {
           // Taking the action back also takes back the maneuver it was traded for - unless that
           // maneuver has already been spent.
-          if (state.actionConverted && state.maneuversUsed > Math.min(Pilot.maxManeuvers(actor), 1 + state.extraManeuvers)) {
+          if (state.actionConverted && state.maneuversUsed > Math.min(Pilot.maneuverLimit(actor), Pilot.freeManeuvers(actor) + state.extraManeuvers)) {
             return ui.notifications.warn(game.i18n.localize("SWFFG.Pilot.Errors.ConvertedSpent"));
           }
           state.actionUsed = false;
           state.actionConverted = false;
-        } else {
-          state.actionUsed = true;
+          return Pilot.saveTurn(actor, state);
         }
-        return Pilot.saveTurn(actor, state);
+        if (!Pilot.mayTakeAction(actor)) return;
+        state.actionUsed = true;
+        await Pilot.saveTurn(actor, state);
+        return chargeActionStrain(actor);
       }
 
       case "convert-action": {
         if (!Pilot.canAct(actor)) return;
         const state = Pilot.turnState(actor);
-        if (state.actionUsed || Pilot.capacity(actor, state) >= Pilot.maxManeuvers(actor)) return;
+        if (state.actionUsed || Pilot.capacity(actor, state) >= Pilot.maneuverLimit(actor)) return;
+        if (!Pilot.mayTakeAction(actor)) return;
         state.actionUsed = true;
         state.actionConverted = true;
         return Pilot.saveTurn(actor, state);
@@ -450,7 +481,10 @@ export default class CharacterPilot extends ApplicationV2 {
       case "extra-maneuver": {
         if (!Pilot.canAct(actor)) return;
         const state = Pilot.turnState(actor);
-        if (Pilot.capacity(actor, state) >= Pilot.maxManeuvers(actor)) return;
+        if (Pilot.capacity(actor, state) >= Pilot.maneuverLimit(actor)) return;
+        if (turnRestrictions(actor).noStrainManeuver) {
+          return ui.notifications.warn(game.i18n.format("SWFFG.Pilot.Errors.Winded", { name: actor.name }));
+        }
         // suffered as wounds by the adversaries that have no strain track
         const track = strainTrack(actor, true);
         if (!track) return;
@@ -515,6 +549,7 @@ export default class CharacterPilot extends ApplicationV2 {
         if (item.getFlag("starwarsffg", "config.enableAmmo") && item.system.ammo.value <= 0) {
           return ui.notifications.warn(game.i18n.localize("SWFFG.Pilot.Errors.NoAmmo"));
         }
+        if (!Pilot.turnState(actor).actionUsed && !Pilot.mayTakeAction(actor)) return;
         await Pilot.spendAction(actor);
         return DiceHelpers.rollItem(item.id, actor);
       }

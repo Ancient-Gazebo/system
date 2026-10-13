@@ -4,6 +4,7 @@ import PopoutEditor from "./popout-editor.js";
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 import DiceHelpers from "./helpers/dice-helpers.js";
 import { getGroupSkillRank, isVehicleGroup } from "./helpers/minions.js";
+import { slotRestriction } from "./helpers/crit-automation.js";
 
 /**
  * Extend the base Combat entity.
@@ -1004,6 +1005,12 @@ export class CombatFFG extends Combat {
     const slotDisposition = slot?.token?.disposition ?? slot?.actor?.token?.disposition ?? slot?.disposition ?? 0;
     if (slotDisposition !== combatantDisposition) {
       ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.SlotType"));
+      return;
+    }
+    // Slowed Down (a critical injury): this turn may only be taken in the side's last slot.
+    const restricted = slotRestriction(this, slotIndex, combatant);
+    if (restricted) {
+      ui.notifications.warn(restricted);
       return;
     }
     await this.claimSlot(this.round, slot.id, combatant.id);

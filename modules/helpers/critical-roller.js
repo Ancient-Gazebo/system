@@ -172,16 +172,31 @@ export default class CriticalRollerFFG extends FFGFormApplication {
   /**
    * Embed a crit item on the target actor, forwarding to the active GM when
    * the current user cannot modify it (see gm-bridge.js).
+   *
+   * The embedded copy records who applied it and the attack it came from
+   * (`flags.starwarsffg.critContext`), for the crit automation
+   * (helpers/crit-automation.js): Overpowered offers that attack's pool again.
+   * @param {string} actorUuid
+   * @param {Item} item
+   * @param {?string} [sourceMessageId]  the attack's chat message
    * @returns {Promise<"local"|"forwarded"|false>}
    */
-  static async applyCriticalTo(actorUuid, item) {
+  static async applyCriticalTo(actorUuid, item, sourceMessageId = null) {
     try {
       const actor = await fromUuid(actorUuid);
       if (!actor) {
         ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
         return false;
       }
-      return await applyToTargetActor(actor, { type: "crit", items: [item.toObject()] });
+      const data = item.toObject();
+      foundry.utils.setProperty(data, "flags.starwarsffg.critContext", { appliedBy: game.user.id, sourceMessageId });
+      // a copy of a crit that already sat on an actor starts afresh
+      if (data.flags?.starwarsffg) {
+        delete data.flags.starwarsffg.critState;
+        delete data.flags.starwarsffg.critSuppressed;
+        delete data.flags.starwarsffg.critSuppressedCombat;
+      }
+      return await applyToTargetActor(actor, { type: "crit", items: [data] });
     } catch (err) {
       CONFIG.logger?.warn?.("CriticalRoller: failed to apply critical to target", err);
       ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
@@ -379,7 +394,7 @@ export default class CriticalRollerFFG extends FFGFormApplication {
     // Single roll: embed on the target first so the card can report it.
     let appliedTo = null;
     if (results.length === 1) {
-      const ok = await CriticalRollerFFG.applyCriticalTo(this.applyContext.actorUuid, results[0].critical);
+      const ok = await CriticalRollerFFG.applyCriticalTo(this.applyContext.actorUuid, results[0].critical, this.applyContext.sourceMessageId ?? null);
       if (ok) appliedTo = this.applyContext.targetName;
     }
 
@@ -392,7 +407,7 @@ export default class CriticalRollerFFG extends FFGFormApplication {
       // For the roll-twice flow the chat card's Choose button performs the
       // apply, so the target rides along in the message flags.
       apply: results.length > 1
-        ? { actorUuid: this.applyContext.actorUuid, targetName: this.applyContext.targetName }
+        ? { actorUuid: this.applyContext.actorUuid, targetName: this.applyContext.targetName, sourceMessageId: this.applyContext.sourceMessageId ?? null }
         : null,
     });
 
@@ -577,6 +592,7 @@ export default class CriticalRollerFFG extends FFGFormApplication {
             // pick on this actor (gm-bridge forwards for non-owners).
             applyTo: apply?.actorUuid ?? null,
             targetName: apply?.targetName ?? null,
+            sourceMessageId: apply?.sourceMessageId ?? null,
           },
         },
       },
@@ -624,7 +640,7 @@ export default class CriticalRollerFFG extends FFGFormApplication {
             ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.TargetGone"));
             return;
           }
-          const ok = await CriticalRollerFFG.applyCriticalTo(data.applyTo, item);
+          const ok = await CriticalRollerFFG.applyCriticalTo(data.applyTo, item, data.sourceMessageId ?? null);
           if (!ok) return;
           appliedTo = data.targetName;
         }

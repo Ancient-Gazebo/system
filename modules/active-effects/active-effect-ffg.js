@@ -50,6 +50,34 @@ function refreshWeaponSheetsForCharacteristicEffect(effect) {
 }
 
 /**
+ * Whether an effect belongs to a critical injury / hit that has been switched off from the sheet's
+ * crit list (helpers/crit-automation.js, for talents that let a character ignore critical injuries):
+ * either a modifier on the crit item itself, or an effect the crit put on an actor, which names its
+ * crit in `flags.starwarsffg.critSource` (and, for a vehicle crit held by its crew, the vehicle in
+ * `critHolder`).
+ *
+ * @param {ActiveEffectFFG} effect
+ * @returns {boolean}
+ */
+function isSwitchedOffCrit(effect) {
+  const parent = effect.parent;
+  if (parent instanceof Item) {
+    return ["criticalinjury", "criticaldamage"].includes(parent.type) && !!parent.flags?.starwarsffg?.critSuppressed;
+  }
+  const flags = effect.flags?.starwarsffg;
+  if (!flags?.critSource || !(parent instanceof Actor)) return false;
+  let holder = parent;
+  if (flags.critHolder) {
+    try {
+      holder = fromUuidSync(flags.critHolder);
+    } catch (err) {
+      holder = null;
+    }
+  }
+  return !!holder?.items?.get?.(flags.critSource)?.flags?.starwarsffg?.critSuppressed;
+}
+
+/**
  * Extend the basic ActiveEffect
  * @extends {ActiveEffect}
  */
@@ -104,6 +132,7 @@ export class ActiveEffectFFG extends ActiveEffect {
     ) {
       return true;
     }
+    if (isSwitchedOffCrit(this)) return true;
     return super.isSuppressed;
   }
 

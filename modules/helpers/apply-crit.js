@@ -115,25 +115,6 @@ export class ApplyCrit {
       return;
     }
 
-    // Existing Critical on Target: count of embedded crit items (+10 each in the roller).
-    const existingCrits = realActor.items.filter(
-      (i) => i.type === "criticalinjury" || i.type === "criticaldamage"
-    ).length;
-
-    // Durable ranks (−10 each). Lookup differs for linked (talentList) vs unlinked (items).
-    let durableRanks = 0;
-    if (isLinked) {
-      const durable = realActor.talentList?.find(
-        (t) => (t.name || "").toLowerCase() === "durable"
-      );
-      durableRanks = Number(durable?.rank) || 0;
-    } else {
-      const durableItem = realActor.items.find(
-        (i) => (i.name || "").toLowerCase() === "durable"
-      );
-      durableRanks = Number(durableItem?.system?.ranks?.current) || 0;
-    }
-
     // Vicious: substring match on chat-embedded qualities; sum totalRanks.
     // Pre-seeds the roller's flat Additional Modifier at +10 per rank.
     const qualities = itemSystem.doNotSubmit?.qualities || [];
@@ -143,6 +124,48 @@ export class ApplyCrit {
       if (name.includes("vicious")) {
         viciousRanks += Number(q?.totalRanks) || 0;
       }
+    }
+
+    await ApplyCrit.openRoller(realActor, { viciousRanks, sourceMessageId: message.id, isLinked });
+  }
+
+  /**
+   * Open the Critical Roller in apply mode against an actor: pre-filled with its existing crits and
+   * Durable ranks, drawing from the world's Critical table and embedding the result on it. Used by the
+   * Apply Crit button and by the crit automation's "Roll Critical Injury" buttons (Bleeding Out past
+   * the threshold, a vehicle's Shot Up).
+   * @param {Actor} realActor
+   * @param {object} [options]
+   * @param {number} [options.viciousRanks=0]       Vicious ranks of the attacking weapon
+   * @param {?string} [options.sourceMessageId]     the attack the crit comes from
+   * @param {?boolean} [options.isLinked]           whether the actor is a linked token's (decides
+   *   where Durable is read from); worked out from the actor when omitted
+   */
+  static async openRoller(realActor, { viciousRanks = 0, sourceMessageId = null, isLinked = null } = {}) {
+    const type = realActor?.type;
+    if (!["character", "nemesis", "rival", "vehicle"].includes(type)) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.UnsupportedActor"));
+      return;
+    }
+    const linked = isLinked ?? !realActor.isToken;
+
+    // Existing Critical on Target: count of embedded crit items (+10 each in the roller).
+    const existingCrits = realActor.items.filter(
+      (i) => i.type === "criticalinjury" || i.type === "criticaldamage"
+    ).length;
+
+    // Durable ranks (−10 each). Lookup differs for linked (talentList) vs unlinked (items).
+    let durableRanks = 0;
+    if (linked) {
+      const durable = realActor.talentList?.find(
+        (t) => (t.name || "").toLowerCase() === "durable"
+      );
+      durableRanks = Number(durable?.rank) || 0;
+    } else {
+      const durableItem = realActor.items.find(
+        (i) => (i.name || "").toLowerCase() === "durable"
+      );
+      durableRanks = Number(durableItem?.system?.ranks?.current) || 0;
     }
 
     // Make sure a Critical RollTable exists; offer the GM the one-click setup.
@@ -160,8 +183,9 @@ export class ApplyCrit {
       applyContext: {
         critType: type === "vehicle" ? "criticaldamage" : "criticalinjury",
         preferredTableName: type === "vehicle" ? "Critical Damage" : "Critical Injuries",
-        targetName: a.name,
+        targetName: realActor.name,
         actorUuid: realActor.uuid,
+        sourceMessageId,
         prefill: {
           existing: existingCrits,
           durable: durableRanks,

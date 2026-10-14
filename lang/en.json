@@ -177,7 +177,7 @@
   "SWFFG.CritAutomation.Difficulty.All": "+1 difficulty on all of {actor}'s skill checks until the end of the encounter.",
   "SWFFG.CritAutomation.Characteristic.UntilHealed": "1d10 rolled {roll}: {actor}'s {characteristic} is 1 lower until this crit is healed.",
   "SWFFG.CritAutomation.Characteristic.AtMinimum": "1d10 rolled {roll}: {characteristic}, which is already at its minimum of 1, so nothing is lost.",
-  "SWFFG.CritAutomation.Repaired": "Critical injuries repaired: {count} item(s) changed (Head Ringer's text, Compromised's modifier). Details are in the console.",
+  "SWFFG.CritAutomation.Repaired": "Critical injuries and hits repaired: {count} item(s) changed. Details are in the console.",
   "SWFFG.CritAutomation.SuddenJolt.Dropped": "{actor} drops {weapons}. Picking a weapon back up is a maneuver.",
   "SWFFG.CritAutomation.SuddenJolt.Nothing": "{actor} has nothing equipped to drop.",
   "SWFFG.CritAutomation.Destiny.Flipped": "A {from} Destiny Point flips to {to}. Pool: {light} {lightLabel}, {dark} {darkLabel}.",

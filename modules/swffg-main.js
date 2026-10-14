@@ -61,7 +61,7 @@ import { ApplyDamage } from "./helpers/apply-damage.js";
 import { ApplyCrit } from "./helpers/apply-crit.js";
 import { registerGMBridge } from "./helpers/gm-bridge.js";
 import { migrateLegacyScope, promptLegacyScopeMigration } from "./helpers/legacy-scope-migration.js";
-import { setupCriticalTables } from "./helpers/crit-tables.js";
+import { repairCriticalTables, setupCriticalTables } from "./helpers/crit-tables.js";
 import { registerGlitchSmithIntegration } from "./integrations/glitchsmith.js";
 import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-details.js";
 import { registerAutoAnimationsShim } from "./integrations/autoanimations.js";
@@ -168,8 +168,9 @@ Hooks.once("init", async function () {
     DestinySession,
     // `game.ffg.ImprovisedDetonation.open(actor)` opens the explosive builder for a character with the talent.
     ImprovisedDetonation,
-    // Head Ringer's text and Compromised's modifier (run once by the 4.0.7 migration).
+    // Critical item and table repairs (run by the 4.0.7 / 4.0.8 migrations; safe to run again).
     repairCriticalItems,
+    repairCriticalTables,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered

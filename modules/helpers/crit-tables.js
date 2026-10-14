@@ -14,6 +14,10 @@
  *
  * Idempotent: an existing table of the same name is left untouched, and items
  * are reused by name+type rather than duplicated.
+ *
+ * The Critical Hit table follows the later core rulebooks' layout (Engine
+ * Damaged and Shield Overload; no Shot Up). {@link repairCriticalTables} rebuilds
+ * a world's table from its crit items when the two disagree.
  */
 
 import { GuardedDialogV2 as DialogV2 } from "./dialog-helpers.js";
@@ -42,7 +46,7 @@ const CRITICAL_INJURIES = [
   { min: 71, max: 75, severity: 2, name: "Hamstrung", description: "<p>The target loses their free maneuver until the end of the encounter.</p>" },
   { min: 76, max: 80, severity: 2, name: "Overpowered", description: "<p>The attacker may immediately make one additional free attack against the target using the same dice pool as the original attack.</p>" },
   { min: 81, max: 85, severity: 2, name: "Winded", description: "<p>The target cannot voluntarily suffer strain to activate abilities or gain additional maneuvers until the end of the encounter.</p>" },
-  { min: 86, max: 90, severity: 3, name: "Compromised", description: "<p>Increase the difficulty of all the target's skill checks by one until the end of the encounter.</p>" },
+  { min: 86, max: 90, severity: 2, name: "Compromised", description: "<p>Increase the difficulty of all the target's skill checks by one until the end of the encounter.</p>" },
   { min: 91, max: 95, severity: 3, name: "At the Brink", description: "<p>The target suffers 1 strain each time they perform an action.</p>" },
   { min: 96, max: 100, severity: 3, name: "Crippled", description: "<p>One of the target's limbs is crippled until healed: increase the difficulty of all checks that require that limb by one.</p>" },
   { min: 101, max: 105, severity: 3, name: "Maimed", description: "<p>One of the target's limbs is permanently lost. Unless it is replaced, increase the difficulty of all checks that require that limb by one.</p>" },
@@ -63,18 +67,19 @@ const CRITICAL_HITS = [
   { min: 19, max: 27, severity: 1, name: "Losing Power to Shields", description: "<p>Decrease defense in the affected zone by 1 until repaired. If the vehicle has no defense, it suffers 1 system strain.</p>" },
   { min: 28, max: 36, severity: 1, name: "Knocked Off Course", description: "<p>On their next turn the pilot cannot execute any maneuvers and must make a Piloting check (difficulty based on current speed) to regain control.</p>" },
   { min: 37, max: 45, severity: 1, name: "Tailspin", description: "<p>All attacks made from the vehicle suffer 2 Setback dice until the end of the pilot's next turn; crew members are immobilized until then.</p>" },
-  { min: 46, max: 54, severity: 2, name: "Component Hit", description: "<p>One component (attacker's choice, or GM's discretion) is knocked offline until this Critical Hit is repaired.</p>" },
+  { min: 46, max: 54, severity: 1, name: "Component Hit", description: "<p>One component of the attacker's choice is knocked offline until the end of the following round.</p>" },
   { min: 55, max: 63, severity: 2, name: "Shields Failing", description: "<p>Decrease defense in all zones by 1 until repaired. If the vehicle has no defense, it suffers 2 system strain.</p>" },
   { min: 64, max: 72, severity: 2, name: "Navicomputer Failure", description: "<p>The navicomputer (or hyperdrive equivalent) goes offline; the vehicle cannot jump to hyperspace until repaired.</p>" },
   { min: 73, max: 81, severity: 2, name: "Power Fluctuations", description: "<p>The vehicle suffers intermittent power surges; the pilot cannot voluntarily inflict system strain (to gain extra maneuvers, for example) until repaired.</p>" },
   { min: 82, max: 90, severity: 3, name: "Shields Down", description: "<p>Decrease defense in the affected zone to 0 and in all other zones by 1 until repaired. If the vehicle has no defense, it suffers 4 system strain.</p>" },
-  { min: 91, max: 99, severity: 3, name: "Engines Down", description: "<p>The vehicle's maximum speed is reduced to 0 until repaired, although it retains maneuverability.</p>" },
-  { min: 100, max: 108, severity: 3, name: "Shot Up", description: "<p>Small explosions ripple through the vehicle: one random crew member suffers a Critical Injury (roll on the Critical Injury table).</p>" },
-  { min: 109, max: 117, severity: 3, name: "Major System Failure", description: "<p>One component (attacker's choice) is heavily damaged and inoperable until repaired at a suitable facility.</p>" },
-  { min: 118, max: 126, severity: 4, name: "Major Hull Breach", description: "<p>The hull is torn open and the vehicle depressurizes. Crew in the affected sections are exposed to vacuum; see the core rules for depressurization.</p>" },
-  { min: 127, max: 135, severity: 4, name: "Destabilized", description: "<p>The vehicle's structural integrity is seriously compromised: halve its hull trauma and system strain thresholds until repaired.</p>" },
-  { min: 136, max: 144, severity: 4, name: "Fire!", description: "<p>Fire rages through the vehicle. Characters in the burning areas suffer the effects of fire each round until it is extinguished.</p>" },
-  { min: 145, max: 153, severity: 0, name: "Breaking Up", description: "<p>The vehicle starts to come apart and is completely destroyed at the end of the next round; everyone aboard must evacuate or perish.</p>" },
+  { min: 91, max: 99, severity: 3, name: "Engine Damaged", description: "<p>The vehicle's maximum speed is reduced by 1, to a minimum of 1, until repaired.</p>" },
+  { min: 100, max: 108, severity: 3, name: "Shield Overload", description: "<p>Defense in every zone drops to 0 and the vehicle suffers 2 system strain; this hit cannot be repaired before the encounter ends. A vehicle with no defense loses 1 armor until repaired instead.</p>" },
+  { min: 109, max: 117, severity: 3, name: "Engines Down", description: "<p>The vehicle's maximum speed is reduced to 0 until repaired, though it keeps its course and momentum, and it cannot execute maneuvers until repaired.</p>" },
+  { min: 118, max: 126, severity: 3, name: "Major System Failure", description: "<p>One component of the attacker's choice is heavily damaged and inoperable until repaired.</p>" },
+  { min: 127, max: 133, severity: 4, name: "Major Hull Breach", description: "<p>The hull is torn open and the vehicle depressurizes (all of it for silhouette 4 or smaller, sections of it for larger ships), over rounds equal to its silhouette. In an atmosphere it suffers Destabilized instead.</p>" },
+  { min: 134, max: 138, severity: 4, name: "Destabilized", description: "<p>The vehicle's structural integrity is seriously compromised: halve its hull trauma and system strain thresholds until repaired.</p>" },
+  { min: 139, max: 144, severity: 4, name: "Fire!", description: "<p>Fire rages through the vehicle: it suffers 2 system strain at once, and characters in the burning areas take fire damage each round until it is put out.</p>" },
+  { min: 145, max: 153, severity: 4, name: "Breaking Up", description: "<p>The vehicle starts to come apart and is completely destroyed at the end of the following round; everyone aboard has one round to get off.</p>" },
   { min: 154, max: 999, severity: 0, name: "Vaporized", description: "<p>The vehicle is completely destroyed; nothing survives.</p>" },
 ];
 
@@ -139,6 +144,84 @@ async function buildCritTable({ tableName, folderName, itemType, entries, tableI
     description: game.i18n.localize("SWFFG.CritSetup.TableDescription"),
     results,
   });
+}
+
+/**
+ * Rebuild a world's Critical tables from its crit items, where the two disagree.
+ *
+ * Apply Crit draws from the "Critical Injuries" / "Critical Damage" table and applies the item the
+ * drawn result points at, while the standalone Critical Roller matches the roll against the items'
+ * own d100 ranges. A table built for one rulebook's layout but pointed at another's items (as the
+ * Zyraitix "Critical Damage" table was: Edge of the Empire ranges, the later books' items, and a link
+ * to a "Shot Up" item that did not exist) applies the wrong hit, or nothing. The items are the
+ * reference: a table whose results are not exactly one per item, at the item's range, is rebuilt.
+ *
+ * A table is left alone when its items cannot be trusted as the reference either - a range missing,
+ * two items overlapping, two items with one name - and a warning names the problem.
+ * Run by the 4.0.8 migration, and available as `game.ffg.repairCriticalTables()`. GM only.
+ * @returns {Promise<string[]>} what was changed
+ */
+export async function repairCriticalTables() {
+  if (!game.user?.isGM) return [];
+  const changed = [];
+  const plans = [
+    { tableName: CRIT_INJURY_TABLE_NAME, itemType: "criticalinjury" },
+    { tableName: CRIT_DAMAGE_TABLE_NAME, itemType: "criticaldamage" },
+  ];
+  for (const { tableName, itemType } of plans) {
+    const table = game.tables.find((t) => t.name === tableName);
+    if (!table) continue;
+    const items = game.items
+      .filter((item) => item.type === itemType && !item.pack)
+      .sort((a, b) => (Number(a.system.min) || 0) - (Number(b.system.min) || 0));
+    if (!items.length) continue;
+
+    // the items must form a clean set of d100 ranges to rebuild from
+    let problem = null;
+    const names = new Set();
+    let lastMax = 0;
+    for (const item of items) {
+      const min = Number(item.system.min);
+      const max = Number(item.system.max);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) problem = `${item.name} has no usable d100 range`;
+      else if (min <= lastMax) problem = `${item.name} overlaps the range before it`;
+      else if (names.has(item.name)) problem = `there are two ${item.name} items`;
+      if (problem) break;
+      names.add(item.name);
+      lastMax = max;
+    }
+    if (problem) {
+      ui.notifications.warn(`The ${tableName} table was not checked: ${problem}.`);
+      continue;
+    }
+
+    const wanted = items.map((item) => `${item.system.min}-${item.system.max}:${item.id}`);
+    const current = [...table.results]
+      .sort((a, b) => (a.range?.[0] ?? 0) - (b.range?.[0] ?? 0))
+      .map((result) => {
+        const uuid = result.documentUuid ?? (result.documentId ? `Item.${result.documentId}` : "");
+        return `${result.range?.[0]}-${result.range?.[1]}:${String(uuid).split(".").pop()}`;
+      });
+    if (wanted.length === current.length && wanted.every((entry, index) => entry === current[index])) continue;
+
+    const results = items.map((item) => ({
+      type: CONST.TABLE_RESULT_TYPES.DOCUMENT,
+      name: item.name,
+      documentUuid: item.uuid,
+      img: item.img,
+      range: [Number(item.system.min), Number(item.system.max)],
+      weight: 1,
+      drawn: false,
+    }));
+    await table.deleteEmbeddedDocuments("TableResult", table.results.map((result) => result.id));
+    await table.createEmbeddedDocuments("TableResult", results);
+    changed.push(`${tableName}: rebuilt from its ${items.length} items (${current.length} results before)`);
+  }
+  if (changed.length) {
+    ui.notifications.info(`Critical tables repaired: ${changed.join("; ")}.`);
+    console.info(`Star Wars FFG | Critical table repair:\n${changed.join("\n")}`);
+  }
+  return changed;
 }
 
 /**

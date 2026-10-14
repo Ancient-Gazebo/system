@@ -164,9 +164,12 @@ export default class CriticalRollerFFG extends FFGFormApplication {
       }
     }
     const result = results[0];
-    if (!result?.documentUuid) return null;
-    const item = await fromUuid(result.documentUuid);
-    return item?.documentName === "Item" ? item : null;
+    const item = result?.documentUuid ? await fromUuid(result.documentUuid) : null;
+    if (item?.documentName === "Item") return item;
+    // A result linked to an item that no longer exists (or to nothing): use the crit items' own d100
+    // ranges, as the standalone roller does, rather than failing the whole roll.
+    const pool = this._resolvePool(this.critType);
+    return pool.length ? CriticalRollerFFG.resolveCritical(pool, total) : null;
   }
 
   /**

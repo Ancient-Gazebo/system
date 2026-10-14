@@ -32,6 +32,13 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.8`
+* Fixes:
+  * Apply Crit applied the wrong Critical Hit to vehicles in worlds whose Critical Damage table did not match their crit items. In Zyraitix the table had the Edge of the Empire ranges while the items are the later rulebooks' table: a roll of 91-144 landed on the wrong hit, 100-108 pointed at a Shot Up item that does not exist and failed, and Engine Damaged and Shield Overload could never be rolled. When a world updates, a Critical table that disagrees with its crit items is rebuilt from them, one result per item at the item's range. A table whose items overlap or lack a range is left alone with a warning. `game.ffg.repairCriticalTables()` runs it again.
+  * A Critical table result that points at a missing item now falls back to the crit items' own ranges instead of failing the roll.
+  * Crit items: Gruesome Injury's severity is Daunting (it was Hard), Dead's and Vaporized's is none (they were Formidable). Slowed Down's text says "on his next turn", Fire!'s page reference is 228, and typos in Knocked Off Course, Power Fluctuations and Engine Damaged are fixed. Like the 4.0.7 repairs, these run once on update and only change what is still wrong.
+  * The system's own Critical Damage table (offered by Apply Crit in a world that has none, or `game.ffg.setupCriticalTables()`) follows the same rulebook layout: Engine Damaged and Shield Overload instead of Shot Up, with the matching ranges and severities. Compromised is Average there, as in the rules.
+
 `4.0.7`
 * New table tool - Critical Injury Automation. When a Critical Injury or Critical Hit is added to a character, adversary or vehicle (from Apply Crit, the Critical Roller, or dragged onto the sheet), the GM's client applies what it does and posts a card, whispered to the GM, the target's owners and the attacker, listing what was applied and what is left to the table:
   * Strain at once: Minor Nick and Bowled Over (which also knocks the target prone), and system strain for Mechanical Stress, a vehicle with no defence hit by a shield crit, Shield Overload and Fire!.

@@ -2,6 +2,7 @@ import ModifierHelpers from "./helpers/modifiers.js";
 import ItemHelpers from "./helpers/item-helpers.js";
 import { AE_MODES } from "./config/ffg-active-effect-modes.js";
 import { repairCriticalItems } from "./helpers/crit-automation.js";
+import { repairCriticalTables } from "./helpers/crit-tables.js";
 
 import { GuardedDialogV2 as DialogV2 } from "./helpers/dialog-helpers.js";
 
@@ -86,6 +87,13 @@ async function handleMigration(oldVersion, newVersion) {
   // 4.0.7 automates critical injuries: Head Ringer's description named the wrong characteristics, and
   // a modifier on Compromised would now count its difficulty twice.
   if (!oldVersion || foundry.utils.isNewerVersion("4.0.7", oldVersion)) {
+    await repairCriticalItems();
+  }
+  // 4.0.8: a Critical table that disagrees with the crit items is rebuilt from them (Zyraitix's
+  // "Critical Damage" had another rulebook's ranges and a dead link), and the item repair runs again
+  // for its new fixes (severities, typos). Both only touch what is still wrong.
+  if (!oldVersion || foundry.utils.isNewerVersion("4.0.8", oldVersion)) {
+    await repairCriticalTables();
     await repairCriticalItems();
   }
   await warnTheme();

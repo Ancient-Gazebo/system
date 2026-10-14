@@ -956,13 +956,31 @@ export async function toggleSuppressed(item) {
 /* -------------------------------------------- */
 
 /**
- * Fix two critical injuries as the Zyraitix world had them. Run once by the 4.0.7 migration, and
- * available as `game.ffg.repairCriticalItems()`.
+ * Wording slips in crit descriptions as the Zyraitix world had them: [crit key, wrong, right, what].
+ * Each is only replaced where the wrong text is still there.
+ */
+const DESCRIPTION_FIXES = [
+  ["headringer", /Presence and Willpower/gi, "Intellect and Cunning", "description now reads Intellect and Cunning"],
+  ["sloweddown", /initiative slot on his turn/gi, "Initiative slot on his next turn", "description now reads \"on his next turn\""],
+  ["knockedoffcourse", /the sh ip\b/gi, "the ship", "typo fixed"],
+  ["powerfluctuations", /\bThee ship\b/g, "The ship", "typo fixed"],
+  ["enginedamaged", /Critical(?:&nbsp;| )\s*Hit/g, "Critical Hit", "stray space removed"],
+  ["fire", /page 214\b/g, "page 228", "page reference now 228"],
+];
+
+/** Severities that disagreed with the rulebook tables ("—" is 0, no healing check). */
+const SEVERITY_FIXES = { gruesomeinjury: 4, dead: 0, vaporized: 0 };
+
+/**
+ * Fix critical injuries and hits as the Zyraitix world had them. Run by the 4.0.7 and 4.0.8
+ * migrations, and available as `game.ffg.repairCriticalItems()`; it only changes what is still wrong.
  *
  *  - Head Ringer's description had been copied from Fearsome Wound and said Presence and Willpower;
- *    the injury is Intellect and Cunning (which is also what the automation applies).
+ *    the injury is Intellect and Cunning (which is also what the automation applies). A few other
+ *    descriptions had typos ({@link DESCRIPTION_FIXES}).
  *  - Compromised carried a hand-made modifier. The automation now applies Compromised itself, so a
  *    modifier on the item would count the difficulty twice; it is removed.
+ *  - Gruesome Injury was severity Hard (Daunting in the rules), Dead and Vaporized Formidable (none).
  *
  * Covers world items, the copies on actors and those on unlinked tokens. GM only.
  * @returns {Promise<string[]>} what was changed
@@ -981,13 +999,27 @@ export async function repairCriticalItems() {
       const where = item.actor ? `${item.actor.name} :: ${item.name}` : item.name;
       try {
         const key = critKey(item);
-        if (key === "headringer") {
-          const description = item.system?.description ?? "";
-          if (/Presence and Willpower/i.test(description)) {
-            await item.update({ "system.description": description.replace(/Presence and Willpower/gi, "Intellect and Cunning") });
-            changed.push(`${where}: description now reads Intellect and Cunning`);
-          }
-        } else if (key === "compromised") {
+        const update = {};
+        const done = [];
+        let description = item.system?.description ?? "";
+        for (const [fixKey, wrong, right, what] of DESCRIPTION_FIXES) {
+          if (fixKey !== key) continue;
+          wrong.lastIndex = 0;
+          if (!wrong.test(description)) continue;
+          wrong.lastIndex = 0;
+          description = description.replace(wrong, right);
+          update["system.description"] = description;
+          done.push(what);
+        }
+        if (key in SEVERITY_FIXES && Number(item.system?.severity) !== SEVERITY_FIXES[key]) {
+          update["system.severity"] = SEVERITY_FIXES[key];
+          done.push(`severity ${item.system?.severity} -> ${SEVERITY_FIXES[key]}`);
+        }
+        if (done.length) {
+          await item.update(update);
+          changed.push(`${where}: ${done.join(", ")}`);
+        }
+        if (key === "compromised") {
           const attributes = Object.keys(item.system?.attributes ?? {});
           const effects = item.effects
             .filter((effect) => attributes.includes(effect.name) || (effect.name?.startsWith("attr") && !effect.flags?.starwarsffg?.critAutomation))

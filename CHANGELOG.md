@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.9`
+* Features:
+  * Death Tracker: three linked dots under "Other" on the Character sheet's Bio tab and the Nemesis sheet's General tab. Clicking an empty dot fills it and clicking a filled dot clears it; each dot is independent. Saved in the actor flag `flags.starwarsffg.deathTracker` (one true/false per dot), so the DataModels are unchanged. Only owners can change it; observers see it read-only.
+
 `4.0.8`
 * Fixes:
   * Apply Crit applied the wrong Critical Hit to vehicles in worlds whose Critical Damage table did not match their crit items. In Zyraitix the table had the Edge of the Empire ranges while the items are the later rulebooks' table: a roll of 91-144 landed on the wrong hit, 100-108 pointed at a Shot Up item that does not exist and failed, and Engine Damaged and Shield Overload could never be rolled. When a world updates, a Critical table that disagrees with its crit items is rebuilt from them, one result per item at the item's range. A table whose items overlap or lack a range is left alone with a warning. `game.ffg.repairCriticalTables()` runs it again.

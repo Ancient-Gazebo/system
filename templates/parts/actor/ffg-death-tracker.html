@@ -1,0 +1,22 @@
+{{!--
+  Death Tracker: three dots joined by short links, under "Other" in the general block (the Bio tab
+  on characters, the General tab on nemeses). Each dot toggles on its own: a click fills an empty
+  dot and clears a filled one. Stored as flags.starwarsffg.deathTracker; getData builds
+  `deathTracker` ({index, number, filled} per dot) from it. The block chrome is ffg-block's, so every theme
+  dresses it like its neighbours.
+--}}
+<div class="resource double ffg2-death-tracker">
+  <div class="attribute flex-group-center">
+    <div class="block-background">
+      <div class="block-title">{{localize "SWFFG.DeathTracker"}}</div>
+      <div class="block-attribute">
+        <div class="ffg2-death-dots{{#if editable}} editable{{/if}}">
+          {{#each deathTracker}}
+          {{#unless @first}}<span class="ffg2-death-link"></span>{{/unless}}
+          <span class="ffg2-death-dot{{#if filled}} filled{{/if}}" data-index="{{index}}" {{#if @root.editable}}role="button" tabindex="0" aria-pressed="{{#if filled}}true{{else}}false{{/if}}"{{/if}} aria-label="{{localize "SWFFG.DeathTracker"}} {{number}}"></span>
+          {{/each}}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -848,3 +848,43 @@
 .starwarsffg .gear-items .gear-col-equipped {
   white-space: nowrap;
 }
+
+/* ---- Death Tracker ------------------------------------------------------ */
+/* Three dots joined by short links under "Other" (ffg-death-tracker.html), in the
+   style of a death-save row. Outlines and links draw in the block's own text colour,
+   so they read dark on mandar's light blocks and light on space-op's dark ones; a
+   filled dot takes the damage track's red. Every rule targets the tracker's own
+   classes, which no theme styles, so none of this needs !important. */
+.starwarsffg .ffg2-death-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0;
+}
+.starwarsffg .ffg2-death-dot {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
+}
+.starwarsffg .ffg2-death-dot.filled {
+  background: #a51f17;
+}
+.starwarsffg .ffg2-death-link {
+  flex: 0 0 auto;
+  width: 0.9rem;
+  height: 3px;
+  background: currentColor;
+}
+.starwarsffg .ffg2-death-dots.editable .ffg2-death-dot {
+  cursor: pointer;
+  transition: box-shadow 0.1s;
+}
+.starwarsffg .ffg2-death-dots.editable .ffg2-death-dot:hover,
+.starwarsffg .ffg2-death-dots.editable .ffg2-death-dot:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(165, 31, 23, 0.55);
+}

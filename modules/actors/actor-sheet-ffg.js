@@ -485,6 +485,7 @@ export class ActorSheetFFG extends FFGActorSheet {
         data.data.enrichedBio = await foundry.applications.ux.TextEditor.enrichHTML(this.actor.system.biography, {secrets: !data.limited});
         data.data.general.enrichedNotes = await foundry.applications.ux.TextEditor.enrichHTML(this.actor.system.general?.notes) || "";
         data.data.general.enrichedFeatures = await foundry.applications.ux.TextEditor.enrichHTML(this.actor.system.general?.features) || "";
+        data.deathTracker = ActorSheetFFG.deathTrackerMarks(this.actor).map((filled, index) => ({ index, number: index + 1, filled }));
         data.maxAttribute = game.settings.get("starwarsffg", "maxAttribute");
         data.obligationItems = {
           obligations: data.items.filter(i => i.system?.type === "obligation"),
@@ -1279,6 +1280,21 @@ export class ActorSheetFFG extends FFGActorSheet {
         this._paintVitalTrack(input);
       }
       await this.actor.update({ [`system.stats.${stat}.value`]: val }, { render: needsRender });
+    });
+
+    // Death Tracker dots (Bio tab on characters, General tab on nemeses). Each dot is independent:
+    // a click fills an empty one and clears a filled one. The dot is painted straight away and the
+    // update re-renders as usual, so any other open copy of the sheet follows.
+    html.find(".ffg2-death-dot").on("click keydown", async (ev) => {
+      if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      const marks = ActorSheetFFG.deathTrackerMarks(this.actor);
+      const index = Number(ev.currentTarget.dataset.index);
+      if (!(index >= 0 && index < marks.length)) return;
+      marks[index] = !marks[index];
+      ev.currentTarget.classList.toggle("filled", marks[index]);
+      ev.currentTarget.setAttribute("aria-pressed", String(marks[index]));
+      await this.actor.setFlag("starwarsffg", "deathTracker", marks);
     });
 
     // Force chip steppers: adjust the committed Force dice (forcePool.value),
@@ -4818,6 +4834,21 @@ export class ActorSheetFFG extends FFGActorSheet {
       return;
     }
     return await super._onSubmit(event, options);
+  }
+
+  /** Number of dots on the Death Tracker. */
+  static DEATH_TRACKER_SIZE = 3;
+
+  /**
+   * The Death Tracker's marks, one boolean per dot, read from flags.starwarsffg.deathTracker. A flag
+   * rather than system data because the DataModels are generated: an undeclared system path would be
+   * pruned on the next save. Anything missing or malformed reads as an empty dot.
+   * @param {Actor} actor
+   * @returns {boolean[]}
+   */
+  static deathTrackerMarks(actor) {
+    const stored = actor?.getFlag?.("starwarsffg", "deathTracker");
+    return Array.from({ length: ActorSheetFFG.DEATH_TRACKER_SIZE }, (_, i) => Array.isArray(stored) && stored[i] === true);
   }
 
   /**

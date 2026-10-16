@@ -4915,6 +4915,36 @@ export class ActorSheetFFG extends FFGActorSheet {
     }
   }
 
+  /**
+   * An update that only moves wounds / strain / hull trauma / system strain is shown by re-syncing those inputs
+   * and their damage tracks instead of rebuilding the sheet. The sheet's own steppers already save with
+   * `render: false`, but damage from anywhere else (Apply Damage on a chat card, the token HUD's bars, crit
+   * automation, a macro) re-rendered every open copy of the sheet: all ten tabs, ~2,500 elements, ~190 ms on a fast
+   * PC in both Firefox and Chromium, on every client that had it open. Nothing else on the sheet shows these values
+   * (the *OverThreshold derived stats appear in no template). Minions and vehicle groups still render, for the same
+   * reason as in activateListeners: their counts and group skills derive from these values.
+   * @inheritDoc
+   */
+  _canRender(options) {
+    if (super._canRender(options) === false) return false;
+    if (this.rendered && options?.renderContext === "updateActor" && ActorSheetFFG.isVitalOnlyChange(options.renderData)
+      && this.actor?.type !== "minion" && !isVehicleGroup(this.actor)) {
+      this.syncVitalInputs();
+      return false;
+    }
+  }
+
+  /**
+   * Whether an actor update diff changes nothing but vital stat values/thresholds (bookkeeping keys aside).
+   * @param {object} changed  the update diff core passes as renderData
+   * @returns {boolean}
+   */
+  static isVitalOnlyChange(changed) {
+    if (!changed || (typeof changed !== "object")) return false;
+    const keys = Object.keys(foundry.utils.flattenObject(changed)).filter((k) => (k !== "_id") && !k.startsWith("_stats."));
+    return (keys.length > 0) && keys.every((k) => /^system\.stats\.(wounds|strain|hullTrauma|systemStrain)\.(value|max)$/.test(k));
+  }
+
   // _handleSourceControl / _handleTagControl: the V1 Dialog overrides that used
   // to live here were deleted in the V2 conversion; the FFGDocumentSheet base
   // provides DialogV2 versions (same lang keys, same update shape) with a

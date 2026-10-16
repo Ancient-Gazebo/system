@@ -32,6 +32,11 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.10`
+* Fixes:
+  * Damage no longer rebuilds open character sheets. When wounds, strain, hull trauma or system strain changed anywhere except the sheet's own steppers (Apply Damage on a chat card, the token HUD's bars, crit automation, a macro), every client with that sheet open re-rendered the whole sheet, all ten tabs and about 2,500 elements: about 190 ms each time on a fast PC in Firefox and Chromium alike, and several times that on a slow one. Those updates now just refresh the numbers and damage bars, as the steppers already did. Updates that change anything else, and minion and vehicle-group sheets (whose counts and group skills follow these values), still render in full.
+  * Re-rendering a sheet laid out the wrong tabs first. The templates mark their first tab active (the character sheet marks two), and the sheet only switched to the tab you were on after the new content was in the page; in between, Foundry's scroll restore forced the browser to lay out the default tabs, then the real one again. The remembered tab is now marked active before insertion, on every actor and item sheet. Main-thread work per re-render on a 35-item character: Brave 102-138 ms down to 48-93 ms, Firefox 64-75 ms down to 49-52 ms. Tabs added by modules (netrunning) are restored as before.
+
 `4.0.9`
 * Features:
   * Death Tracker: three linked dots under "Other" on the Character sheet's Bio tab and the Nemesis sheet's General tab. Clicking an empty dot fills it and clicking a filled dot clears it; each dot is independent. Saved in the actor flag `flags.starwarsffg.deathTracker` (one true/false per dot), so the DataModels are unchanged. Only owners can change it; observers see it read-only.

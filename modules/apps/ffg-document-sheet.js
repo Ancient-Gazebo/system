@@ -223,6 +223,47 @@ export class FFGDocumentSheet extends HandlebarsApplicationMixin(DocumentSheetV2
   }
 
   /**
+   * Show the tab the user is on in the NEW content before it goes into the page. Sheet templates
+   * hard-code their first tab as active (the character sheet marks two), and `Tabs` only switched to
+   * the real one after insertion, in `_activateCoreListeners`. In between, core's scroll restore in
+   * `_syncPartState` forces a layout, so every re-render laid out the template's default tabs and
+   * then the real one again. Measured on a 35-item character, main-thread work per re-render:
+   * Brave 102-138 ms -> 48-93 ms, Firefox 64-75 ms -> 49-52 ms. @override
+   */
+  _replaceHTML(result, content, options) {
+    const root = result?.sheet;
+    if (root instanceof HTMLElement) this._preActivateTabs(root);
+    return super._replaceHTML(result, content, options);
+  }
+
+  /**
+   * Mark the remembered tab active the way `Tabs#activate` will (nav items, then the content's
+   * `.tab` elements of the nav's group), so binding `Tabs` afterwards changes nothing. A tab that is
+   * not in this content - a module tab, injected by a render hook later - leaves the template as it
+   * is, and `_restoreInjectedTab` selects it as before.
+   * @param {HTMLElement} root  the new content
+   */
+  _preActivateTabs(root) {
+    const cacheKey = this._activeTabCacheKey;
+    const desired = (cacheKey ? this.constructor._activeTabCache.get(cacheKey) : undefined) ?? this._sheetTab;
+    if (!desired) return;
+    for (const config of this.options.tabs ?? []) {
+      const nav = config.navSelector ? root.querySelector(config.navSelector) : null;
+      if (!nav) continue;
+      const items = nav.querySelectorAll("[data-tab]");
+      if (!Array.from(items).some((item) => item.dataset.tab === desired)) continue;
+      for (const item of items) item.classList.toggle("active", item.dataset.tab === desired);
+      const group = nav.dataset.group;
+      const body = !config.contentSelector ? null
+        : (root.matches(config.contentSelector) ? root : root.querySelector(config.contentSelector));
+      for (const tab of body?.querySelectorAll(".tab[data-tab]") ?? []) {
+        if (tab.dataset.group && (tab.dataset.group !== group)) continue;
+        tab.classList.toggle("active", tab.dataset.tab === desired);
+      }
+    }
+  }
+
+  /**
    * Stable identity for a scroll container across re-renders. Tabs are keyed by
    * `data-tab` so a changing tab count (module-injected tabs, the optional gear /
    * talent organization tabs) cannot shift one tab's scroll onto another; anything

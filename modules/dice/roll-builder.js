@@ -826,7 +826,9 @@ export default class RollBuilderFFG extends HandlebarsApplicationMixin(Applicati
           // The odds must model the dice that will actually be rolled: with "Apply remove setback
           // mods" on, removals cancel setback dice in renderDiceExpression, so simulating the raw
           // count reported odds worse than the roll the player was about to make.
-          setbackDice: pool.resolveSetback().setback,
+          // The library spells this key with a capital B; `setbackDice` is silently ignored, which
+          // left setback dice out of the odds entirely.
+          setBackDice: pool.resolveSetback().setback,
         },
         iterations: game.settings.get("starwarsffg", "rollSimulation"),
         runSimulate: false,

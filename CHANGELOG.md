@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.11`
+* Fixes:
+  * The roll dialog's success chance now counts setback dice. Since 2.1.0 the dialog sent them to the simulator under a key it does not read (`setbackDice`; the library spells it `setBackDice`), so it simulated every roll as if there were no setback dice and the percentage never moved however many you added. Example, 2 Ability + 1 Proficiency against 2 Difficulty: the dialog showed about 67% with 0, 1, 2 or 4 setback dice. It now shows about 67%, 59%, 51% and 36%. The 2.1.x note below that claims to fix this had it backwards: the original code was correct, and that change is what broke it. Only the displayed percentage was wrong. The dice actually rolled always included the setback dice.
+
 `4.0.10`
 * Fixes:
   * Damage no longer rebuilds open character sheets. When wounds, strain, hull trauma or system strain changed anywhere except the sheet's own steppers (Apply Damage on a chat card, the token HUD's bars, crit automation, a macro), every client with that sheet open re-rendered the whole sheet, all ten tabs and about 2,500 elements: about 190 ms each time on a fast PC in Firefox and Chromium alike, and several times that on a slow one. Those updates now just refresh the numbers and damage bars, as the steppers already did. Updates that change anything else, and minion and vehicle-group sheets (whose counts and group skills follow these values), still render in full.

@@ -9,14 +9,15 @@
  *   +10  per Critical Injury / Hit the target already has
  *   +10  per rank of the Lethal Blows talent
  *   -10  per rank of the Durable talent the target possesses
- *   +10  per time the weapon's Critical rating is activated
+ *   +10  per time the weapon's Critical rating is triggered beyond the first
  *
  * Two modes:
  *  - Standalone (Destiny Tracker menu / macros): rolls and reports only;
  *    resolving the result onto an actor is out of scope.
  *  - Apply mode (the weapon chat card's Apply Crit button passes
  *    `options.applyContext`): the type is fixed by the target, the modifiers
- *    are pre-seeded from the attack (existing crits, Durable, Vicious), the
+ *    are pre-seeded from the attack (existing crits, Durable, Vicious, and the
+ *    extra Critical rating triggers bought with Spend Results), the
  *    roll draws from the world's Critical RollTable, and the resulting crit
  *    item is embedded on the target (forwarded to the GM for unowned targets
  *    via gm-bridge). Roll-twice-and-choose applies the pick on Choose instead.
@@ -63,7 +64,7 @@ export default class CriticalRollerFFG extends FFGFormApplication {
           existing: Math.max(0, prefill.existing ?? 0),
           lethal: 0,
           durable: Math.max(0, prefill.durable ?? 0),
-          critrating: 0,
+          critrating: Math.max(0, prefill.critrating ?? 0),
           other: prefill.other ?? 0,
         },
       };

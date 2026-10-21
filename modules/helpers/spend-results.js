@@ -38,6 +38,8 @@ const FEEDBACK_EVENT = "ffgSpendFeedback";
 const FLAG = "spend";
 const PENDING_FLAG = "pendingNextCheck";
 const CUSTOM_SETTING = "spendCustomOptions";
+/** The attack option that triggers the weapon's Critical rating (resolved by Apply Crit). */
+const CRIT_OPTION = "criticalInjury";
 
 const SYMBOLS = ["advantage", "triumph", "threat", "despair"];
 const SYMBOL_CODE = { advantage: "[AD]", triumph: "[TR]", threat: "[TH]", despair: "[DE]" };
@@ -170,6 +172,11 @@ export default class SpendResults {
     const out = {};
     for (const symbol of SYMBOLS) out[symbol] = rolled[symbol] - spent[symbol];
     return out;
+  }
+
+  /** How many times the weapon's Critical rating has been triggered from this roll. */
+  static critActivations(message) {
+    return this.state(message).history.filter((entry) => entry.option === CRIT_OPTION).length;
   }
 
   static _isInitiative(message) {
@@ -338,7 +345,7 @@ export default class SpendResults {
       options.push(...WeaponQualities.spendOptions(message, targetActor));
       if (attack.hit && attack.crit > 0) {
         options.push({
-          id: "criticalInjury",
+          id: CRIT_OPTION,
           group: "weapon",
           title: game.i18n.localize("SWFFG.Spend.Options.criticalInjury.Title"),
           description: game.i18n.format("SWFFG.Spend.Options.criticalInjury.Description", {

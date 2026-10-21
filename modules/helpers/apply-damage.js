@@ -1,11 +1,13 @@
 /**
  * Apply Damage chat button — opens a dialog seeded from the weapon item and the
- * roll's successes, applies the resulting damage to the user's targeted token,
- * and posts a short public chat message. The full arithmetic is kept off the
- * chat log and only whispered to the GM on demand, via the "Damage Breakdown"
- * entry in the right-click context menu of the public card.
+ * roll's successes, applies the resulting damage to the user's targeted token
+ * (else the one the attack was rolled against, else a selected one), and posts
+ * a short public chat message. The full arithmetic is kept off the chat log and
+ * only whispered to the GM on demand, via the "Damage Breakdown" entry in the
+ * right-click context menu of the public card.
  */
 import { applyToTargetActor } from "./gm-bridge.js";
+import { attackTarget } from "./attack-target.js";
 import WeaponQualities, { hasFixedDamage } from "./weapon-qualities.js";
 import { strainTrack } from "./status-effects.js";
 
@@ -53,6 +55,8 @@ export class ApplyDamage {
 
     button.addEventListener("click", (ev) => {
       ev.preventDefault();
+      // inside the roll's `expandRoll` element, so keep the click from toggling the dice breakdown
+      ev.stopPropagation();
       ApplyDamage.show(message);
     });
   }
@@ -128,12 +132,12 @@ export class ApplyDamage {
       return;
     }
 
-    const targets = [...game.user.targets];
-    if (targets.length === 0) {
+    // The current target, else the one the attack was rolled against, else a selected token (see attack-target.js).
+    const target = attackTarget(message);
+    if (!target) {
       ui.notifications.warn(game.i18n.localize("SWFFG.ApplyDamage.NoTarget"));
       return;
     }
-    const target = targets[0];
     const a = target.actor;
     const type = a?.type;
 
@@ -347,7 +351,7 @@ export class ApplyDamage {
             const plainHits = hits - blockUses;
             const applied = blockUses * blockedHit.applied + plainHits * plainHit.applied;
 
-            const speaker = ChatMessage.getSpeaker({ token: target.document });
+            const speaker = ChatMessage.getSpeaker({ token: target });
 
             // Strain paid for Block / Deflect lands on the defender's strain track regardless of
             // which track the damage itself went to. Minions and rivals have no strain track --

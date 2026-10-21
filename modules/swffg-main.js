@@ -65,6 +65,8 @@ import { repairCriticalTables, setupCriticalTables } from "./helpers/crit-tables
 import { registerGlitchSmithIntegration } from "./integrations/glitchsmith.js";
 import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-details.js";
 import { registerAutoAnimationsShim } from "./integrations/autoanimations.js";
+import { registerCinematicCutInsShim } from "./integrations/cinematic-cut-ins.js";
+import { registerChromiumAudioFix } from "./helpers/chromium-audio-fix.js";
 import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
 import TalentTree from "./helpers/talent-tree.js";
@@ -130,6 +132,13 @@ Hooks.once("init", async function () {
   // Stop Automated Animations from throwing on every roll made without a source item
   // (skill checks, initiative, Destiny). No-op when AA is not installed.
   registerAutoAnimationsShim();
+
+  // Stop Cinematic Cut-ins replaying Turn Start cut-ins on every combat update under V14 (runs at
+  // ready; no-op if the module is absent).
+  registerCinematicCutInsShim();
+
+  // Chromium sticks at the end of some audio buffers (no loop, no `ended`); trim those by a frame.
+  registerChromiumAudioFix();
 
   // Place our classes in their own namespace for later reference.
   game.ffg = {

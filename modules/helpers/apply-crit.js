@@ -1,15 +1,18 @@
 /**
  * Apply Crit chat button — gathers the crit context from the attack (target,
- * Vicious quality, the target's existing crits / Durable talent) and opens the
- * system's Critical Roller (helpers/critical-roller.js) in apply mode: the
- * roller's modifier interface drives a draw from the world's Critical
- * RollTable and the resulting crit item is embedded on the target.
+ * Vicious quality, how many times Spend Results triggered the Critical rating,
+ * the target's existing crits / Durable talent) and opens the system's
+ * Critical Roller (helpers/critical-roller.js) in apply mode: the roller's
+ * modifier interface drives a draw from the world's Critical RollTable and the
+ * resulting crit item is embedded on the target.
  * Crit-ing a minion kills one outright instead (RAW).
  */
 import { applyToTargetActor } from "./gm-bridge.js";
+import { attackTarget } from "./attack-target.js";
 import { isVehicleGroup } from "./minions.js";
 import { promptSetupCriticalTables } from "./crit-tables.js";
 import CriticalRollerFFG from "./critical-roller.js";
+import SpendResults from "./spend-results.js";
 
 export class ApplyCrit {
   /**
@@ -56,6 +59,9 @@ export class ApplyCrit {
 
     button.addEventListener("click", (ev) => {
       ev.preventDefault();
+      // The weapon card sits inside the roll's `expandRoll` element: without this the click also
+      // toggled the dice breakdown, which was all that seemed to happen when the crit could not start.
+      ev.stopPropagation();
       ApplyCrit.show(message);
     });
   }
@@ -74,12 +80,12 @@ export class ApplyCrit {
     }
     const itemSystem = itemData.system || {};
 
-    const targets = [...game.user.targets];
-    if (targets.length === 0) {
+    // The current target, else the one the attack was rolled against, else a selected token (see attack-target.js).
+    const target = attackTarget(message);
+    if (!target) {
       ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.NoTarget"));
       return;
     }
-    const target = targets[0];
     const a = target.actor;
     const type = a?.type;
     if (!["character", "nemesis", "minion", "rival", "vehicle"].includes(type)) {
@@ -88,7 +94,7 @@ export class ApplyCrit {
     }
 
     // Linked vs unlinked actor resolution (mirrors the macro).
-    const isLinked = target.document.actorLink === true;
+    const isLinked = target.actorLink === true;
     const realActor = isLinked ? game.actors.get(a.id) : a;
 
     // A vehicle minion group follows the minion rule too: a Critical Hit destroys one ship outright
@@ -126,7 +132,10 @@ export class ApplyCrit {
       }
     }
 
-    await ApplyCrit.openRoller(realActor, { viciousRanks, sourceMessageId: message.id, isLinked });
+    // Each time the Critical rating was triggered beyond the first adds +10 (the spend option says so).
+    const extraActivations = Math.max(0, SpendResults.critActivations(message) - 1);
+
+    await ApplyCrit.openRoller(realActor, { viciousRanks, extraActivations, sourceMessageId: message.id, isLinked });
   }
 
   /**
@@ -137,11 +146,12 @@ export class ApplyCrit {
    * @param {Actor} realActor
    * @param {object} [options]
    * @param {number} [options.viciousRanks=0]       Vicious ranks of the attacking weapon
+   * @param {number} [options.extraActivations=0]   times the Critical rating was triggered beyond the first
    * @param {?string} [options.sourceMessageId]     the attack the crit comes from
    * @param {?boolean} [options.isLinked]           whether the actor is a linked token's (decides
    *   where Durable is read from); worked out from the actor when omitted
    */
-  static async openRoller(realActor, { viciousRanks = 0, sourceMessageId = null, isLinked = null } = {}) {
+  static async openRoller(realActor, { viciousRanks = 0, extraActivations = 0, sourceMessageId = null, isLinked = null } = {}) {
     const type = realActor?.type;
     if (!["character", "nemesis", "rival", "vehicle"].includes(type)) {
       ui.notifications.warn(game.i18n.localize("SWFFG.ApplyCrit.UnsupportedActor"));
@@ -189,6 +199,7 @@ export class ApplyCrit {
         prefill: {
           existing: existingCrits,
           durable: durableRanks,
+          critrating: extraActivations,
           other: viciousRanks * 10,
         },
       },

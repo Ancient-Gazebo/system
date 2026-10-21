@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.11`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.12`, compatibility minimum 13 /
 verified `"14.369"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -162,6 +162,16 @@ npx eslint modules
   `combat.turns[combat.turn]` is whoever rolled that initiative; the unit acting
   is the slot's claimant. Go through `helpers/combat-turns.js` rather than
   `combat.combatant`.
+- **V14 `combat.previous` only moves when the turn does.** An update that leaves
+  the round and turn alone (a slot claim, any flag) keeps it pointing at the
+  turn before, so "`previous.combatantId` differs from the current combatant"
+  stays true for the whole turn. To spot a new turn, remember the last one
+  yourself (`turnKey()`, as status-effects.js does). Cinematic Cut-ins got this
+  wrong; `integrations/cinematic-cut-ins.js` gates its handler and hands it the
+  slot's claimant as `combatant` (via a Proxy view of the Combat).
+- **Chromium sticks at the end of about 1 in 8 audio buffers** (no loop wrap, no
+  `ended`). `helpers/chromium-audio-fix.js` trims those by a frame or two before
+  they play; its start-up probe switches it off where the bug is absent.
 - **Only sweep statuses, never `actor.effects`.** XP purchases, species and
   talent modifiers are actor-level Active Effects too. Anything that "clears
   effects" must go through `temporaryStatusEffects()` (helpers/status-effects.js).

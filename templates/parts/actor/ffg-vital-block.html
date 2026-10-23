@@ -15,6 +15,8 @@
     disabled    when true the threshold input is locked (edit mode off)
     track       {pct,color} for the damage bar (from getData vitalTracks)
     showRest    render the Rest (bed) button in the header
+    showRecover render the Recover Strain button in the header, in the Rest
+                button's place (helpers/strain-recovery.js)
 --}}
 <div class="resource ffg2-vital data.stats.{{stat}}">
   <div class="attribute flex-group-center">
@@ -23,6 +25,9 @@
         <span>{{localize title}}</span>
         {{#if showRest}}
         <button type="button" class="resetMedical ffg2-rest" title="{{localize "SWFFG.MedicalItemNameUseRest"}}"><i class="fas fa-bed"></i></button>
+        {{/if}}
+        {{#if showRecover}}
+        <button type="button" class="ffg2-rest ffg2-recover-strain" title="{{localize "SWFFG.StrainRecovery.Button"}}"><i class="fas fa-spa"></i></button>
         {{/if}}
       </div>
       <div class="block-attribute ffg2-vital-body">

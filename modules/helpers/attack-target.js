@@ -13,7 +13,42 @@
  *      (`flags.starwarsffg.attack.targets`, see RollBuilderFFG) and Spend Results already acts on;
  *   3. the token the user has selected - only when exactly one is, and never the attacker's own,
  *      which is usually the one selected when a GM rolls for it.
+ * For a player, a targeted token they do not own comes after 2: on an adversary's attack (see
+ * playersMayApply) the player is usually the one hit, with their own last target still set on an
+ * enemy.
  */
+
+/** Attacker types whose attack cards any player may resolve, not only the GM and the roller. */
+const PLAYER_APPLY_ATTACKERS = ["minion", "rival", "nemesis", "vehicle"];
+
+/**
+ * @param {ChatMessage} message  the attack's chat message
+ * @returns {?Actor} who made the attack: the speaker's token actor where there is one, else its actor
+ */
+export function attackerActor(message) {
+  const speaker = message?.speaker ?? {};
+  let actor = null;
+  try {
+    actor = ChatMessage.implementation.getSpeakerActor(speaker);
+  } catch (err) {
+    actor = null;
+  }
+  return actor ?? game.actors.get(speaker.actor) ?? null;
+}
+
+/**
+ * Whether any player may use Apply Damage and Apply Crit on an attack card, rather than only the GM
+ * (and, for Apply Crit, the roller). True for an attack by a minion, rival or nemesis, and for a
+ * vehicle's: rolled from the vehicle sheet, or a ship weapon a crew member fired, whose card speaks for
+ * the crew member rather than the vehicle. The player using them is usually the one hit, applying the
+ * damage to their own character and choosing their own Block or Deflect.
+ * @param {ChatMessage} message
+ * @returns {boolean}
+ */
+export function playersMayApply(message) {
+  if (message?.rolls?.[0]?.data?.type === "shipweapon") return true;
+  return PLAYER_APPLY_ATTACKERS.includes(attackerActor(message)?.type);
+}
 
 /**
  * @param {TokenDocument} token
@@ -32,7 +67,7 @@ function isAttacker(token, message) {
  */
 export function attackTarget(message) {
   const live = Array.from(game.user.targets ?? [])[0]?.document;
-  if (live) return live;
+  if (live && (game.user.isGM || live.isOwner)) return live;
   for (const uuid of message?.flags?.starwarsffg?.attack?.targets ?? []) {
     let token = null;
     try {
@@ -42,6 +77,7 @@ export function attackTarget(message) {
     }
     if (token?.actor) return token;
   }
+  if (live) return live;
   const selected = (canvas?.tokens?.controlled ?? [])
     .map((token) => token.document)
     .filter((token) => token?.actor && !isAttacker(token, message));

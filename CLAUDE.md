@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.12`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.13`, compatibility minimum 13 /
 verified `"14.369"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -67,8 +67,9 @@ on purpose — they are not build output to be regenerated.
     `flags.starwarsffg.critSource`; a crit switched off from the sheet's crit
     list is suppressed through `ActiveEffectFFG#isSuppressed`; turn limits are
     read by the Pilot, the slot claim and the roll dialog).
-    They share `helpers/status-effects.js` (stacking "next check" statuses and
-    statuses with a lifetime) and `helpers/combat-turns.js` (whose turn it is,
+    They share `helpers/status-effects.js` (stacking "next check" statuses,
+    statuses with a lifetime, and the stacking Upgrade Incoming Attacks statuses
+    that `DiceHelpers.getDefenseUpgrades` reads off an attack's targets) and `helpers/combat-turns.js` (whose turn it is,
     slot-aware); the two Destiny Point rules also share
     `helpers/destiny-session.js` (paying from the pool, per-session counts and
     their reset), and every reroll is rebuilt by `dice/reroll.js`. Their styles

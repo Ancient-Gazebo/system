@@ -20,6 +20,7 @@ import WeaponOrganization from "../helpers/weapon-organization.js";
 import AbilityOrganization from "../helpers/ability-organization.js";
 import ArmorOrganization from "../helpers/armor-organization.js";
 import RollProfiles from "../helpers/roll-profiles.js";
+import StrainRecovery from "../helpers/strain-recovery.js";
 import {
   change_role,
   deregister_crew,
@@ -924,7 +925,7 @@ export class ActorSheetFFG extends FFGActorSheet {
       icon: '<i class="far fa-comment"></i>',
       callback: (el) => {
         let itemId = el.getAttribute("data-item-id");
-        this._itemDetailsToChat(itemId, el.getAttribute("data-item-name"));
+        this._itemDetailsToChat(itemId, el.getAttribute("data-item-name"), el.classList.contains("specialization-talent-item"));
       },
     };
 
@@ -1256,6 +1257,12 @@ export class ActorSheetFFG extends FFGActorSheet {
       }
     });
 
+    // Recover Strain (the strain block's header button): the end-of-encounter Cool / Discipline check.
+    html.find(".ffg2-recover-strain").click((ev) => {
+      ev.preventDefault();
+      StrainRecovery.open(this.actor);
+    });
+
     // Wounds / strain steppers (the -/+ buttons on the header vital blocks).
     // Floored at 0 but NOT capped at the threshold — current wounds/strain may
     // exceed the threshold (that's the incapacitated state), so the only bound
@@ -1403,6 +1410,15 @@ export class ActorSheetFFG extends FFGActorSheet {
           let itemId = li.data("itemId");
           let item = this.actor.items.get(itemId);
 
+          if (!item && li.hasClass("specialization-talent-item")) {
+            // A talent granted by a specialization: show the tree box this row was built from, not
+            // whatever its itemId happens to resolve to (see _resolveTalentRow).
+            const talentRow = this._resolveTalentRow(itemId, li.attr("data-item-name"));
+            if (talentRow.talentData) {
+              return this._talentDisplayDetails(talentRow.talentData, ev);
+            }
+            item = talentRow.item;
+          }
           if (!item) {
             item = game.items.get(itemId);
           }
@@ -1953,12 +1969,10 @@ export class ActorSheetFFG extends FFGActorSheet {
       ev.stopPropagation();
       const li = $(ev.currentTarget).parents(".item");
       const itemId = li.data("itemId");
-      const itemName = li.data("itemName");
+      const itemName = li.attr("data-item-name");
 
-      const item = this.actor.talentList.find((talent) => {
-        if (itemId) return talent.itemId === itemId;
-        return talent.name === itemName;
-      });
+      const item = this._talentRowData(itemId, itemName);
+      if (!item) return;
 
       const title = `${game.i18n.localize("SWFFG.TalentSource")} ${item.name}`;
       // V1 Dialog accepted a `template` option and rendered `content` through it;
@@ -2727,6 +2741,8 @@ export class ActorSheetFFG extends FFGActorSheet {
     // targeted actor's ranged defence never reached a gunnery roll. getDefenseDice reads the skill
     // name off `.value`, and weaponSkill here is the bare name.
     pool.setback += DiceHelpers.getDefenseDice({ value: weaponSkill }, weapon);
+    // the target's attack-upgrade statuses (a pilot's evasive flying, Dodge), last, as in assemblePool
+    pool.upgradeDifficulty(DiceHelpers.getDefenseUpgrades({ value: weaponSkill }, weapon));
     // display the roll dialog
     await DiceHelpers.displayRollDialog(
       crewSheet,
@@ -2794,6 +2810,42 @@ export class ActorSheetFFG extends FFGActorSheet {
   }
 
   /**
+   * The talentList entry a talent row was rendered from. Rows are matched on the name they show
+   * before their itemId: a tree box's itemId can name another talent than the one the box now holds
+   * (see _resolveTalentRow), so two rows - Block and Unyielding - may carry the same id.
+   * @private
+   */
+  _talentRowData(itemId, itemName) {
+    const list = this.actor?.talentList ?? [];
+    const name = String(itemName ?? "");
+    if (name) {
+      const named = list.find((t) => t.name === name && (t.itemId ?? "") === (itemId ?? "")) ?? list.find((t) => t.name === name);
+      if (named) return named;
+    }
+    return itemId ? list.find((t) => t.itemId === itemId) : undefined;
+  }
+
+  /**
+   * Resolve a talent row with no Item on this actor, i.e. one granted by a specialization. Its text
+   * is the tree box's: what the row and the tree show, and what FFG Tree Sync rewrites. The box's
+   * itemId only names the talent the box was built from, and Tree Sync keeps it when it rewrites a
+   * box, so once a tree's layout has changed between versions it can name another talent outright -
+   * a synced Block box still carrying Unyielding's id expanded to Unyielding's text, and refunding
+   * and rebuying it changed nothing. A world Item found by that id therefore only stands in for a
+   * box with no text of its own, and only when it is that same talent.
+   * @returns {{item?: Item, talentData?: object}}
+   * @private
+   */
+  _resolveTalentRow(itemId, itemName) {
+    const talentData = this._talentRowData(itemId, itemName);
+    const worldItem = itemId ? game.items.get(itemId) : undefined;
+    if (worldItem && (!talentData || (!String(talentData.description ?? "").trim() && worldItem.name === talentData.name))) {
+      return { item: worldItem };
+    }
+    return { talentData };
+  }
+
+  /**
    * Match getItemDetails()'s {ranks} / {ranks|word} substitution for a talent that has no Item
    * document, so rank-scaled talents read as a number instead of the literal placeholder.
    * @private
@@ -2831,22 +2883,35 @@ export class ActorSheetFFG extends FFGActorSheet {
    * Send details of an item to chat.
    * @private
    */
-  async _itemDetailsToChat(itemId, itemName) {
-    let item = this.actor.items.get(itemId) ?? game.items.get(itemId);
+  async _itemDetailsToChat(itemId, itemName, isTalentRow = false) {
+    let item = this.actor.items.get(itemId);
+    let talentData;
 
     // Talents granted by a specialization have no standalone Item document: their text lives in the
     // tree box, which is what the sheet shows (_talentDisplayDetails) and what FFG Tree Sync rewrites.
     // The box's itemId only points back at the talent the tree was built from - for imported trees a
     // compendium entry - so building the card from that document posted the pack's text, stale as soon
-    // as the tree's wording changed. Read the actor's talentList instead, as the sheet does. A box
-    // filled in by hand has no itemId, so those are matched by name.
-    const talentData = item ? undefined : this.actor?.talentList?.find((t) => (itemId ? t.itemId === itemId : !!itemName && t.name === itemName));
+    // as the tree's wording changed, or another talent's altogether. Read the actor's talentList
+    // instead, as the sheet does (_resolveTalentRow).
+    if (!item && isTalentRow) {
+      ({ item, talentData } = this._resolveTalentRow(itemId, itemName));
+    }
+    if (!item && !talentData) {
+      item = game.items.get(itemId);
+      // A box filled in by hand has no itemId, so those are matched by name.
+      talentData = item ? undefined : this.actor?.talentList?.find((t) => (itemId ? t.itemId === itemId : !!itemName && t.name === itemName));
+    }
 
     let itemDetails;
     if (talentData) {
       // The box stores no image. Take the source talent's from the pack indexes, which hold `img`
-      // without loading a document from every pack.
-      const indexed = itemId ? game.packs.find((p) => p.documentName === "Item" && p.index.has(itemId))?.index.get(itemId) : undefined;
+      // without loading a document from every pack. A stale itemId names another talent: look for
+      // this one by name in the same pack instead.
+      const sourcePack = itemId ? game.packs.find((p) => p.documentName === "Item" && p.index.has(itemId)) : undefined;
+      let indexed = sourcePack?.index.get(itemId);
+      if (indexed?.name && indexed.name !== talentData.name) {
+        indexed = sourcePack.index.find((e) => e.name === talentData.name && (!e.type || e.type === "talent"));
+      }
       itemDetails = {
         description: this._substituteTalentRanks(talentData.description, talentData.rank),
       };

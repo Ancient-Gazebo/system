@@ -70,8 +70,20 @@ export default class TalentOrganization {
     buckets[TalentOrganization.DEFAULT_TAB] = [];
     for (const tab of org.tabs) buckets[tab.id] = [];
 
-    list.forEach((talent, index) => {
+    // A tree box keeps the itemId of the talent it was built from even after FFG Tree Sync has
+    // rewritten it into another talent, so two different talents can share an itemId - and with it
+    // a key, which made dragging one drag the other along. Tell such talents apart by name (minus
+    // dots, which a flag update would read as a path).
+    const namesByKey = new Map();
+    for (const talent of list) {
       const key = TalentOrganization.talentKey(talent);
+      if (!namesByKey.has(key)) namesByKey.set(key, new Set());
+      namesByKey.get(key).add(talent.name);
+    }
+
+    list.forEach((talent, index) => {
+      let key = TalentOrganization.talentKey(talent);
+      if (namesByKey.get(key).size > 1) key = `${key}::${String(talent.name ?? "").replace(/\./g, "")}`;
       const assignment = org.assignments[key];
       let tabId = assignment?.tab;
       if (!tabId || !validTabIds.has(tabId)) tabId = TalentOrganization.DEFAULT_TAB;

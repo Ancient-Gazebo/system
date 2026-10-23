@@ -4867,12 +4867,14 @@ img {
   flex-direction: column;
 }
 
-.starwarsffg .resetMedical {
+.starwarsffg .resetMedical,
+.starwarsffg .ffg2-recover-strain {
   height: 20px;
   display: flex;
 }
 
-.starwarsffg .resetMedical>i {
+.starwarsffg .resetMedical>i,
+.starwarsffg .ffg2-recover-strain>i {
   height: 14px;
 }
 

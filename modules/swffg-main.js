@@ -1112,6 +1112,32 @@ Hooks.once("init", async function () {
           })),
       ],
     });
+    // Talents that make the character harder to hit (Dodge, Sense's Control upgrade, a pilot's
+    // evasive flying): each stack upgrades the difficulty of attacks of one kind made at whoever
+    // carries the status. They have no changes - the roll builder reads them off the target
+    // (DiceHelpers.getDefenseUpgrades) - and they stack, so the Status Icon Counters badge (or the
+    // Character Pilot's stepper) is the number of upgrades.
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-upgrade-ranged-attacks",
+      img: "icons/magic/defensive/barrier-shield-dome-deflect-blue.webp",
+      name: "SWFFG.Status.UpgradeAttacks.Ranged",
+      changes: [],
+      flags: { starwarsffg: { stackable: true } },
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-upgrade-melee-attacks",
+      img: "icons/skills/melee/swords-parry-block-blue.webp",
+      name: "SWFFG.Status.UpgradeAttacks.Melee",
+      changes: [],
+      flags: { starwarsffg: { stackable: true } },
+    });
+    CONFIG.statusEffects.push({
+      id: "starwarsffg-upgrade-all-attacks",
+      img: "icons/magic/defensive/illusion-evasion-echo-purple.webp",
+      name: "SWFFG.Status.UpgradeAttacks.All",
+      changes: [],
+      flags: { starwarsffg: { stackable: true } },
+    });
     CONFIG.statusEffects.push({
       id: "starwarsffg-defeated",
       img: "systems/starwarsffg/images/status/defeated.svg",

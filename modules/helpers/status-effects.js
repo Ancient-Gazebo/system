@@ -43,6 +43,17 @@ export const STATUS = Object.freeze({
 });
 
 /**
+ * Statuses that upgrade the difficulty of attacks made AT whoever carries them, once per stack: the
+ * talents that make a character harder to hit (Dodge, Sense's Control upgrade, a pilot's evasive
+ * flying). Keyed by the kind of attack they affect; "all" covers both and any other attack.
+ */
+export const ATTACK_UPGRADE = Object.freeze({
+  ranged: "starwarsffg-upgrade-ranged-attacks",
+  melee: "starwarsffg-upgrade-melee-attacks",
+  all: "starwarsffg-upgrade-all-attacks",
+});
+
+/**
  * Conditions that are not registered statuses but free-form markers identified by their `tool` key
  * (see {@link applyStatusLocal}). Staggered is one: Concussive applies it, and so do the critical
  * injuries that stagger (helpers/crit-automation.js), all onto the same marker.
@@ -152,6 +163,21 @@ export function nextCheckCount(actor, kind) {
   return stackCount(findStatusEffect(actor, NEXT_CHECK[kind]));
 }
 
+/**
+ * How many times an attack at this actor has its difficulty upgraded by the actor's
+ * {@link ATTACK_UPGRADE} statuses. Ranged and melee attacks add their own status to "all"; an attack
+ * that is neither only meets "all".
+ * @param {?Actor} actor
+ * @param {("ranged"|"melee"|"other")} kind  the kind of attack (DiceHelpers.attackKind)
+ * @returns {number}
+ */
+export function attackUpgradesAgainst(actor, kind) {
+  if (!actor) return 0;
+  let upgrades = stackCount(findStatusEffect(actor, ATTACK_UPGRADE.all));
+  if (kind === "ranged" || kind === "melee") upgrades += stackCount(findStatusEffect(actor, ATTACK_UPGRADE[kind]));
+  return upgrades;
+}
+
 function counterModuleActive() {
   return Boolean(game.modules?.get?.("statuscounter")?.active);
 }
@@ -200,6 +226,31 @@ async function writeStackCount(effect, count) {
 export async function applyNextCheckLocal(actor, kind, amount = 1) {
   const statusId = NEXT_CHECK[kind];
   if (!actor || !statusId) throw new Error(`Unknown next-check effect: ${kind}`);
+  return applyStackedStatusLocal(actor, statusId, amount);
+}
+
+/**
+ * Whether a status stacks instead of being on or off. The dice statuses ("next check" or "this
+ * combat") do: their changes are all additive, so ActiveEffectFFG#getStackCount can multiply them.
+ * So does any status flagged `stackable`, whose count is read directly where it matters (the
+ * {@link ATTACK_UPGRADE} statuses).
+ * @param {string} statusId
+ */
+export function isStackableStatus(statusId) {
+  const flags = statusDefinition(statusId)?.flags?.starwarsffg;
+  return ["once", "combat"].includes(flags?.duration) || flags?.stackable === true;
+}
+
+/**
+ * Add stacks of a stacking status (see {@link isStackableStatus}) to an actor the current client can
+ * modify.
+ * @param {Actor} actor
+ * @param {string} statusId
+ * @param {number} [amount=1]
+ * @returns {Promise<{count: number, previous: number}>}
+ */
+export async function applyStackedStatusLocal(actor, statusId, amount = 1) {
+  if (!actor || !statusDefinition(statusId)) throw new Error(`Unknown status effect: ${statusId}`);
   amount = Math.max(1, Math.trunc(Number(amount) || 1));
 
   const existing = findStatusEffect(actor, statusId);
@@ -225,7 +276,16 @@ export async function applyNextCheckLocal(actor, kind, amount = 1) {
  * @returns {Promise<{count: number, previous: number}>}
  */
 export async function removeNextCheckLocal(actor, kind, amount = 1) {
-  const existing = findStatusEffect(actor, NEXT_CHECK[kind]);
+  return removeStackedStatusLocal(actor, NEXT_CHECK[kind], amount);
+}
+
+/**
+ * Remove stacks of a stacking status (see {@link isStackableStatus}) from an actor the current client
+ * can modify; the last stack removes the effect.
+ * @returns {Promise<{count: number, previous: number}>}
+ */
+export async function removeStackedStatusLocal(actor, statusId, amount = 1) {
+  const existing = findStatusEffect(actor, statusId);
   if (!existing) return { count: 0, previous: 0 };
   amount = Math.max(1, Math.trunc(Number(amount) || 1));
   const previous = stackCount(existing);

@@ -6,6 +6,7 @@ import RollProfiles from "../helpers/roll-profiles.js";
 import { getGroupSkillRank, isVehicleGroup } from "../helpers/minions.js";
 import { additionalDefenseKind } from "../settings/defense-skills-settings.js";
 import WeaponQualities from "./weapon-qualities.js";
+import { attackUpgradesAgainst } from "./status-effects.js";
 
 export default class DiceHelpers {
   /**
@@ -142,6 +143,9 @@ export default class DiceHelpers {
     }
 
     dicePool = new DicePoolFFG(await this.getModifiers(dicePool, itemData));
+    // The target's attack-upgrade statuses, once every difficulty die is in. Kept on the weapon's
+    // own skill for the same reason as defence.
+    dicePool.upgradeDifficulty(this.getDefenseUpgrades({ value: profile.baseSkill ?? profile.skill }, itemData));
 
     return { dicePool, profile, skill, characteristic, label: skill.label };
   }
@@ -302,45 +306,67 @@ export default class DiceHelpers {
     };
   }
 
+  /**
+   * What kind of attack a roll is, as the target's defence sees it.
+   * @param {object} skill     `{value}`: the skill's key or name
+   * @param {?object} itemData the item rolled
+   * @returns {?("ranged"|"melee"|"other")} null when the roll is not an attack; "other" for a weapon
+   *                                        rolled with a skill that is neither ranged nor melee
+   */
+  static attackKind(skill, itemData) {
+    // Normalise the skill identifier so both skillsets resolve the same way regardless of
+    // how the ranged skills are spelled: Star Wars uses "Ranged: Light" / "Ranged: Heavy"
+    // while GOCK uses "Ranged-Light" / "Ranged-Heavy". Stripping all non-alphanumerics and
+    // lowercasing collapses those (and any spacing variant) to a single canonical key.
+    const normalize = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const key = normalize(skill?.value);
+    const kind = ["rangedlight", "rangedheavy", "gunnery"].includes(key) ? "ranged" : ["melee", "brawl", "lightsaber"].includes(key) ? "melee" : null;
+    // Skills the GM has opted in as attacks (Configure Settings -> Additional Defence Skills): a
+    // Force power skill, a custom combat skill, a renamed one in another skill theme. These face
+    // defence whenever they are rolled at a target, with or without a weapon behind the roll.
+    const configured = kind ? null : additionalDefenseKind(skill?.value);
+    if (configured) return configured;
+    // `shipweapon` counts as a weapon here: a vehicle weapon fired at a personal-scale target
+    // still faces that target's ranged defence. Omitting it meant gunnery attacks silently
+    // ignored defence while the equivalent personal attack applied it.
+    const weapon = itemData?.type === "weapon" || itemData?.type === "shipweapon" || itemData?.metaData?.tags?.includes("weapon");
+    return weapon ? kind ?? "other" : null;
+  }
+
   static getDefenseDice(skill, itemData){
     let defenseDice = 0;
     if (game.settings.get("starwarsffg", "useDefense")) {
-      // Normalise the skill identifier so both skillsets resolve the same way regardless of
-      // how the ranged skills are spelled: Star Wars uses "Ranged: Light" / "Ranged: Heavy"
-      // while GOCK uses "Ranged-Light" / "Ranged-Heavy". Stripping all non-alphanumerics and
-      // lowercasing collapses those (and any spacing variant) to a single canonical key.
-      const normalize = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const key = normalize(skill?.value);
-      let isRanged = ["rangedlight", "rangedheavy", "gunnery"].includes(key);
-      let isMelee = ["melee", "brawl", "lightsaber"].includes(key);
-      // Skills the GM has opted in as attacks (Configure Settings -> Additional Defence Skills): a
-      // Force power skill, a custom combat skill, a renamed one in another skill theme. These face
-      // defence whenever they are rolled at a target, with or without a weapon behind the roll.
-      const configured = !isRanged && !isMelee ? additionalDefenseKind(skill?.value) : null;
-      if (configured === "ranged") isRanged = true;
-      else if (configured === "melee") isMelee = true;
-      // `shipweapon` counts as a weapon here: a vehicle weapon fired at a personal-scale target
-      // still faces that target's ranged defence. Omitting it meant gunnery attacks silently
-      // ignored defence while the equivalent personal attack applied it.
-      if (configured || itemData?.type === "weapon" || itemData?.type === "shipweapon" || itemData?.metaData?.tags?.includes("weapon")) {
-        if (game.user.targets.size > 0) {
-          for (const target of game.user.targets) {
-            // Personal ranged/melee defense only exists on actors that carry a stats.defence
-            // block (character, nemesis, rival, minion). Vehicles use silhouette/shields and
-            // have no stats.defence, so a targeted vehicle contributes no setback here rather
-            // than throwing a TypeError.
-            const defence = target?.actor?.system?.stats?.defence;
-            if (!defence) continue;
-            if (isRanged) {
-              defenseDice = Math.max(defenseDice, Number(defence.ranged) || 0);
-            } else if (isMelee) {
-              defenseDice = Math.max(defenseDice, Number(defence.melee) || 0);
-            }
-          }
+      const kind = this.attackKind(skill, itemData);
+      if (kind === "ranged" || kind === "melee") {
+        for (const target of game.user.targets) {
+          // Personal ranged/melee defense only exists on actors that carry a stats.defence
+          // block (character, nemesis, rival, minion). Vehicles use silhouette/shields and
+          // have no stats.defence, so a targeted vehicle contributes no setback here rather
+          // than throwing a TypeError.
+          const defence = target?.actor?.system?.stats?.defence;
+          if (!defence) continue;
+          defenseDice = Math.max(defenseDice, Number(defence[kind]) || 0);
         }
       }
     }
     return defenseDice;
+  }
+
+  /**
+   * Difficulty upgrades the targets' attack-upgrade statuses put on an attack (Upgrade Incoming
+   * Ranged / Melee / All Attacks, one upgrade per stack - see helpers/status-effects.js). Read off
+   * the targets like defence, but not behind the Use Defense setting: these are statuses someone put
+   * on deliberately, not stats. With several targets, the most any one of them gives.
+   * @returns {number}
+   */
+  static getDefenseUpgrades(skill, itemData) {
+    const kind = this.attackKind(skill, itemData);
+    if (!kind) return 0;
+    let upgrades = 0;
+    for (const target of game.user.targets ?? []) {
+      upgrades = Math.max(upgrades, attackUpgradesAgainst(target?.actor, kind));
+    }
+    return upgrades;
   }
 
   static async displayRollDialog(data, dicePool, description, skillName, item, flavorText, sound, options = {}) {

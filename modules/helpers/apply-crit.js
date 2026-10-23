@@ -8,7 +8,7 @@
  * Crit-ing a minion kills one outright instead (RAW).
  */
 import { applyToTargetActor } from "./gm-bridge.js";
-import { attackTarget } from "./attack-target.js";
+import { attackTarget, playersMayApply } from "./attack-target.js";
 import { isVehicleGroup } from "./minions.js";
 import { promptSetupCriticalTables } from "./crit-tables.js";
 import CriticalRollerFFG from "./critical-roller.js";
@@ -17,11 +17,12 @@ import SpendResults from "./spend-results.js";
 export class ApplyCrit {
   /**
    * Called from the renderChatMessage hook. Enforces visibility (button is
-   * removed for users who are neither GM nor the message author), computes crit
-   * eligibility from the roll's advantages/triumphs vs the weapon's critical
-   * rating, tags the button with a tooltip when ineligible, and binds the click
-   * handler. Note that Apply Damage next to it is GM-only - the attacking player
-   * may apply their own crit, but not decide the damage that lands.
+   * removed for users who are neither GM nor the message author, unless the
+   * attack came from an adversary or a vehicle), computes crit eligibility from
+   * the roll's advantages/triumphs vs the weapon's critical rating, tags the
+   * button with a tooltip when ineligible, and binds the click handler. Note that
+   * Apply Damage next to it is GM-only on a character's attack - the attacking
+   * player may apply their own crit, but not decide the damage that lands.
    * @param {ChatMessage} message — the live ChatMessage instance.
    * @param {jQuery} html — the rendered chat-message element wrapped in jQuery.
    */
@@ -29,11 +30,12 @@ export class ApplyCrit {
     const button = html.find(".ffg-apply-crit")[0];
     if (!button) return;
 
-    // Visible to the attack's roller (message author) and GMs only. Non-owning
-    // clicks still forward to the active GM via gm-bridge, so this is a UI
-    // scoping gate, not a permission boundary.
+    // Visible to the attack's roller (message author) and GMs only, or to every
+    // player on an attack by an adversary or a vehicle (see playersMayApply).
+    // Non-owning clicks still forward to the active GM via gm-bridge, so this is
+    // a UI scoping gate, not a permission boundary.
     const authorId = message.author?.id ?? message.user;
-    if (game.user.id !== authorId && !game.user.isGM) {
+    if (game.user.id !== authorId && !game.user.isGM && !playersMayApply(message)) {
       button.remove();
       return;
     }

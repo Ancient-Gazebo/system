@@ -7,7 +7,7 @@
  * right-click context menu of the public card.
  */
 import { applyToTargetActor } from "./gm-bridge.js";
-import { attackTarget } from "./attack-target.js";
+import { attackTarget, playersMayApply } from "./attack-target.js";
 import WeaponQualities, { hasFixedDamage } from "./weapon-qualities.js";
 import { strainTrack } from "./status-effects.js";
 
@@ -47,8 +47,10 @@ export class ApplyDamage {
 
     // GM only. Unlike Apply Crit (which the attacking player may use on their own attack),
     // deciding how much damage actually lands - soak, defence, ranks of the relevant qualities -
-    // is the GM's call, so the button is removed for everyone else including the roller.
-    if (!game.user.isGM) {
+    // is the GM's call, so the button is removed for everyone else including the roller. The
+    // exception is an attack by an adversary or a vehicle (see playersMayApply): any player may
+    // apply that one, usually the player it hit.
+    if (!game.user.isGM && !playersMayApply(message)) {
       button.remove();
       return;
     }

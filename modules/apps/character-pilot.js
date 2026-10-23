@@ -13,6 +13,11 @@
  *   Assist          a boost on an ally's next check
  *   Draw / Holster  toggles a weapon's equipped state
  *
+ * The Statuses section lists the character's statuses and lets whoever is piloting it add any other
+ * registered status to it (see CharacterPilot.statusChoices), players included. The talents that
+ * upgrade the difficulty of attacks against the character (Dodge, Sense, ...) get steppers of their
+ * own: one per kind of attack, each step a stack of the matching ATTACK_UPGRADE status.
+ *
  * The turn bookkeeping is stored on the actor (`flags.starwarsffg.pilot`), so it is the same for
  * the player and for a GM looking at the same character, and it resets itself whenever a new turn
  * of that character begins.
@@ -28,10 +33,14 @@
 import DiceHelpers from "../helpers/dice-helpers.js";
 import { applyToTargetActor } from "../helpers/gm-bridge.js";
 import {
+  ATTACK_UPGRADE,
   STATUS,
   applyNextCheckLocal,
+  applyStackedStatusLocal,
   applyStatusLocal,
   findStatusEffect,
+  isStackableStatus,
+  removeStackedStatusLocal,
   removeStatusLocal,
   stackCount,
   statusLabel,
@@ -234,6 +243,32 @@ export default class CharacterPilot extends ApplicationV2 {
     await chargeActionStrain(actor);
   }
 
+  /**
+   * The statuses the Statuses section offers to add, grouped like the Token HUD orders them: dice for
+   * the next check, dice for this combat, the FFG conditions, then everything else. Dice statuses
+   * stack, so they stay on offer while active; anything else is offered only while absent. Defeated
+   * is left to the combat tracker, and a status the Token HUD hides for this actor is hidden here too.
+   * @param {Actor} actor
+   * @returns {{key: string, statuses: object[]}[]}
+   */
+  static statusChoices(actor) {
+    const groups = { NextCheck: [], Combat: [], Conditions: [], Other: [] };
+    const defeated = CONFIG.specialStatusEffects?.DEFEATED;
+    for (const status of CONFIG.statusEffects ?? []) {
+      if (!status?.id || status.id === defeated || status.hud === false) continue;
+      const actorTypes = status.hud?.actorTypes;
+      if (Array.isArray(actorTypes) && !actorTypes.includes(actor.type)) continue;
+      const duration = status.flags?.starwarsffg?.duration;
+      const group = duration === "once" ? "NextCheck" : duration === "combat" ? "Combat" : status.id.startsWith("starwarsffg-") ? "Conditions" : "Other";
+      const effect = findStatusEffect(actor, status.id);
+      groups[group].push({ id: status.id, label: statusLabel(status.id), stackable: isStackableStatus(status.id), count: stackCount(effect) });
+    }
+    groups.Other.sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang));
+    return Object.entries(groups)
+      .filter(([, statuses]) => statuses.length)
+      .map(([key, statuses]) => ({ key, statuses }));
+  }
+
   /* -------------------------------------------- */
   /*  Rendering                                   */
   /* -------------------------------------------- */
@@ -312,6 +347,25 @@ export default class CharacterPilot extends ApplicationV2 {
           .join("")
       : `<span class="notes">${loc("SWFFG.Pilot.NoEffects")}</span>`;
 
+    const attackUpgrades = Object.entries(ATTACK_UPGRADE)
+      .map(([kind, statusId]) => {
+        const count = stackCount(findStatusEffect(actor, statusId));
+        const step = (delta, icon, tooltip) =>
+          `<button type="button" data-pilot="attack-upgrade" data-kind="${kind}" data-delta="${delta}" data-tooltip="${loc(`SWFFG.Pilot.IncomingAttacks.${tooltip}`)}" ${delta < 0 && !count ? "disabled" : ""}><i class="${icon}"></i></button>`;
+        return `<div class="ffg-pilot-upgrade${count ? " active" : ""}"><span>${loc(`SWFFG.Pilot.IncomingAttacks.${kind}`)}</span><div>${step(-1, "fa-solid fa-minus", "Remove")}<strong>${count}</strong>${step(1, "fa-solid fa-plus", "Add")}</div></div>`;
+      })
+      .join("");
+
+    const statusOptions = CharacterPilot.statusChoices(actor)
+      .map(({ key, statuses }) => {
+        const options = statuses.map((status) => {
+          const label = !status.count ? status.label : status.stackable ? t("StatusStacked", { name: status.label, count: status.count }) : t("StatusActive", { name: status.label });
+          return `<option value="${escapeHTML(status.id)}" ${status.count && !status.stackable ? "disabled" : ""}>${escapeHTML(label)}</option>`;
+        });
+        return `<optgroup label="${escapeHTML(t(`StatusGroups.${key}`))}">${options.join("")}</optgroup>`;
+      })
+      .join("");
+
     const targets = Array.from(game.user.targets ?? []);
     const targetChips = targets.length
       ? targets.map((token) => `<span class="ffg-pilot-chip"><img src="${escapeHTML(token.document?.texture?.src ?? "icons/svg/mystery-man.svg")}" alt="" />${escapeHTML(token.name)}</span>`).join("")
@@ -382,8 +436,17 @@ export default class CharacterPilot extends ApplicationV2 {
       </section>
 
       <section class="ffg-pilot-section">
+        <h3 data-tooltip="${loc("SWFFG.Pilot.IncomingAttacks.Hint")}"><i class="fa-solid fa-shield-halved"></i> ${loc("SWFFG.Pilot.Sections.IncomingAttacks")}</h3>
+        <div class="ffg-pilot-upgrades">${attackUpgrades}</div>
+      </section>
+
+      <section class="ffg-pilot-section">
         <h3><i class="fa-solid fa-wand-magic-sparkles"></i> ${loc("SWFFG.Pilot.Sections.Effects")}</h3>
         <div class="ffg-pilot-chips">${effectChips}</div>
+        <div class="ffg-pilot-add-status">
+          <select data-pilot-status aria-label="${t("AddStatus")}"><option value="">${t("ChooseStatus")}</option>${statusOptions}</select>
+          <button type="button" data-pilot="add-status" disabled><i class="fa-solid fa-plus"></i><span>${t("AddStatus")}</span></button>
+        </div>
       </section>
 
       ${combat ? `<section class="ffg-pilot-section"><div class="ffg-pilot-grid">${button("end-turn", t("Turn.End"), "fa-solid fa-forward-step", { disabled: !ownTurn })}</div></section>` : ""}
@@ -412,6 +475,19 @@ export default class CharacterPilot extends ApplicationV2 {
       const value = Math.max(DEFAULT_MAX_MANEUVERS, Math.trunc(Number(event.currentTarget.value)) || DEFAULT_MAX_MANEUVERS);
       await actor.setFlag("starwarsffg", FLAG, { maxManeuvers: value });
     });
+    // The panel re-renders on every change to the actor or the combat, so the status picked but not
+    // yet added is remembered here rather than lost to a render.
+    const statusSelect = root.querySelector("[data-pilot-status]");
+    const addStatus = root.querySelector('[data-pilot="add-status"]');
+    if (statusSelect && addStatus) {
+      const chosen = this._statusChoice && statusSelect.querySelector(`option[value="${CSS.escape(this._statusChoice)}"]:not([disabled])`);
+      if (chosen) statusSelect.value = this._statusChoice;
+      addStatus.disabled = !statusSelect.value;
+      statusSelect.addEventListener("change", () => {
+        this._statusChoice = statusSelect.value || null;
+        addStatus.disabled = !statusSelect.value;
+      });
+    }
     for (const control of root.querySelectorAll("[data-pilot]")) {
       control.addEventListener("click", async (event) => {
         event.preventDefault();
@@ -556,6 +632,24 @@ export default class CharacterPilot extends ApplicationV2 {
 
       case "remove-effect":
         return actor.effects.get(data.effectId)?.delete();
+
+      case "add-status": {
+        // Not tied to the turn: like the Token HUD, this is bookkeeping rather than a maneuver.
+        const statusId = this.element?.querySelector("[data-pilot-status]")?.value;
+        if (!statusId) return;
+        this._statusChoice = null;
+        if (isStackableStatus(statusId)) return applyStackedStatusLocal(actor, statusId, 1);
+        if (findStatusEffect(actor, statusId)) return;
+        return applyStatusLocal(actor, { statusId });
+      }
+
+      case "attack-upgrade": {
+        // Not tied to the turn either: Dodge and its like are used when the character is attacked.
+        const statusId = ATTACK_UPGRADE[data.kind];
+        if (!statusId) return;
+        if (Number(data.delta) < 0) return removeStackedStatusLocal(actor, statusId, 1);
+        return applyStackedStatusLocal(actor, statusId, 1);
+      }
 
       case "end-turn": {
         const combat = activeCombat();

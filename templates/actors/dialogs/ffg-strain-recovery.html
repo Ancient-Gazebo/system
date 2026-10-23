@@ -1,0 +1,30 @@
+<div class="dialog-content strain-recovery-dialog">
+  <p class="strain-recovery-hint">{{localize "SWFFG.StrainRecovery.Hint"}}</p>
+  <p class="strain-recovery-current">{{current}}</p>
+
+  {{!-- The dice are drawn into each row's pool span by StrainRecovery._activateDialog. --}}
+  {{#each choices}}
+  <div class="strain-recovery-choice">
+    <label>
+      <input type="radio" name="strainRecoverySkill" value="{{this.key}}" {{#if this.selected}}checked{{/if}} />
+      <span>{{this.label}}</span>
+    </label>
+    <span class="strain-recovery-pool" data-skill="{{this.key}}"></span>
+  </div>
+  {{/each}}
+
+  {{#if others.length}}
+  <div class="strain-recovery-choice other">
+    <label>
+      <input type="radio" name="strainRecoverySkill" value="{{other}}" {{#if otherSelected}}checked{{/if}} />
+      <span>{{localize "SWFFG.StrainRecovery.OtherSkill"}}</span>
+    </label>
+    <select class="strain-recovery-other">
+      {{#each others}}
+      <option value="{{this.key}}" {{#if this.selected}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    <span class="strain-recovery-pool" data-skill="{{other}}"></span>
+  </div>
+  {{/if}}
+</div>

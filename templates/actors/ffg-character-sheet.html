@@ -106,8 +106,8 @@
           {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Wounds" stat="wounds" value=data.stats.wounds.value max=data.stats.wounds.max disabled=disabled track=vitalTracks.wounds showRest=true)}}
 
           {{#if (or (eq actor.flags.starwarsffg.config.enableStrainThreshold undefined) (eq actor.flags.starwarsffg.config.enableStrainThreshold true) )}}
-          {{!-- Strain Box: no separate reset — the Wounds Rest button already recovers strain --}}
-          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Strain" stat="strain" value=data.stats.strain.value max=data.stats.strain.max disabled=disabled track=vitalTracks.strain)}}
+          {{!-- Strain Box: the Rest button on Wounds clears strain too; this one is the end-of-encounter recovery check --}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Strain" stat="strain" value=data.stats.strain.value max=data.stats.strain.max disabled=disabled track=vitalTracks.strain showRecover=true)}}
           {{/if}}
 
           {{!-- Soak Box --}}

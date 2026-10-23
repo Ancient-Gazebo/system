@@ -4699,6 +4699,51 @@ body.theme-dark #chat .chat-log .message.round-marker .message-header .flavor-te
   opacity: 0.85;
 }
 
+/* Recover Strain dialog (helpers/strain-recovery.js): one row per skill, its dice on the right. */
+.strain-recovery-dialog .strain-recovery-hint {
+  margin: 0 0 4px 0;
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+.strain-recovery-dialog .strain-recovery-current {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+.strain-recovery-dialog .strain-recovery-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 2px 0;
+}
+.strain-recovery-dialog .strain-recovery-choice > label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.strain-recovery-dialog .strain-recovery-other {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.strain-recovery-dialog .strain-recovery-pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 1px;
+  flex: 1 0 auto;
+}
+.strain-recovery-dialog .strain-recovery-choice.other .strain-recovery-pool {
+  flex: 0 0 auto;
+}
+.strain-recovery-dialog .strain-recovery-pool img {
+  width: 22px;
+  height: 22px;
+  border: none;
+}
+
 /* Row badge naming the substitution currently in force. Sized down and set to not shrink the row:
    it sits inside the existing name cell, so it must never push the controls out of the row. */
 .starwarsffg .roll-override-badge {

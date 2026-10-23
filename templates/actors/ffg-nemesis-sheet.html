@@ -66,7 +66,7 @@
           {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Wounds" stat="wounds" value=data.stats.wounds.value max=data.stats.wounds.max disabled=disabled track=vitalTracks.wounds showRest=true)}}
           {{#if (or (eq actor.flags.starwarsffg.config.enableStrainThreshold undefined) (eq actor.flags.starwarsffg.config.enableStrainThreshold true) )}}
           {{!-- Strain Box --}}
-          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Strain" stat="strain" value=data.stats.strain.value max=data.stats.strain.max disabled=disabled track=vitalTracks.strain)}}
+          {{> "systems/starwarsffg/templates/parts/actor/ffg-vital-block.html" (object title="SWFFG.Strain" stat="strain" value=data.stats.strain.value max=data.stats.strain.max disabled=disabled track=vitalTracks.strain showRecover=true)}}
           {{/if}}
           {{!-- Soak Box --}}
             {{> "systems/starwarsffg/templates/parts/shared/ffg-block.html"

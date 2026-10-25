@@ -178,8 +178,9 @@ async function focusCombatant(combat, combatantId) {
 }
 
 /**
- * The GM's right-click menu on a card: the slot entries of the sidebar tracker's own menu, through the
+ * The right-click menu on a card: the slot entries of the sidebar tracker's own menu, through the
  * same Combat methods, so the slots that removed combatants leave behind can be cleared from here.
+ * A player gets only Un-claim, on a slot their own character holds (CombatFFG#mayReleaseClaim).
  * @param {HTMLElement} root  the carousel
  * @param {Combat} combat
  */
@@ -187,20 +188,21 @@ function attachSlotMenu(root, combat) {
   // A card is looked up by its slot's id when an entry is picked, not by its position: the strip may
   // have been redrawn (another removal, the next turn) while the menu was open.
   const slotIdOf = (card) => card?.dataset?.slotId;
-  const claimed = (card) => combat.getSlotClaims(combat.round, slotIdOf(card)) !== undefined;
+  const releasable = (card) => !!slotIdOf(card) && combat.mayReleaseClaim(combat.round, slotIdOf(card));
   const { ContextMenu } = foundry.applications.ux;
   new (ContextMenu.implementation ?? ContextMenu)(root, ".ffg-cc-slot[data-slot-id]", [
     CombatTrackerFFG._makeEntry({
       label: "SWFFG.Notifications.Combat.Claim.UnClaim",
       icon: '<i class="fa-regular fa-xmark"></i>',
-      condition: claimed,
+      condition: releasable,
       callback: async (card) => {
-        if (claimed(card)) await combat.unclaimSlot(combat.round, slotIdOf(card));
+        if (releasable(card)) await combat.releaseClaim(slotIdOf(card));
       },
     }),
     CombatTrackerFFG._makeEntry({
       label: "SWFFG.Notifications.Combat.Claim.RemoveSlot",
       icon: '<i class="fa-regular fa-trash-alt"></i>',
+      condition: () => game.user.isGM,
       callback: (card) => combat.removeInitiativeSlot(slotIdOf(card)),
     }),
   ], { jQuery: false, fixed: true });
@@ -330,8 +332,8 @@ function render({ center = false } = {}) {
   for (const button of root.querySelectorAll("[data-focus]")) {
     button.addEventListener("click", () => focusCombatant(combat, button.dataset.focus));
   }
-  // un-claiming is the GM's (CombatFFG#unclaimSlot), as is removing slots
-  if (game.user.isGM && usesSlots(combat)) attachSlotMenu(root, combat);
+  // removing slots is the GM's; un-claiming too, except that a player may release their own claim
+  if (usesSlots(combat)) attachSlotMenu(root, combat);
   // a mouse wheel over the strip scrolls it sideways
   root.querySelector(".ffg-cc-track")?.addEventListener("wheel", (event) => {
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;

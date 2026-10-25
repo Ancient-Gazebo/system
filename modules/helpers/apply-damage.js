@@ -31,13 +31,33 @@ const BLOCK_TIERS = [
 const STRAIN_PER_USE_OPTIONS = [3, 2, 1];
 
 export class ApplyDamage {
-  /** Message ids with an Apply Damage dialog currently open, so repeated
-   * clicks on the chat button can't stack dialogs (and double-apply). */
-  static _openDialogs = new Set();
+  /** Apply Damage dialogs currently open, by message id, so repeated clicks on the chat button
+   * can't stack dialogs (and double-apply). A repeated click brings the open one to the front:
+   * one left behind another window otherwise made the button seem to do nothing. */
+  static _openDialogs = new Map();
 
   /**
-   * Called from the renderChatMessage hook. Enforces visibility (GM only) and
+   * Whether the current user may use Apply Damage on this attack card.
+   *
+   * GM only. Unlike Apply Crit (which the attacking player may use on their own attack), deciding
+   * how much damage actually lands - soak, defence, ranks of the relevant qualities - is the GM's
+   * call, so the button is for nobody else, the roller included. The exception is an attack by an
+   * adversary or a vehicle (see playersMayApply): any player may apply that one, usually the player
+   * it hit.
+   * @param {ChatMessage} message
+   * @returns {boolean}
+   */
+  static mayUse(message) {
+    return game.user.isGM || playersMayApply(message);
+  }
+
+  /**
+   * Called from the renderChatMessage hook. Removes the button for users who may not use it and
    * binds the click handler.
+   *
+   * The handler bound here is only a fallback: a click on the button is caught for the whole page
+   * before it reaches the card (see attack-card-buttons.js), so it no longer depends on this hook
+   * having run on that copy of the card.
    * @param {ChatMessage} message — the live ChatMessage instance.
    * @param {jQuery} html — the rendered chat-message element wrapped in jQuery.
    */
@@ -45,12 +65,7 @@ export class ApplyDamage {
     const button = html.find(".ffg-apply-damage")[0];
     if (!button) return;
 
-    // GM only. Unlike Apply Crit (which the attacking player may use on their own attack),
-    // deciding how much damage actually lands - soak, defence, ranks of the relevant qualities -
-    // is the GM's call, so the button is removed for everyone else including the roller. The
-    // exception is an attack by an adversary or a vehicle (see playersMayApply): any player may
-    // apply that one, usually the player it hit.
-    if (!game.user.isGM && !playersMayApply(message)) {
+    if (!ApplyDamage.mayUse(message)) {
       button.remove();
       return;
     }
@@ -59,8 +74,18 @@ export class ApplyDamage {
       ev.preventDefault();
       // inside the roll's `expandRoll` element, so keep the click from toggling the dice breakdown
       ev.stopPropagation();
-      ApplyDamage.show(message);
+      ApplyDamage.click(message);
     });
+  }
+
+  /**
+   * A click on the card's button, from either listener.
+   * @param {ChatMessage} message
+   */
+  static click(message) {
+    // A copy of the card the render hook has not reached yet still shows the button.
+    if (!ApplyDamage.mayUse(message)) return;
+    return ApplyDamage.show(message);
   }
 
   /**
@@ -120,7 +145,10 @@ export class ApplyDamage {
    * @param {ChatMessage} message
    */
   static async show(message) {
-    if (ApplyDamage._openDialogs.has(message.id)) return;
+    if (ApplyDamage._openDialogs.has(message.id)) {
+      ApplyDamage._openDialogs.get(message.id)?.bringToFront?.();
+      return;
+    }
 
     // The weapon attack chat message embeds the rendered/adjusted weapon data
     // directly on the roll (see modules/dice/roll.js render() — it assigns
@@ -290,11 +318,12 @@ export class ApplyDamage {
     // running the callback -- and deducting the damage -- twice.
     let submitted = false;
 
-    ApplyDamage._openDialogs.add(message.id);
+    ApplyDamage._openDialogs.set(message.id, null);
     DialogV2.wait({
       window: { title },
       position: { width: 420 },
       content,
+      render: (_event, dialog) => ApplyDamage._openDialogs.set(message.id, dialog),
       buttons: [
         {
           action: "apply",

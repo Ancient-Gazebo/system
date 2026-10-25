@@ -1024,10 +1024,77 @@ export class CombatFFG extends Combat {
    */
   async unclaimSlot(round, slot_id) {
     if (!game.user.isGM) {
-      // only the GM can un-claim a slot
+      // only the GM can un-claim a slot; a player releases their own claim through releaseClaim()
       return;
     }
     await this.unsetFlag('starwarsffg', `combatClaims.${round}.${slot_id}`);
+  }
+
+  /**
+   * Whether a user may release the claim on a slot: a GM any claim, a player only a claim held by a
+   * combatant they own, i.e. a turn their own character took.
+   * @param round - INT - the round
+   * @param slot_id - STRING - the ID of the native combatant for this turn
+   * @param user - User - whose permission to check (the current user by default)
+   * @returns {boolean}
+   */
+  mayReleaseClaim(round, slot_id, user = game.user) {
+    const claimantId = this.getSlotClaims(round, slot_id);
+    if (claimantId === undefined || !user) return false;
+    if (user.isGM) return true;
+    const claimant = this.combatants.get(claimantId);
+    if (!claimant) return false;
+    return !!(claimant.actor?.testUserPermission(user, "OWNER") || claimant.testUserPermission(user, "OWNER"));
+  }
+
+  /**
+   * Un-claim a slot for the current user, from the tracker's or the carousel's menu or the Character
+   * Pilot. A GM un-claims directly; a player may release only their own claim (see mayReleaseClaim),
+   * and the active GM writes it, since players cannot update the encounter.
+   * @param slot_id - STRING - the ID of the native combatant for this turn
+   * @param round - INT - the round (the current one by default)
+   * @returns {Promise<boolean>} whether the claim was released
+   */
+  async releaseClaim(slot_id, round = this.round) {
+    if (!this.mayReleaseClaim(round, slot_id)) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.NotYours"));
+      return false;
+    }
+    if (game.user.isGM) {
+      await this.unclaimSlot(round, slot_id);
+      return true;
+    }
+    const gm = game.users.activeGM;
+    if (!gm) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.NeedsGM"));
+      return false;
+    }
+    try {
+      await gm.query(CombatFFG.RELEASE_CLAIM_QUERY, { combatId: this.id, round, slotId: slot_id }, { timeout: 15000 });
+      return true;
+    } catch (err) {
+      CONFIG.logger.warn("The GM could not release the initiative slot claim", err);
+      ui.notifications.warn(game.i18n.localize("SWFFG.Notifications.Combat.Claim.ReleaseFailed"));
+      return false;
+    }
+  }
+
+  /** Name of the query a player's releaseClaim() sends to the active GM. */
+  static RELEASE_CLAIM_QUERY = "starwarsffg.releaseClaim";
+
+  /**
+   * Runs on the active GM: un-claim a slot for the player who asked, when the claim is theirs.
+   * Registered as `CONFIG.queries[CombatFFG.RELEASE_CLAIM_QUERY]`; the query's `user` is the sender.
+   * @param {{combatId: string, round: number, slotId: string}} data
+   * @param {{user: User}} options
+   * @returns {Promise<boolean>}
+   */
+  static async onReleaseClaimQuery({ combatId, round, slotId } = {}, { user } = {}) {
+    const combat = game.combats.get(combatId);
+    if (!combat) throw new Error(`No encounter ${combatId}`);
+    if (!combat.mayReleaseClaim(round, slotId, user)) throw new Error(`${user?.name ?? "That user"} does not hold that slot`);
+    await combat.unclaimSlot(round, slotId);
+    return true;
   }
 
   /**
@@ -1839,18 +1906,29 @@ export class CombatTrackerFFG extends foundry.applications.sidebar.tabs.CombatTr
           await this._removeSlot(this.viewed.round, el);
         }
       },
+      condition: () => game.user.isGM,
     });
 
-    // Allow GMs to revoke an initiative slot claim.
+    // Revoke an initiative slot claim: a GM any claim, a player a claim their own character holds.
+    // Shown only on a claimed slot the user may release (CombatFFG#mayReleaseClaim).
+    const slotIdOf = (el) => {
+      // V14 hands conditions the element; a jQuery-mode menu (V13) a wrapper of it
+      const node = el instanceof HTMLElement ? el : el?.[0];
+      const index = +node?.getAttribute?.("data-slot-index");
+      return isNaN(index) ? undefined : this.viewed?.turns[index]?.id;
+    };
     const unClaimSlot = this.constructor._makeEntry({
       label: 'SWFFG.Notifications.Combat.Claim.UnClaim',
       icon: '<i class="fa-regular fa-xmark"></i>',
       callback: async (el) => {
-        const li = $(el);
-        const index = +li.data('slot-index');
-        if (!isNaN(index)) {
-          await this.viewed.unclaimSlot(this.viewed.round, this.viewed.turns[index].id);
+        const slotId = slotIdOf(el);
+        if (slotId) {
+          await this.viewed.releaseClaim(slotId);
         }
+      },
+      condition: (el) => {
+        const slotId = slotIdOf(el);
+        return !!slotId && !!this.viewed?.mayReleaseClaim(this.viewed.round, slotId);
       },
     });
 

@@ -30,12 +30,7 @@ export class ApplyCrit {
     const button = html.find(".ffg-apply-crit")[0];
     if (!button) return;
 
-    // Visible to the attack's roller (message author) and GMs only, or to every
-    // player on an attack by an adversary or a vehicle (see playersMayApply).
-    // Non-owning clicks still forward to the active GM via gm-bridge, so this is
-    // a UI scoping gate, not a permission boundary.
-    const authorId = message.author?.id ?? message.user;
-    if (game.user.id !== authorId && !game.user.isGM && !playersMayApply(message)) {
+    if (!ApplyCrit.mayUse(message)) {
       button.remove();
       return;
     }
@@ -59,13 +54,37 @@ export class ApplyCrit {
       button.title = game.i18n.localize("SWFFG.ApplyCrit.NotEligibleTooltip");
     }
 
+    // A fallback: the page-wide handler catches the click first (see ApplyDamage.bindChatMessage).
     button.addEventListener("click", (ev) => {
       ev.preventDefault();
       // The weapon card sits inside the roll's `expandRoll` element: without this the click also
       // toggled the dice breakdown, which was all that seemed to happen when the crit could not start.
       ev.stopPropagation();
-      ApplyCrit.show(message);
+      ApplyCrit.click(message);
     });
+  }
+
+  /**
+   * Whether the current user may use Apply Crit on this attack card: the attack's roller (message
+   * author) and GMs, or every player on an attack by an adversary or a vehicle (see
+   * playersMayApply). Non-owning clicks still forward to the active GM via gm-bridge, so this is a
+   * UI scoping gate, not a permission boundary.
+   * @param {ChatMessage} message
+   * @returns {boolean}
+   */
+  static mayUse(message) {
+    const authorId = message.author?.id ?? message.user;
+    return game.user.id === authorId || game.user.isGM || playersMayApply(message);
+  }
+
+  /**
+   * A click on the card's button, from either listener.
+   * @param {ChatMessage} message
+   */
+  static click(message) {
+    // A copy of the card the render hook has not reached yet still shows the button.
+    if (!ApplyCrit.mayUse(message)) return;
+    return ApplyCrit.show(message);
   }
 
   /**

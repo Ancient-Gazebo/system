@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.13`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.15`, compatibility minimum 13 /
 verified `"14.369"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -131,6 +131,14 @@ npx eslint modules
   `apps/` bases, dialogs are `DialogV2`. `ActorSheetFFGV2` / `ItemSheetFFGV2` /
   `AdversarySheetFFGV2` are deprecated empty aliases kept only so existing
   `flags.core.sheetClass` values resolve — do not add behaviour to them.
+- **A button inside a roll card needs a page-wide handler.** The weapon card is
+  drawn inside core's `.dice-roll[data-action="expandRoll"]`, so a click that no
+  listener stops just expands the dice breakdown. A listener bound per button in
+  the `renderChatMessageHTML` hook is not reliable there: the hook binds after
+  an awaited redraw of the card's dice symbols, and a later redraw of the card
+  drops it. Apply Damage / Apply Crit are caught by one capture-phase listener
+  per document (`helpers/attack-card-buttons.js`); give any new card button the
+  same treatment.
 - **The V2 render pipeline assigns `innerHTML`, which never runs inline
   `<script>` in a template.** Several dialogs used to wire themselves that way;
   wire listeners in JS (or call `executeInlineScripts`) instead.

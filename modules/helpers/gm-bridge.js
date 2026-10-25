@@ -26,7 +26,7 @@ const APPLY_EVENT = "ffgApplyToTarget";
  * is allowed to modify.
  * @param {Actor} actor
  * @param {object} op
- * @param {"damage"|"crit"|"kill-minion"|"destroy-ship"|"next-check"|"status"} op.type
+ * @param {"damage"|"crit"|"heal-crit"|"kill-minion"|"destroy-ship"|"next-check"|"status"} op.type
  * @param {string} [op.path]    For "damage": the numeric system path to bump.
  * @param {number} [op.delta]   For "damage": the amount to add to the current value.
  * @param {{path: string, delta: number}[]} [op.deltas] For "damage": several paths to bump in a
@@ -35,6 +35,9 @@ const APPLY_EVENT = "ffgApplyToTarget";
  * @param {boolean} [op.floor]  For "damage": clamp the result at zero. Recovering strain is a
  *   negative delta, and a track never reads below zero.
  * @param {object[]} [op.items] For "crit": item data objects to embed.
+ * @param {string[]} [op.itemIds] For "heal-crit": ids of the healed crit items to remove. Anything
+ *   that is not a Critical Injury / Critical Damage item is ignored, so the socket cannot be used to
+ *   delete arbitrary items off actors the sender does not own.
  * @param {string} [op.kind]    For "next-check": boost / setback / upgradeAbility / upgradeDifficulty.
  * @param {number} [op.amount]  For "next-check": how many stacks to add.
  * @param {object} [op.status]  For "status": the spec handed to applyStatusLocal.
@@ -56,6 +59,9 @@ async function performApply(actor, op) {
     if (Object.keys(update).length) await actor.update(update);
   } else if (op.type === "crit") {
     await actor.createEmbeddedDocuments("Item", op.items);
+  } else if (op.type === "heal-crit") {
+    const ids = (op.itemIds ?? []).filter((id) => ["criticalinjury", "criticaldamage"].includes(actor.items.get(id)?.type));
+    if (ids.length) await actor.deleteEmbeddedDocuments("Item", ids);
   } else if (op.type === "kill-minion") {
     await killMinion(actor);
   } else if (op.type === "destroy-ship") {

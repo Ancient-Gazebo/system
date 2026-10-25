@@ -59,6 +59,8 @@ import CurrencyManager from "./helpers/currency.js";
 import CurrencySettings from "./settings/currency-settings.js";
 import { ApplyDamage } from "./helpers/apply-damage.js";
 import { ApplyCrit } from "./helpers/apply-crit.js";
+import { registerAttackCardButtons } from "./helpers/attack-card-buttons.js";
+import { registerChatFollow, registerChatFollowSettings } from "./helpers/chat-follow.js";
 import { registerGMBridge } from "./helpers/gm-bridge.js";
 import { migrateLegacyScope, promptLegacyScopeMigration } from "./helpers/legacy-scope-migration.js";
 import { repairCriticalTables, setupCriticalTables } from "./helpers/crit-tables.js";
@@ -120,6 +122,8 @@ Hooks.once("init", async function () {
   // the chat sidebar builds its context menu in _onFirstRender during Game#initializeUI(), which
   // runs before the ready hook fires, so a later registration is never seen.
   ApplyDamage.registerContextMenu();
+  // The attack card's Apply Damage / Apply Crit buttons, for every copy of the card on the page.
+  registerAttackCardButtons();
 
   // Register GlitchSmith Library integration listeners first, before any await in this handler, so
   // the listeners exist before GlitchSmith fires its registration hooks during its own init.
@@ -373,6 +377,7 @@ Hooks.once("init", async function () {
   DestinyReroll.registerContextMenu();
   BondInvocation.registerContextMenu();
   registerCombatCarouselSettings();
+  registerChatFollowSettings();
   RollRequestApp.register();
 
   const uitheme = game.settings.get("starwarsffg", "ui-uitheme");
@@ -419,6 +424,8 @@ Hooks.once("init", async function () {
     CONFIG.Combatant.documentClass = CombatantFFG;
     // override the token placeable object so we can control turn indicators
     CONFIG.Token.objectClass = TokenFFG;
+    // a player releasing their own initiative slot claim asks the active GM to write it
+    if (CONFIG.queries) CONFIG.queries[CombatFFG.RELEASE_CLAIM_QUERY] = CombatFFG.onReleaseClaimQuery.bind(CombatFFG);
   }
 
   /**
@@ -2123,6 +2130,7 @@ Hooks.once("ready", async () => {
   ImprovisedDetonation.register();
   CharacterPilot.register();
   registerCombatCarousel();
+  registerChatFollow();
 
   if (game.settings.get("starwarsffg", "useGenericSlots")) {
 

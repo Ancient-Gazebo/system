@@ -308,8 +308,14 @@ export default class CharacterPilot extends ApplicationV2 {
     // turn banner, with the claim shortcut when the open slot is this character's to take
     let banner;
     if (!combat) banner = `<i class="fa-solid fa-mug-hot"></i> ${loc("SWFFG.Pilot.Turn.OutOfCombat")}`;
-    else if (ownTurn) banner = `<i class="fa-solid fa-bolt"></i> ${loc("SWFFG.Pilot.Turn.Yours")}`;
-    else {
+    else if (ownTurn) {
+      banner = `<i class="fa-solid fa-bolt"></i> ${loc("SWFFG.Pilot.Turn.Yours")}`;
+      // a slot this character claimed can be handed back, by its player as well as the GM
+      const slotId = combat.turns?.[combat.turn]?.id;
+      if (usesSlots(combat) && slotId && combat.mayReleaseClaim?.(combat.round, slotId)) {
+        banner += ` <button type="button" data-pilot="unclaim" class="ffg-pilot-claim">${loc("SWFFG.Notifications.Combat.Claim.UnClaimShort")}</button>`;
+      }
+    } else {
       const slot = combat.turns?.[combat.turn];
       const open = usesSlots(combat) && slot && !currentCombatant(combat);
       const token = actor.token ?? actor.getActiveTokens?.(false, true)?.[0] ?? null;
@@ -523,6 +529,12 @@ export default class CharacterPilot extends ApplicationV2 {
         // refused) for the wrong one. Without a token in view the usual selection rules apply.
         const token = actor.token?.object ?? actor.getActiveTokens?.()[0] ?? null;
         return combat?.claimSlotWithToken?.(combat.turn, token);
+      }
+
+      case "unclaim": {
+        const combat = activeCombat();
+        const slotId = combat?.turns?.[combat.turn]?.id;
+        return slotId ? combat.releaseClaim?.(slotId) : undefined;
       }
 
       case "toggle-action": {

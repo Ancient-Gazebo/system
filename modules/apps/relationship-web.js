@@ -8,10 +8,18 @@
  * theirs the next, and so on, so the rings read as degrees of separation. Characters with no path to
  * the centre wait, dimmed, on an outer ring. Clicking a portrait moves it to the centre.
  *
- * A line is drawn in two halves, each half one side's bond: blue for a positive bond, red for a
- * negative one, a faint dashed half where the bond is not returned (or, for a player, not known).
- * A half grows thicker with its rank, and the rank itself sits on a badge at that side's end (shown
- * for the centred character's bonds, and for any line under the pointer).
+ * Each line shows one bond, seen from the centre: the bond held by the side nearer the centred
+ * character - so on the centred character's own lines, their bond - or the other side's when that
+ * side holds none. Blue is a positive bond, red a negative one; the line grows thicker with the
+ * rank, and the rank sits on a badge at the holder's end (shown for the centred character's lines,
+ * and for any line under the pointer). The tooltip on a line, and the panel beside the web, give
+ * both sides.
+ *
+ * Only the centred character's lines are drawn at first; everyone else's would bury them. Hovering a
+ * portrait shows its lines, from that character's side, while the pointer is on it; right-clicking it
+ * (or the eye beside it in the panel) keeps them shown until someone else is centred. Show Every Bond
+ * in the toolbar draws them all, and is remembered per user. Characters with no line drawn to them
+ * are dimmed.
  *
  * The tracker is a protected module, so it is only read through its public API -
  * `listRelationshipProgress`, which applies the tracker's own visibility rules for the viewing user
@@ -44,6 +52,7 @@ const TRACKER_ID = "stylish-relationship-tracker";
 const TRACKER_FLAG = "relationshipData";
 const ENABLE_SETTING = "enableRelationshipWeb";
 const SHARE_PC_SETTING = "relationshipWebSharePCBonds";
+const SHOW_ALL_SETTING = "relationshipWebShowAll";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MYSTERY = "icons/svg/mystery-man.svg";
 
@@ -111,14 +120,6 @@ function sharesPCBonds() {
   } catch (err) {
     return true;
   }
-}
-
-/**
- * The words for the faint half of a one-sided line. For a GM it is a bond not returned; a player may
- * simply not be allowed to see the other side's bond, so for them it is only none known.
- */
-function unreturnedLabel() {
-  return loc(game.user.isGM ? "SWFFG.RelationshipWeb.Unreturned" : "SWFFG.RelationshipWeb.UnreturnedUnknown");
 }
 
 function isDefaultImage(img) {
@@ -437,6 +438,10 @@ export default class RelationshipWeb extends ApplicationV2 {
     this._state = null;
     this._raf = null;
     this._dragMoved = 0;
+    // Characters whose bonds are shown alongside the centred character's (cleared on a new centre),
+    // and the one under the pointer, whose bonds show while it is there.
+    this.expanded = new Set();
+    this._peek = null;
   }
 
   /** The one window each client keeps. */
@@ -483,6 +488,7 @@ export default class RelationshipWeb extends ApplicationV2 {
     const focusKey = typeof actor === "string" ? actor : actor?.uuid ?? null;
     if (!this.instance) this.instance = new this({ focusKey });
     else if (focusKey) {
+      if (focusKey !== this.instance.focusKey) this.instance.expanded.clear();
       this.instance.focusKey = focusKey;
       this.instance._state = null;
     }
@@ -552,8 +558,10 @@ export default class RelationshipWeb extends ApplicationV2 {
     const keys = this.orderedKeys;
     if (!this.web.nodes.has(this.focusKey)) {
       this.focusKey = this._defaultFocus(keys);
+      this.expanded.clear();
       this._state = null;
     }
+    this.expanded = new Set([...this.expanded].filter((key) => this.web.nodes.has(key) && key !== this.focusKey));
 
     const root = document.createElement("div");
     root.className = "ffg-rw-body";
@@ -575,6 +583,7 @@ export default class RelationshipWeb extends ApplicationV2 {
         <label class="ffg-rw-focus"><span>${loc("SWFFG.RelationshipWeb.Focus")}</span><select data-rw="focus">${options}</select></label>
         <span class="ffg-rw-count">${loc("SWFFG.RelationshipWeb.Counts", { nodes: keys.length, bonds: bondCount })}</span>
         ${needsGM}
+        <button type="button" data-rw="all" aria-pressed="${RelationshipWeb.showAll}" data-tooltip="${loc("SWFFG.RelationshipWeb.ShowAll")}" aria-label="${loc("SWFFG.RelationshipWeb.ShowAll")}"><i class="fa-solid fa-eye"></i></button>
         <button type="button" data-rw="reset" data-tooltip="${loc("SWFFG.RelationshipWeb.ResetView")}" aria-label="${loc("SWFFG.RelationshipWeb.ResetView")}"><i class="fa-solid fa-expand"></i></button>
       </header>
       <div class="ffg-rw-main">
@@ -586,7 +595,6 @@ export default class RelationshipWeb extends ApplicationV2 {
           <div class="ffg-rw-legend">
             <span><i class="ffg-rw-swatch positive"></i>${loc("SWFFG.RelationshipWeb.Positive")}</span>
             <span><i class="ffg-rw-swatch negative"></i>${loc("SWFFG.RelationshipWeb.Negative")}</span>
-            <span><i class="ffg-rw-swatch none"></i>${unreturnedLabel()}</span>
             <span><b class="ffg-rw-legend-badge">5</b>${loc("SWFFG.RelationshipWeb.RankLegend")}</span>
           </div>
           <p class="ffg-rw-hint">${loc("SWFFG.RelationshipWeb.Hint")}</p>
@@ -617,6 +625,7 @@ export default class RelationshipWeb extends ApplicationV2 {
     this._drawWeb();
     this._bindStage();
     root.querySelector('[data-rw="focus"]')?.addEventListener("change", (event) => this.setFocus(event.currentTarget.value));
+    root.querySelector('[data-rw="all"]')?.addEventListener("click", (event) => this._toggleShowAll(event.currentTarget));
     root.querySelector('[data-rw="reset"]')?.addEventListener("click", () => this._animateTo({ ...(this._target ?? this._state), view: { x: 0, y: 0, k: 1 } }));
     root.querySelector(".ffg-rw-inspector").addEventListener("click", (event) => this._onInspectorClick(event));
 
@@ -634,18 +643,14 @@ export default class RelationshipWeb extends ApplicationV2 {
     const badgeLayer = this._svg.querySelector(".ffg-rw-badges");
     const labelLayer = this._svg.querySelector(".ffg-rw-labels");
     this._els = { nodes: new Map(), links: new Map() };
+    this._peek = null;
 
     for (const link of this.web.links.values()) {
+      // The line's colour, width and badge depend on which bond it shows, which follows the focus
+      // (see _applyEmphasis).
       const group = svg("g", { class: "ffg-rw-link" });
-      const half = (side) => {
-        const bond = link.bonds.get(side);
-        const line = svg("line", { class: `ffg-rw-half ${bond ? (bond.negative ? "negative" : "positive") : "none"}` });
-        if (bond) line.setAttribute("stroke-width", (2 + 5 * Math.min(1, bond.rank / bond.maxRank)).toFixed(2));
-        group.append(line);
-        return line;
-      };
-      const halfA = half(link.a);
-      const halfB = half(link.b);
+      const line = svg("line", { class: "ffg-rw-line" });
+      group.append(line);
       const hit = svg("line", { class: "ffg-rw-hit" });
       hit.dataset.tooltip = this._linkTooltip(link);
       group.append(hit);
@@ -662,7 +667,7 @@ export default class RelationshipWeb extends ApplicationV2 {
         badgeLayer.append(element);
         return element;
       };
-      const entry = { link, group, halfA, halfB, hit, badgeA: badge(link.a), badgeB: badge(link.b) };
+      const entry = { link, group, line, hit, badgeA: badge(link.a), badgeB: badge(link.b) };
       const hover = (on) => {
         group.classList.toggle("hover", on);
         entry.badgeA?.classList.toggle("hover", on);
@@ -696,12 +701,25 @@ export default class RelationshipWeb extends ApplicationV2 {
       labelLayer.append(label);
 
       const links = [...this._els.links.values()].filter((entry) => entry.link.a === node.key || entry.link.b === node.key);
-      group.addEventListener("pointerenter", () => links.forEach((entry) => entry.hover(true)));
-      group.addEventListener("pointerleave", () => links.forEach((entry) => entry.hover(false)));
+      group.addEventListener("pointerenter", () => {
+        this._peek = node.key;
+        this._applyEmphasis(this._target ?? this._state);
+        links.forEach((entry) => entry.hover(true));
+      });
+      group.addEventListener("pointerleave", () => {
+        if (this._peek === node.key) this._peek = null;
+        this._applyEmphasis(this._target ?? this._state);
+        links.forEach((entry) => entry.hover(false));
+      });
       group.addEventListener("click", () => {
         if (this._dragMoved <= DRAG_THRESHOLD) this.setFocus(node.key);
       });
       group.addEventListener("dblclick", () => this._openArchive(node.key) || this._openSheet(node.key));
+      group.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.toggleBonds(node.key);
+      });
       nodeLayer.append(group);
       this._els.nodes.set(node.key, { node, group, label });
     }
@@ -762,6 +780,7 @@ export default class RelationshipWeb extends ApplicationV2 {
 
   setFocus(key) {
     if (!this.web.nodes.has(key)) return;
+    if (key !== this.focusKey) this.expanded.clear();
     this.focusKey = key;
     const select = this.element?.querySelector('[data-rw="focus"]');
     if (select) select.value = key;
@@ -814,23 +833,86 @@ export default class RelationshipWeb extends ApplicationV2 {
     this._paint(this._state);
   }
 
-  /** Opacity by distance from the focus, and which badges show. Set once per focus; CSS fades it. */
+  /**
+   * Which lines are drawn and which bond each shows, and opacity by distance from the focus. Set once
+   * per focus, and on each show/hide or hover; CSS fades it.
+   */
   _applyEmphasis(state) {
+    if (!state) return;
     const dist = (key) => state.dist.get(key) ?? Infinity;
-    for (const { node, group, label } of this._els?.nodes.values() ?? []) {
-      const d = dist(node.key);
-      group.style.opacity = d <= 1 ? 1 : d === 2 ? 0.8 : d === 3 ? 0.62 : Number.isFinite(d) ? 0.5 : 0.32;
-      label.style.opacity = group.style.opacity;
-      group.classList.toggle("focus", node.key === this.focusKey);
-    }
+    const showAll = RelationshipWeb.showAll;
+    const shown = (key) => this.expanded.has(key) || key === this._peek;
+    const linked = new Set([this.focusKey]);
     for (const entry of this._els?.links.values() ?? []) {
       const { a, b } = entry.link;
       const touches = a === this.focusKey || b === this.focusKey;
+      const opened = shown(a) || shown(b);
       const far = Math.max(dist(a), dist(b));
-      entry.group.style.opacity = touches ? 1 : far <= 1 ? 0.6 : Number.isFinite(far) ? 0.4 : 0.2;
-      entry.badgeA?.classList.toggle("on", touches);
-      entry.badgeB?.classList.toggle("on", touches);
+      // The centred character's lines, and those of anyone shown or hovered, unless every bond is drawn.
+      const drawn = showAll || touches || opened;
+      if (drawn) linked.add(a).add(b);
+      entry.group.classList.toggle("ffg-rw-off", !drawn);
+      entry.group.style.opacity = touches ? 1 : opened ? 0.9 : far <= 1 ? 0.6 : Number.isFinite(far) ? 0.4 : 0.2;
+      entry.badgeA?.classList.toggle("on", touches || opened);
+      entry.badgeB?.classList.toggle("on", touches || opened);
+      // One bond per line: the centred character's; else the hovered character's; else a shown
+      // character's; else the one held by the side nearer the centre - or the other side's when the
+      // chosen side holds none.
+      const prefer = touches
+        ? this.focusKey
+        : a === this._peek || b === this._peek
+          ? this._peek
+          : this.expanded.has(a) !== this.expanded.has(b)
+            ? this.expanded.has(a) ? a : b
+            : dist(a) <= dist(b) ? a : b;
+      const holder = entry.link.bonds.has(prefer) ? prefer : prefer === a ? b : a;
+      const bond = entry.link.bonds.get(holder);
+      entry.line.setAttribute("class", `ffg-rw-line ${bond.negative ? "negative" : "positive"}`);
+      entry.line.setAttribute("stroke-width", (2 + 5 * Math.min(1, bond.rank / bond.maxRank)).toFixed(2));
+      entry.badgeA?.classList.toggle("shown", holder === a);
+      entry.badgeB?.classList.toggle("shown", holder === b);
     }
+    for (const { node, group, label } of this._els?.nodes.values() ?? []) {
+      const d = dist(node.key);
+      const opacity = d <= 1 ? 1 : d === 2 ? 0.8 : d === 3 ? 0.62 : Number.isFinite(d) ? 0.5 : 0.32;
+      // Someone with no line drawn to them recedes until one is.
+      group.style.opacity = linked.has(node.key) ? opacity : Math.min(opacity, 0.4);
+      label.style.opacity = group.style.opacity;
+      group.classList.toggle("focus", node.key === this.focusKey);
+      group.classList.toggle("expanded", this.expanded.has(node.key));
+    }
+  }
+
+  /** Show or hide one character's bonds (seen from their side) alongside the centred character's. */
+  toggleBonds(key) {
+    if (!this.web.nodes.has(key) || key === this.focusKey) return;
+    if (!this.expanded.delete(key)) this.expanded.add(key);
+    this._applyEmphasis(this._target ?? this._state);
+    this._syncToggles();
+  }
+
+  /** Set the panel's eye buttons to match, in place: redrawing the panel would lose its scroll position. */
+  _syncToggles() {
+    for (const button of this.element?.querySelectorAll(".ffg-rw-inspector button[data-toggle]") ?? []) {
+      const on = this.expanded.has(button.dataset.toggle);
+      button.setAttribute("aria-pressed", String(on));
+      button.querySelector("i")?.classList.replace(on ? "fa-eye-slash" : "fa-eye", on ? "fa-eye" : "fa-eye-slash");
+    }
+  }
+
+  /** Whether this user draws every bond at once (Show Every Bond, a per-user setting). */
+  static get showAll() {
+    try {
+      return !!game.settings.get("starwarsffg", SHOW_ALL_SETTING);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  async _toggleShowAll(button) {
+    await game.settings.set("starwarsffg", SHOW_ALL_SETTING, !RelationshipWeb.showAll);
+    button.setAttribute("aria-pressed", String(RelationshipWeb.showAll));
+    this._applyEmphasis(this._target ?? this._state);
   }
 
   _paint(state) {
@@ -856,15 +938,13 @@ export default class RelationshipWeb extends ApplicationV2 {
       const pa = state.positions.get(entry.link.a);
       const pb = state.positions.get(entry.link.b);
       if (!pa || !pb) continue;
-      const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
       const set = (line, p, q) => {
         line.setAttribute("x1", p.x);
         line.setAttribute("y1", p.y);
         line.setAttribute("x2", q.x);
         line.setAttribute("y2", q.y);
       };
-      set(entry.halfA, pa, mid);
-      set(entry.halfB, mid, pb);
+      set(entry.line, pa, pb);
       set(entry.hit, pa, pb);
       const length = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
       const ux = (pb.x - pa.x) / length;
@@ -944,17 +1024,16 @@ export default class RelationshipWeb extends ApplicationV2 {
     held.sort(byRank);
     received.sort((p, q) => q.rank - p.rank || this.web.nodes.get(p.from).name.localeCompare(this.web.nodes.get(q.from).name, game.i18n.lang));
 
-    const row = (bond, otherKey, returned) => {
+    const row = (bond, otherKey) => {
       const other = this.web.nodes.get(otherKey);
-      const unreturned = returned ? "" : `<span class="ffg-rw-unreturned">${unreturnedLabel()}</span>`;
       return `<li data-key="${escapeHTML(otherKey)}" class="${bond.negative ? "negative" : "positive"}">
         <img src="${escapeHTML(other.img)}" alt="">
-        <span class="ffg-rw-row-text"><span class="ffg-rw-row-name">${escapeHTML(other.name)}</span><span class="ffg-rw-row-role">${escapeHTML(bond.role)}${unreturned}</span></span>
+        <span class="ffg-rw-row-text"><span class="ffg-rw-row-name">${escapeHTML(other.name)}</span><span class="ffg-rw-row-role">${escapeHTML(bond.role)}</span></span>
+        <button type="button" class="ffg-rw-row-toggle" data-toggle="${escapeHTML(otherKey)}" aria-pressed="${this.expanded.has(otherKey)}" data-tooltip="${loc("SWFFG.RelationshipWeb.ToggleBonds")}" aria-label="${loc("SWFFG.RelationshipWeb.ToggleBonds")}"><i class="fa-solid ${this.expanded.has(otherKey) ? "fa-eye" : "fa-eye-slash"}"></i></button>
         <b class="ffg-rw-row-rank" data-tooltip="${loc("SWFFG.RelationshipWeb.Rank", { rank: bond.rank })}">${bond.rank}</b>
       </li>`;
     };
-    const returnedBy = (bond) => this.web.links.get([bond.from, bond.to].sort().join("|"))?.bonds.has(bond.to);
-    const list = (bonds, other) => (bonds.length ? `<ul>${bonds.map((bond) => row(bond, other(bond), returnedBy(bond))).join("")}</ul>` : `<p class="ffg-rw-none">${loc("SWFFG.RelationshipWeb.None")}</p>`);
+    const list = (bonds, other) => (bonds.length ? `<ul>${bonds.map((bond) => row(bond, other(bond))).join("")}</ul>` : `<p class="ffg-rw-none">${loc("SWFFG.RelationshipWeb.None")}</p>`);
 
     const kind = { pc: "PlayerCharacter", npc: "NonPlayerCharacter", custom: "NameOnly" }[node.kind];
     const actor = resolveActor(node.actorUuid);
@@ -977,6 +1056,8 @@ export default class RelationshipWeb extends ApplicationV2 {
   }
 
   _onInspectorClick(event) {
+    const toggle = event.target.closest("button[data-toggle]");
+    if (toggle) return this.toggleBonds(toggle.dataset.toggle);
     const button = event.target.closest("button[data-rw]");
     if (button?.dataset.rw === "archive") return this._openArchive(this.focusKey);
     if (button?.dataset.rw === "sheet") return this._openSheet(this.focusKey);
@@ -1004,8 +1085,14 @@ export default class RelationshipWeb extends ApplicationV2 {
   /*  Wiring                                      */
   /* -------------------------------------------- */
 
-  /** The player-character exception's setting. Call during init, with the other table tools' settings. */
+  /** The web's settings: the player-character exception, and Show Every Bond. Call during init. */
   static registerSettings() {
+    game.settings.register("starwarsffg", SHOW_ALL_SETTING, {
+      scope: "client",
+      config: false,
+      default: false,
+      type: Boolean,
+    });
     game.settings.register("starwarsffg", SHARE_PC_SETTING, {
       name: game.i18n.localize("SWFFG.Settings.tools.relationshipWebSharePCBonds.Name"),
       hint: game.i18n.localize("SWFFG.Settings.tools.relationshipWebSharePCBonds.Hint"),

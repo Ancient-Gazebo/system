@@ -32,6 +32,13 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.17`
+* Changes:
+  * Relationship Web, decluttered. A busy web drew every bond between everyone, two halves to a line, and was hard to read.
+    * Only the centred character's lines are drawn now. Hover over any other portrait to see its lines, from that character's side, while the pointer is on it. Right-click it, or click the eye beside that person in the panel, to keep their lines shown until you centre someone else (opening the web on another character also clears them); a shown character's portrait glows. Show Every Bond (the eye in the toolbar) draws every line, and each user's choice is remembered. Characters with no line drawn to them are dimmed until one is.
+    * Each line shows one bond instead of two halves. On the centred character's lines it is their own bond toward that person, in its colour and thickness, with one rank badge. On a shown character's lines it is that character's bond. A line only shows the other side's bond when that side holds none, such as an NPC's bond toward the centred character. Hover over a line to see both sides.
+    * The web no longer marks bonds as "Not Returned" (or "None Known" for players), in the lines, the legend or the panel.
+
 `4.0.16`
 * Features:
   * Relationship Web: a new table tool that draws every bond kept by the Stylish Relationship Tracker as one web, like the bond chart on Fabula Ultima's party sheet. The tracker only ever shows one character's relationships at a time; the web shows how everyone's are linked. Every character and NPC that holds a bond, or is the subject of one, is a portrait. One character sits in the centre, the people they are bonded to form the first ring, theirs the next, and anyone with no link to the centre waits, dimmed, on an outer ring. Click a portrait (or pick a name from Centre On) to move it to the centre. Each line is drawn in two halves, one per side: blue for a positive bond, red for a negative one, dashed where the bond is not returned. Thicker halves are higher ranks, and the centred character's lines carry rank badges. Hover over any line for both sides' roles and ranks. The panel beside the web lists the centred character's own bonds and the bonds others hold toward them, with Open Archive and Open Sheet buttons. Drag to pan, scroll to zoom, and double-click a portrait to open its archive. The web updates as relationships change.

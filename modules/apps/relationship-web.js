@@ -862,7 +862,9 @@ export default class RelationshipWeb extends ApplicationV2 {
     }
     const start = performance.now();
     const step = (now) => {
-      const t = Math.min(1, (now - start) / TWEEN_MS);
+      // A frame's timestamp can come from before the tween began (a busy or throttled page);
+      // unclamped, that would run the tween backwards past where it started.
+      const t = Math.clamp((now - start) / TWEEN_MS, 0, 1);
       const e = ease(t);
       const mix = (a, b) => (a ? lerp(a, b, e) : b);
       const positions = new Map();
@@ -978,7 +980,7 @@ export default class RelationshipWeb extends ApplicationV2 {
   _paint(state) {
     if (!this._svg || !this._els) return;
     const { box, view } = state;
-    this._svg.setAttribute("viewBox", `${box.x} ${box.y} ${box.w} ${box.h}`);
+    if (box.w > 0 && box.h > 0) this._svg.setAttribute("viewBox", `${box.x} ${box.y} ${box.w} ${box.h}`);
     this._svg.querySelector(".ffg-rw-view").setAttribute("transform", `translate(${view.x} ${view.y}) scale(${view.k})`);
 
     for (const [key, { group, label }] of this._els.nodes) {

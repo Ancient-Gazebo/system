@@ -32,6 +32,10 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.19`
+* Fixes:
+  * Relationship Web: re-centring no longer occasionally logs "attribute viewBox: A negative value is not valid" and jolts for a frame. A busy or throttled page can stamp an animation frame with a time from before the move began, which ran the move backwards past its start point; the move now never runs outside its start and end, and the web's frame is never given a negative size.
+
 `4.0.18`
 * Fixes:
   * Relationship Web: portraits no longer land on top of each other. Spacing a ring worked one way round the circle, so on a crowded ring the last portrait could be pushed round onto the first (on the left of the web). In a test of 60 random webs, 1,087 of 2,577 possible centres had overlapping portraits; after the fix none do, and no two portraits on a ring come closer than the minimum spacing.

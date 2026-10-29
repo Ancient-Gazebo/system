@@ -26,8 +26,9 @@
  * (hidden, GM-only and locked relationships never appear) - plus the display fields (name, role,
  * picture) of the entries that API returned, as Bond Invocations reads them. Organizations are
  * reputation rather than bonds and are left out. Relationships recorded by name only (no actor) are
- * matched to an actor of the same name when the user knows of one, as Fabula Ultima matches bond
- * names; otherwise they get a node of their own.
+ * matched to an actor the user knows of, as Fabula Ultima matches bond names: the one with that name,
+ * else the only one whose name holds all the relationship's words or whose words it all holds (so
+ * "Buggsy" finds Beckett "Buggsy" Hudson); otherwise they get a node of their own.
  *
  * One exception to the tracker's rules, behind its own setting (on by default): players see every
  * bond that involves a player character - every bond a player character holds (toward other player
@@ -78,15 +79,22 @@ function trackerApi() {
   return tracker?.active ? tracker.api ?? null : null;
 }
 
-/** @returns {?Actor} */
+/**
+ * A relationship's target, found as the tracker finds it: the actor at that uuid, a token's actor,
+ * or a world actor by bare id.
+ * @returns {?Actor}
+ */
 function resolveActor(uuid) {
   if (!uuid) return null;
-  let actor = null;
+  let found = null;
   try {
-    actor = fromUuidSync(uuid);
+    found = fromUuidSync(uuid);
   } catch (err) {
-    return null;
+    found = null;
   }
+  if (found instanceof Actor) return found;
+  if (found?.actor instanceof Actor) return found.actor;
+  const actor = game.actors.get(uuid);
   return actor instanceof Actor ? actor : null;
 }
 
@@ -99,18 +107,57 @@ function lowerName(name) {
   return String(name ?? "").trim().toLocaleLowerCase(game.i18n.lang);
 }
 
+/** A name's words, as they are matched: lower-cased, without quotes, brackets or punctuation. */
+function nameWords(name) {
+  return lowerName(name)
+    .replace(/["'`\u2018\u2019\u201c\u201d()[\]{}]/g, " ")
+    .split(/[\s.,;:!?/-]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Finds the actor a name-only relationship means, among the actors `knows` accepts: the one with
+ * exactly that name; else the only one whose name holds every word of the relationship's name; else
+ * the only one whose words the relationship's name all holds - so "Buggsy" finds Beckett "Buggsy"
+ * Hudson, "Enrique Fresno" finds Enrique "The Miser" Fresno and "Circe Cortez" finds Circe. Two
+ * candidates are too close to call and find nobody, as do fewer than three letters to go on.
+ * @param {(actor: Actor) => boolean} knows
+ * @returns {(name: string) => ?Actor}
+ */
+function actorNameMatcher(knows) {
+  const actors = game.actors.filter((actor) => knows(actor)).map((actor) => ({ actor, name: lowerName(actor.name), words: new Set(nameWords(actor.name)) }));
+  const within = (some, all) => [...some].every((word) => all.has(word));
+  const cache = new Map();
+  const find = (name) => {
+    const key = lowerName(name);
+    if (!key) return null;
+    const exact = actors.find((entry) => entry.name === key);
+    if (exact) return exact.actor;
+    const words = new Set(nameWords(name));
+    if (!words.size) return null;
+    // An actor whose name holds every word of this one is the better match ("Natalia Holland" is
+    // Dr. Natalia Holland before an NPC called Natalia); one whose words this name all holds comes next.
+    const fuller = actors.filter((entry) => within(words, entry.words));
+    const matches = fuller.length ? fuller : actors.filter((entry) => entry.words.size && within(entry.words, words));
+    if (matches.length !== 1) return null;
+    const shorter = words.size <= matches[0].words.size ? words : matches[0].words;
+    return [...shorter].join("").length >= 3 ? matches[0].actor : null;
+  };
+  return (name) => {
+    const key = lowerName(name);
+    if (!cache.has(key)) cache.set(key, find(name));
+    return cache.get(key);
+  };
+}
+
 /**
  * A test for whether a relationship points at a player character: by actor, or by a name-only entry
- * naming one (which buildRelationshipWeb matches to that character).
+ * naming one (matched as buildRelationshipWeb matches it, among every actor).
  * @returns {(relationship: {targetUuid?: string, customName?: string}) => boolean}
  */
 function targetsPlayerCharacter() {
-  const names = new Set(game.actors.filter((actor) => isPlayerCharacter(actor)).map((actor) => lowerName(actor.name)));
-  return (relationship) => {
-    if (relationship?.targetUuid) return isPlayerCharacter(resolveActor(relationship.targetUuid));
-    const name = lowerName(relationship?.customName);
-    return !!name && names.has(name);
-  };
+  const byName = actorNameMatcher(() => true);
+  return (relationship) => isPlayerCharacter(resolveActor(relationship?.targetUuid) ?? byName(relationship?.customName));
 }
 
 /** Whether players are shown the bonds involving player characters (see the header). */
@@ -281,12 +328,7 @@ export function buildRelationshipWeb(user = game.user, shared = null) {
     }
   }
 
-  const byName = new Map();
-  const actorByName = (name) => {
-    const key = lowerName(name);
-    if (!byName.has(key)) byName.set(key, game.actors.find((actor) => lowerName(actor.name) === key && knows(actor)) ?? null);
-    return byName.get(key);
-  };
+  const actorByName = actorNameMatcher(knows);
 
   for (const { owner, entry, record, own } of pending) {
     let target = null;
@@ -350,21 +392,39 @@ function chainOrder(ring, adjacency) {
 }
 
 /**
- * Angles on a ring as close to the preferred ones as a minimum spacing allows, in the given order.
- * Nodes are pushed apart in one sweep and the result turned back so the shifts balance out. When
- * the ring is too full for that, it is spread evenly, turned to keep the preferences as far as it can.
+ * Angles on a ring as close to the preferred ones as a minimum spacing allows, keeping their order
+ * round the circle. Crowded neighbours are pushed apart, half each way, until every gap is wide
+ * enough - including the one across the start of the circle, where a one-way sweep used to pile the
+ * last node onto the first. A ring too full for that, or one that will not settle, is spaced evenly,
+ * turned to keep the preferences as far as it can.
+ * @param {number[]} preferred  ascending angles, at most one turn apart
+ * @param {number} minStep
+ * @returns {number[]}
  */
 function spreadAngles(preferred, minStep) {
   const n = preferred.length;
   const step = (2 * Math.PI) / n;
-  if (n * minStep >= 2 * Math.PI - minStep) {
+  const even = () => {
     const offset = circularMean(preferred.map((angle, index) => angle - index * step));
     return preferred.map((_, index) => offset + index * step);
+  };
+  if (n < 2) return [...preferred];
+  if (n * minStep >= 2 * Math.PI) return even();
+  const angles = [...preferred];
+  const gap = (index) => (index === n - 1 ? angles[0] + 2 * Math.PI : angles[index + 1]) - angles[index];
+  for (let pass = 0; pass < 500; pass++) {
+    let moved = false;
+    for (let index = 0; index < n; index++) {
+      const short = minStep - gap(index);
+      if (short <= 1e-9) continue;
+      angles[index] -= short / 2;
+      angles[(index + 1) % n] += short / 2;
+      moved = true;
+    }
+    if (!moved) break;
   }
-  const angles = [];
-  preferred.forEach((angle, index) => angles.push(index ? Math.max(angle, angles[index - 1] + minStep) : angle));
-  const shift = angles.reduce((sum, angle, index) => sum + angle - preferred[index], 0) / n;
-  return angles.map((angle) => angle - shift);
+  for (let index = 0; index < n; index++) if (gap(index) < minStep - 1e-6) return even();
+  return angles;
 }
 
 /**

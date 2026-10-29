@@ -32,6 +32,12 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.18`
+* Fixes:
+  * Relationship Web: portraits no longer land on top of each other. Spacing a ring worked one way round the circle, so on a crowded ring the last portrait could be pushed round onto the first (on the left of the web). In a test of 60 random webs, 1,087 of 2,577 possible centres had overlapping portraits; after the fix none do, and no two portraits on a ring come closer than the minimum spacing.
+  * Relationship Web: a relationship recorded by name only now finds its actor when the names differ a little, so the same person no longer appears twice. The bond's name and the actor's name are compared word by word, ignoring quotes and punctuation: "Buggsy" finds Beckett "Buggsy" Hudson, "Enrique Fresno" finds Enrique "The Miser" Fresno, "Circe Cortez" finds Circe, and "Natalia Holland" finds Dr. Natalia Holland ahead of an NPC called just Natalia. When two actors fit equally well (a bare "Rene" with two Renes in the world), or there are fewer than three letters to go on, the bond keeps a portrait of its own rather than guessing. A name with different words ("Santo Rharnog" for Santo NogRhar) is still not matched: link that relationship to its actor in the tracker.
+  * Relationship Web: a relationship whose target is a token, or a bare actor id, is now placed on that actor, the way the tracker itself finds it, instead of appearing as a separate person.
+
 `4.0.17`
 * Changes:
   * Relationship Web, decluttered. A busy web drew every bond between everyone, two halves to a line, and was hard to read.

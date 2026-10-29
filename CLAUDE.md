@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.15`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.16`, compatibility minimum 13 /
 verified `"14.369"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -56,6 +56,13 @@ on purpose — they are not build output to be regenerated.
     `helpers/weapon-qualities.js` (Cumbersome, Auto-fire and
     the active qualities), `apps/character-pilot.js` (turn bookkeeping panel),
     `apps/combat-carousel.js` (initiative strip in `#ui-top`),
+    `apps/relationship-web.js` (every Stylish Relationship Tracker bond drawn as one
+    web, Fabula Ultima style; reads the tracker only through its public API, and adds
+    a launcher to the tracker's frameless archive window, which it swaps with. The
+    API's `userId` only works for your own user unless you are a GM, so the bonds a
+    player sees beyond the tracker's rules are computed by the active GM and fetched
+    over the `starwarsffg.relationshipWebShared` query; test that path from a real
+    player login, a fake user on the GM's client hides it),
     `apps/improvised-detonation.js` (builds the Improvised Detonation talents'
     explosive: difficulty, Supreme qualities, the check, damage; the device is
     flagged `fixedDamage`, which the weapon card, Apply Damage and Blast honour

@@ -212,6 +212,8 @@ export class toolsSettings extends ffgSettings {
       "starwarsffg.enableCritAutomation",
       "starwarsffg.enableCharacterPilot",
       "starwarsffg.enableCombatCarousel",
+      "starwarsffg.enableRelationshipWeb",
+      "starwarsffg.relationshipWebSharePCBonds",
     ];
     return this._buildSettingsContext(includeSettingsNames);
   }

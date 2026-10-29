@@ -1,8 +1,10 @@
 /**
- * Scene-control entry points for the table tools: Request a Roll (GM) and the Character Pilot.
+ * Scene-control entry points for the table tools: Request a Roll (GM), the Character Pilot and the
+ * Relationship Web.
  */
 import RollRequestApp from "../apps/roll-request.js";
 import CharacterPilot from "../apps/character-pilot.js";
+import RelationshipWeb from "../apps/relationship-web.js";
 
 /**
  * Add the tool buttons to the Token scene controls.
@@ -57,6 +59,20 @@ export function registerToolControls() {
         button: true,
         onChange: (event, active) => {
           if (active) CharacterPilot.open();
+        },
+      });
+    }
+
+    // Only offered while the Stylish Relationship Tracker, which holds the bonds, is active.
+    if (enabled("enableRelationshipWeb") && RelationshipWeb.available) {
+      add({
+        name: "ffgRelationshipWeb",
+        order: 103,
+        title: "SWFFG.RelationshipWeb.Title",
+        icon: "fa-solid fa-circle-nodes",
+        button: true,
+        onChange: (event, active) => {
+          if (active) RelationshipWeb.open();
         },
       });
     }

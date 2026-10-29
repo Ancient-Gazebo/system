@@ -75,6 +75,7 @@ import TalentTree from "./helpers/talent-tree.js";
 import { AE_MODES } from "./config/ffg-active-effect-modes.js";
 import RollRequestApp from "./apps/roll-request.js";
 import CharacterPilot from "./apps/character-pilot.js";
+import RelationshipWeb from "./apps/relationship-web.js";
 import SpendResults from "./helpers/spend-results.js";
 import BondInvocation from "./helpers/bond-invocation.js";
 import DestinyReroll from "./helpers/destiny-reroll.js";
@@ -175,6 +176,8 @@ Hooks.once("init", async function () {
     RollRequestApp,
     CharacterPilot,
     SpendResults,
+    // `game.ffg.RelationshipWeb.open(actor)` opens the web of Stylish Relationship Tracker bonds, centred on the actor.
+    RelationshipWeb,
     // House-rule Destiny Point spends. `game.ffg.DestinySession.reset()` starts a new session's count.
     BondInvocation,
     DestinyReroll,
@@ -373,6 +376,7 @@ Hooks.once("init", async function () {
   SpendResults.registerSettings();
   DestinySession.registerSettings();
   BondInvocation.registerSettings();
+  RelationshipWeb.registerSettings();
   DestinyReroll.registerSettings();
   DestinyReroll.registerContextMenu();
   BondInvocation.registerContextMenu();
@@ -2129,6 +2133,7 @@ Hooks.once("ready", async () => {
   DestinyReroll.register();
   ImprovisedDetonation.register();
   CharacterPilot.register();
+  RelationshipWeb.register();
   registerCombatCarousel();
   registerChatFollow();
 

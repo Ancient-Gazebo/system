@@ -23,6 +23,7 @@
  */
 
 import ModifierHelpers from "./modifiers.js";
+import { careerSkillSlots, systemSkillKey } from "./skill-keys.js";
 import { markDeleted } from "./update-operators.js";
 
 const CAREER_PACK = "world.oggdudecareers";
@@ -181,6 +182,82 @@ export async function relinkCareers({ log = () => {} } = {}) {
   for (const career of copies) {
     const reference = byKey.get(career.flags?.starwarsffg?.ffgimportid) ?? byName.get(career.name) ?? null;
     await relink(career, reference);
+  }
+  return summary;
+}
+
+/**
+ * Repair the career skills of every career and specialization in the world. Before 4.0.21 the
+ * importer stored each skill's OggDude name ("Athletics ", "Knowledge: Science") where the skill
+ * list's key belongs, so with a list keyed otherwise those slots matched no skill and granted
+ * nothing, and every copy made from them carried the same names.
+ *
+ * Each stored name becomes its skill's key; a skill the list does not have drops out. A copy (on a
+ * character or in the Items directory) then takes the career skills of the imported career or
+ * specialization with the same OggDude key (or name) when everything it has is on that list, which
+ * fills in skills it lost or never got; a copy holding a skill the imported one lacks was set by
+ * hand and keeps its own list. GM only; safe to run again.
+ * @param {object} [options]
+ * @param {function(string): void} [options.log] - receives one line per changed item
+ * @returns {Promise<{checked: number, updated: number}|null>}
+ */
+export async function repairCareerSkills({ log = () => {} } = {}) {
+  if (!game.user.isGM) return null;
+  const summary = { checked: 0, updated: 0 };
+  const known = new Set(Object.keys(CONFIG.FFG.skills ?? {}));
+  const filled = (item) => careerSkillSlots(item.type)
+    .map((slot) => item.system?.careerSkills?.[slot])
+    .filter((skill) => skill && skill !== "(none)");
+
+  const repair = async (item, reference) => {
+    summary.checked += 1;
+    const slots = careerSkillSlots(item.type);
+    const current = filled(item);
+    const resolved = [];
+    for (const skill of current) {
+      const key = known.has(skill) ? skill : systemSkillKey(skill);
+      if (key && !resolved.includes(key)) resolved.push(key);
+    }
+    let wanted = resolved;
+    if (reference) {
+      const imported = filled(reference).filter((skill) => known.has(skill));
+      const covered = resolved.every((skill) => imported.includes(skill));
+      // the same skills in another order are left as they are
+      if (covered && imported.length > resolved.length) wanted = imported;
+    }
+    if (wanted.length > slots.length) {
+      log(`${item.name}: ${wanted.slice(slots.length).join(", ")} does not fit in ${slots.length} slots`);
+    }
+    const next = Object.fromEntries(slots.map((slot, i) => [slot, wanted[i] ?? "(none)"]));
+    if (slots.every((slot) => (item.system?.careerSkills?.[slot] ?? "(none)") === next[slot])) return;
+    try {
+      await item.update({ system: { careerSkills: next } });
+      summary.updated += 1;
+      log(`${item.parent ? `${item.parent.name}: ` : ""}${item.name}: ${wanted.slice(0, slots.length).join(", ") || "(none)"}`);
+    } catch (err) {
+      CONFIG.logger.error(`Could not repair the career skills of ${item.uuid}`, err);
+    }
+  };
+
+  for (const [type, packId] of [["career", CAREER_PACK], ["specialization", "world.oggdudespecializations"]]) {
+    // The imported entries first (their names only): the copies below take their lists from them.
+    const pack = game.packs.get(packId);
+    const references = pack ? (await pack.getDocuments()).filter((item) => item.type === type) : [];
+    if (pack && !pack.locked) {
+      for (const item of references) await repair(item, null);
+    }
+    const byKey = new Map();
+    const byName = new Map();
+    for (const item of references) {
+      const key = item.flags?.starwarsffg?.ffgimportid;
+      if (key && !byKey.has(key)) byKey.set(key, item);
+      if (!byName.has(item.name)) byName.set(item.name, item);
+    }
+    const copies = game.items.filter((item) => item.type === type);
+    for (const actor of game.actors) copies.push(...actor.items.filter((item) => item.type === type));
+    for (const item of copies) {
+      await repair(item, byKey.get(item.flags?.starwarsffg?.ffgimportid) ?? byName.get(item.name) ?? null);
+    }
   }
   return summary;
 }

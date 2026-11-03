@@ -1,6 +1,7 @@
 import ModifierHelpers from "./modifiers.js";
 import TalentTree from "./talent-tree.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
+import { careerSkillChanges } from "./skill-keys.js";
 
 export default class ItemHelpers {
   static async itemUpdate(event, formData, { render = false } = {}) {
@@ -86,47 +87,12 @@ export default class ItemHelpers {
           }
         }
       }
-    } else if (this.object.type === "career") {
-      // apply career skills from Careers
+    } else if (["career", "specialization"].includes(this.object.type)) {
+      // apply career skills from Careers / Specializations. The sheet only shows the slots in use
+      // (plus one), so take the rest from the item: the effect covers every slot.
       const existingEffects = this.object.getEmbeddedCollection("ActiveEffect");
       const itemEffect = existingEffects.find(i => i.name === `(inherent)`);
-      const changes = [];
-      for (let i = 0; i < 8; i++) {
-        let path;
-        const skill = formData.data.careerSkills[`careerSkill${i}`];
-        if (skill !== "(none)") {
-          path = `system.skills.${skill}.careerskill`;
-        } else {
-          path = "(none)";
-        }
-        changes.push({
-          key: path,
-          mode: AE_MODES.ADD,
-          value: true,
-        });
-      }
-      if (itemEffect) {
-        await ModifierHelpers.updateEffectChanges(itemEffect, changes);
-      }
-    } else if (this.object.type === "specialization") {
-      // apply career skills from Careers
-      const existingEffects = this.object.getEmbeddedCollection("ActiveEffect");
-      const itemEffect = existingEffects.find(i => i.name === `(inherent)`);
-      const changes = [];
-      for (let i = 0; i < 5; i++) {
-        let path;
-        const skill = formData.data.careerSkills[`careerSkill${i}`];
-        if (skill !== "(none)") {
-          path = `system.skills.${skill}.careerskill`;
-        } else {
-          path = "(none)";
-        }
-        changes.push({
-          key: path,
-          mode: AE_MODES.ADD,
-          value: true,
-        });
-      }
+      const changes = careerSkillChanges({ ...this.object.system.careerSkills, ...formData.data.careerSkills });
       if (itemEffect) {
         await ModifierHelpers.updateEffectChanges(itemEffect, changes);
       }
@@ -180,16 +146,7 @@ export default class ItemHelpers {
       // An item predating careerSkills has nothing to rebuild from; leave its effect alone.
       if (!item.system?.careerSkills) return false;
       // Same shape the item sheet writes (see itemUpdate): one change per slot, "(none)" if empty.
-      const slots = item.type === "career" ? 8 : 5;
-      changes = [];
-      for (let i = 0; i < slots; i++) {
-        const skill = item.system.careerSkills[`careerSkill${i}`];
-        changes.push({
-          key: skill && skill !== "(none)" ? `system.skills.${skill}.careerskill` : "(none)",
-          mode: AE_MODES.ADD,
-          value: true,
-        });
-      }
+      changes = careerSkillChanges(item.system.careerSkills);
     }
     const updated = await ModifierHelpers.updateEffectChanges(inherent, changes);
     // Armour that is not worn must not apply. Imported armour often arrives with its effect switched

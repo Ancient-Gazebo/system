@@ -1070,6 +1070,7 @@
   "SWFFG.Notifications.Import.FileLoadError": "There was an error trying to load the import file, check the console log for more information.",
   "SWFFG.Notifications.Import.Relinked": "Relinked {updated} of {checked} careers: {fixed} links updated, {removed} old links removed.",
   "SWFFG.Notifications.Import.RelinkBroken": "{broken} career links point at items that no longer exist and have no replacement of the same name. Tick Generate Log in the importer's header to list them.",
+  "SWFFG.Notifications.Import.CareerSkillsRepaired": "Repaired the career skills of {updated} of {checked} careers and specializations.",
   "SWFFG.Notifications.Import.RelinkedSpecies": "Relinked {updated} of {checked} species: {fixed} talent links updated, {effects} modifier effects repaired.",
   "SWFFG.Notifications.Import.RelinkSpeciesBroken": "{broken} species talent links point at talents that no longer exist under any name. Tick Generate Log in the importer's header to list them.",
   "SWFFG.Combats.Actors.Friendly": "Friendly Actors",

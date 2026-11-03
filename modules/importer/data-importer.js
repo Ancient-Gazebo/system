@@ -2,7 +2,7 @@ import ImportHelpers from "./import-helpers.js";
 import OggDude from "./oggdude/oggdude.js";
 import SupersededFilter from "./oggdude/superseded-filter.js";
 import { loadImporterLibs } from "../helpers/lazy-libs.js";
-import { relinkCareers, relinkSpecies } from "../helpers/career-relink.js";
+import { relinkCareers, relinkSpecies, repairCareerSkills } from "../helpers/career-relink.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
 
@@ -296,6 +296,11 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
         ui.notifications.info(game.i18n.format("SWFFG.Notifications.Import.Relinked", summary));
         if (summary.broken) ui.notifications.warn(game.i18n.format("SWFFG.Notifications.Import.RelinkBroken", summary));
       }
+    }
+    if (relink && ["career", "specialization"].some((type) => this.shouldImport[type])) {
+      this._importLogger("Repairing career skills");
+      const summary = await repairCareerSkills({ log: (line) => this._importLogger(`Career skills: ${line}`) });
+      if (summary?.updated) ui.notifications.info(game.i18n.format("SWFFG.Notifications.Import.CareerSkillsRepaired", summary));
     }
     if (relink && ["talent", "species"].some((type) => this.shouldImport[type])) {
       this._importLogger("Relinking species");

@@ -1,4 +1,5 @@
 import ImportHelpers from "../../import-helpers.js";
+import { careerSkillSlots, systemSkillKey } from "../../../helpers/skill-keys.js";
 
 export default class Career {
   static getMetaData() {
@@ -37,6 +38,7 @@ export default class Career {
 
             item.Description = ImportHelpers.cleanDescription(item.Description);
 
+            const slots = careerSkillSlots("career");
             data.data = {
               attributes: {},
               description: item.Description,
@@ -48,28 +50,25 @@ export default class Career {
                 ],
                 sources: ImportHelpers.getSourcesAsArray(item?.Sources ?? item?.Source),
               },
-              careerSkills: {
-                careerSkill0: "(none)",
-                careerSkill1: "(none)",
-                careerSkill2: "(none)",
-                careerSkill3: "(none)",
-                careerSkill4: "(none)",
-                careerSkill5: "(none)",
-                careerSkill6: "(none)",
-                careerSkill7: "(none)",
-              }
+              // every slot the schema has, so an update in place also clears a slot the data set emptied
+              careerSkills: Object.fromEntries(slots.map((slot) => [slot, "(none)"])),
             };
 
             //data.data.description += ImportHelpers.getSources(item.Sources ?? item.Source);
 
             // process career skills
             let currentSkill = 0;
-            item.CareerSkills.Key.forEach((skillKey) => {
-              let skill = CONFIG.temporary.skills[skillKey];
-              if (skill) {
-                data.data.careerSkills[`careerSkill${currentSkill}`] = skill;
-                currentSkill++;
+            [item.CareerSkills.Key].flat().forEach((skillKey) => {
+              // Stored by the active skill list's key, which is what the career sheet and the career
+              // skill effect use; the OggDude name matched no skill in a list keyed otherwise.
+              const skill = systemSkillKey(CONFIG.temporary.skills[skillKey]);
+              if (!skill) return;
+              if (currentSkill >= slots.length) {
+                CONFIG.logger.warn(`Career ${item.Name} has more than ${slots.length} career skills; ${skill} does not fit`);
+                return;
               }
+              data.data.careerSkills[slots[currentSkill]] = skill;
+              currentSkill++;
             });
 
             // process career attributes

@@ -5,6 +5,7 @@ import ModifierHelpers from "../helpers/modifiers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 import { loadImporterLibs } from "../helpers/lazy-libs.js";
 import { markRemovedKeys } from "../helpers/update-operators.js";
+import { careerSkillChanges } from "../helpers/skill-keys.js";
 
 export default class ImportHelpers {
   /**
@@ -227,6 +228,7 @@ export default class ImportHelpers {
   static clearCache() {
     CONFIG.temporary = {};
   }
+
 
   /**
    * Find an entity by the import key.
@@ -3290,40 +3292,8 @@ export default class ImportHelpers {
 
     // careers and specializations are created with the template, then populated with the data passed in
     // check for careerSkills being set and update them
-    if (item.type === "career" && inherentEffect) {
-      const changes = [];
-      for (let i = 0; i < 8; i++) {
-        let path;
-        const skill = item.system.careerSkills[`careerSkill${i}`];
-        if (skill !== "(none)") {
-          path = `system.skills.${skill}.careerskill`;
-        } else {
-          path = "(none)";
-        }
-        changes.push({
-          key: path,
-          mode: AE_MODES.ADD,
-          value: true,
-        });
-      }
-      await inherentEffect.update({changes: changes}, { noHook: true });
-    } else if (item.type === "specialization" && inherentEffect) {
-      const changes = [];
-      for (let i = 0; i < 5; i++) {
-        let path;
-        const skill = item.system.careerSkills[`careerSkill${i}`];
-        if (skill !== "(none)") {
-          path = `system.skills.${skill}.careerskill`;
-        } else {
-          path = "(none)";
-        }
-        changes.push({
-          key: path,
-          mode: AE_MODES.ADD,
-          value: true,
-        });
-      }
-      await inherentEffect.update({changes: changes}, { noHook: true });
+    if (["career", "specialization"].includes(item.type) && inherentEffect) {
+      await inherentEffect.update({changes: careerSkillChanges(item.system.careerSkills)}, { noHook: true });
     }
 
     if (toCreate.length) {

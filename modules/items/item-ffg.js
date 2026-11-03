@@ -7,6 +7,7 @@ import Helpers from "../helpers/common.js";
 import ItemHelpers from "../helpers/item-helpers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 import { preparedSystemCopy } from "../datamodels/sheet-data.js";
+import { careerSkillChanges } from "../helpers/skill-keys.js";
 
 /**
  * Extend the basic Item with some very simple modifications.
@@ -227,22 +228,9 @@ export class ItemFFG extends ItemBaseFFG {
               value: 0,
             });
           }
-        } else if (this.type === "career") {
-          for (let i = 0; i < 8; i++) {
-            effects.changes.push({
-              key: "(none)",
-              mode: AE_MODES.ADD,
-              value: true,
-            });
-          }
-        } else if (this.type === "specialization") {
-          for (let i = 0; i < 5; i++) {
-            effects.changes.push({
-              key: "(none)",
-              mode: AE_MODES.ADD,
-              value: true,
-            });
-          }
+        } else if (["career", "specialization"].includes(this.type)) {
+          // one change per career skill slot, in the shape every later writer builds
+          effects.changes = careerSkillChanges(this.system.careerSkills);
         }
 
         if (["armour", "weapon", "gear"].includes(this.type) && effects.name !== "(inherent)") {

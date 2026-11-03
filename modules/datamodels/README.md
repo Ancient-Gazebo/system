@@ -13,8 +13,11 @@ the schemas stay a field-for-field mirror of the historical shapes.
 Caveat: `template.json` is now schema-only (the per-type field definitions were removed), so a
 regeneration run can no longer reproduce this folder on its own. Fields added since then exist
 only here and would be lost by a naive regenerate — currently `system.equippable.carried` on
-armour, gear, shipattachment, shipweapon and weapon (2.1.34), and `system.group` on vehicle
-(vehicle minion groups). Any field a DataModel does not
+armour, gear, shipattachment, shipweapon and weapon (2.1.34), `system.group` on vehicle
+(vehicle minion groups), and the extra career skill slots (4.0.22): career `careerSkills`
+runs `careerSkill0`-`careerSkill11` (was 0-7) and specialization `careerSkill0`-`careerSkill7`
+(was 0-4). Code reads the slot count from the schema (`careerSkillSlots` in
+`helpers/skill-keys.js`), so changing it needs no other edit. Any field a DataModel does not
 declare is pruned from every document on its next save, so check this list before regenerating.
 
 The same applies to the **talent/upgrade tree defaults** (`treeNodes` in `item-models.js`):

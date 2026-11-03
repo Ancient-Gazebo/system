@@ -160,6 +160,10 @@ export class CareerItemModel extends FFGTypeModel {
         careerSkill5: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
         careerSkill6: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
         careerSkill7: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill8: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill9: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill10: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill11: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
       }),
     };
   }
@@ -623,6 +627,9 @@ export class SpecializationItemModel extends FFGTypeModel {
         careerSkill2: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
         careerSkill3: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
         careerSkill4: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill5: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill6: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
+        careerSkill7: new fields.StringField({ initial: "(none)", blank: true, nullable: true }),
       }),
       universal: new fields.BooleanField({ initial: false }),
     };

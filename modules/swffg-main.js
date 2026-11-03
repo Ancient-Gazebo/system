@@ -69,7 +69,7 @@ import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-deta
 import { registerAutoAnimationsShim } from "./integrations/autoanimations.js";
 import { registerCinematicCutInsShim } from "./integrations/cinematic-cut-ins.js";
 import { registerChromiumAudioFix } from "./helpers/chromium-audio-fix.js";
-import { relinkCareers, relinkSpecies } from "./helpers/career-relink.js";
+import { relinkCareers, relinkSpecies, repairCareerSkills } from "./helpers/career-relink.js";
 import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
 import TalentTree from "./helpers/talent-tree.js";
@@ -193,6 +193,8 @@ Hooks.once("init", async function () {
     // `await game.ffg.relinkSpecies()`.
     relinkCareers,
     relinkSpecies,
+    // Fix career skills stored as OggDude names on careers and specializations: `await game.ffg.repairCareerSkills()`.
+    repairCareerSkills,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered

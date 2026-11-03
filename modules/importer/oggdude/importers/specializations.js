@@ -1,4 +1,5 @@
 import ImportHelpers from "../../import-helpers.js";
+import { careerSkillSlots, systemSkillKey } from "../../../helpers/skill-keys.js";
 
 export default class Specializations {
   static getMetaData() {
@@ -38,6 +39,7 @@ export default class Specializations {
             item.Description = ImportHelpers.cleanDescription(item.Description);
 
             let data = ImportHelpers.prepareBaseObject(item, "specialization");
+            const slots = careerSkillSlots("specialization");
             data.system = {
               attributes: {},
               description: item.Description,
@@ -50,25 +52,23 @@ export default class Specializations {
                 ],
                 sources: ImportHelpers.getSourcesAsArray(item?.Sources ?? item?.Source),
               },
-              careerSkills: {
-                careerSkill0: "(none)",
-                careerSkill1: "(none)",
-                careerSkill2: "(none)",
-                careerSkill3: "(none)",
-                careerSkill4: "(none)",
-              },
+              // every slot the schema has, so an update in place also clears a slot the data set emptied
+              careerSkills: Object.fromEntries(slots.map((slot) => [slot, "(none)"])),
               universal: false,
             };
 
             // process career skills
             let currentSkill = 0;
             if (item?.CareerSkills && item.CareerSkills?.Key) {
-              item.CareerSkills.Key.forEach((skillKey) => {
-                let skill = CONFIG.temporary.skills[skillKey];
-                if (skill) {
-                  data.system.careerSkills[`careerSkill${currentSkill}`] = skill;
-                  currentSkill++;
+              [item.CareerSkills.Key].flat().forEach((skillKey) => {
+                const skill = systemSkillKey(CONFIG.temporary.skills[skillKey]);
+                if (!skill) return;
+                if (currentSkill >= slots.length) {
+                  CONFIG.logger.warn(`Specialization ${item.Name} has more than ${slots.length} career skills; ${skill} does not fit`);
+                  return;
                 }
+                data.system.careerSkills[slots[currentSkill]] = skill;
+                currentSkill++;
               });
             }
 

@@ -565,6 +565,16 @@ export class ItemSheetFFG extends FFGDocumentSheet {
       );
     }
 
+    // Career skill slots past the classic count (8 for a career, 5 for a specialization) show only
+    // once used, plus one empty slot to add the next, so an ordinary career keeps its usual layout.
+    if (["career", "specialization"].includes(this.object.type) && data.data?.careerSkills) {
+      const stored = data.data.careerSkills;
+      const slots = Object.keys(stored).sort((a, b) => parseInt(a.replace(/\D/g, ""), 10) - parseInt(b.replace(/\D/g, ""), 10));
+      const lastUsed = slots.findLastIndex((slot) => stored[slot] && stored[slot] !== "(none)");
+      const shown = Math.max(this.object.type === "career" ? 8 : 5, lastUsed + 2);
+      data.data.careerSkills = Object.fromEntries(slots.slice(0, shown).map((slot) => [slot, stored[slot]]));
+    }
+
     // get summarized data for qualities (e.g. weapons)
     data = this._getSummarizedQualities(data);
 

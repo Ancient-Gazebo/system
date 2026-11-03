@@ -1,5 +1,5 @@
 import ImportHelpers from "../../import-helpers.js";
-import { markDeleted } from "../../../helpers/career-relink.js";
+import { markDeleted } from "../../../helpers/update-operators.js";
 
 export default class SignatureAbilities {
   static getMetaData() {

@@ -265,6 +265,9 @@ export class ItemFFG extends ItemBaseFFG {
       // only run onCreate for the user actually performing the update
       return;
     }
+    // An import that updates a compendium item rebuilds the item's effects itself once the update
+    // is in (ImportHelpers.resyncImportedEffects); syncing them here as well raced that rebuild.
+    if (options.ffgImport) return;
 
     const existingEffects = this.getEmbeddedCollection("ActiveEffect");
     CONFIG.logger.debug(`On item ${this.name} update, found the following active effects:`);

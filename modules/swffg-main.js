@@ -69,7 +69,7 @@ import { registerMonksCombatDetailsShim } from "./integrations/monks-combat-deta
 import { registerAutoAnimationsShim } from "./integrations/autoanimations.js";
 import { registerCinematicCutInsShim } from "./integrations/cinematic-cut-ins.js";
 import { registerChromiumAudioFix } from "./helpers/chromium-audio-fix.js";
-import { relinkCareers } from "./helpers/career-relink.js";
+import { relinkCareers, relinkSpecies } from "./helpers/career-relink.js";
 import {register_system_tours} from "./helpers/tours.js";
 import CriticalRollerFFG from "./helpers/critical-roller.js";
 import TalentTree from "./helpers/talent-tree.js";
@@ -188,9 +188,11 @@ Hooks.once("init", async function () {
     // Critical item and table repairs (run by the 4.0.7 / 4.0.8 migrations; safe to run again).
     repairCriticalItems,
     repairCriticalTables,
-    // Repoint careers at the imported specializations and signature abilities, as the importer does
-    // after an import: `await game.ffg.relinkCareers()`.
+    // Repoint careers at the imported specializations and signature abilities, and species at their
+    // talents, as the importer does after an import: `await game.ffg.relinkCareers()`,
+    // `await game.ffg.relinkSpecies()`.
     relinkCareers,
+    relinkSpecies,
   };
 
   // The Token scene controls are built once, before the `ready` hook, so this has to be registered

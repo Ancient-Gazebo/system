@@ -16,26 +16,23 @@
  * counterpart keeps its own lists, with dead links repointed at an item of the same name where one
  * exists. The imported careers themselves only get that repair, which covers importing
  * specializations again without importing careers.
+ *
+ * Species list their talents the same way, and dropping a species on a character fetches each one
+ * through its link, so a species whose talents were imported again without it silently granted
+ * nothing. Species only ever get the repair: a dead link is repointed at the talent of the same name.
  */
 
+import ModifierHelpers from "./modifiers.js";
+import { markDeleted } from "./update-operators.js";
+
 const CAREER_PACK = "world.oggdudecareers";
+const SPECIES_PACK = "world.oggdudespecies";
 
 const LISTS = {
   specializations: { type: "specialization", pack: "world.oggdudespecializations", setting: "specializationCompendiums" },
   signatureabilities: { type: "signatureability", pack: "world.oggdudesignatureabilities", setting: "signatureAbilityCompendiums" },
 };
-
-/**
- * Mark one key of an ObjectField for deletion in an update. V14 has an operator for it and
- * deprecates the old `-=key` form, which V13 still needs.
- * @param {object} update - the field's update object, changed in place
- * @param {string} key
- */
-export function markDeleted(update, key) {
-  const ForcedDeletion = foundry.data?.operators?.ForcedDeletion;
-  if (game.release.generation >= 14 && ForcedDeletion) update[key] = ForcedDeletion.create();
-  else update[`-=${key}`] = null;
-}
+const SPECIES_TALENTS = { type: "talent", pack: "world.oggdudetalents", setting: "talentCompendiums" };
 
 /**
  * Items of one type by name, for repointing a dead link: the imported compendium first, then the
@@ -80,9 +77,11 @@ function resolveLink(link, type, names) {
  * Work out one list's new contents and the update that writes them.
  * @param {object} current - the career's list as stored
  * @param {object|null} reference - the imported career's list, which wins, or null to repair only
+ * @param {object} [options]
+ * @param {boolean} [options.keepNames] - keep the names stored with links that still resolve
  * @returns {{update: object, fixed: string[], removed: string[], broken: string[]}}
  */
-function relinkList(current, reference, { type, pack }, names) {
+function relinkList(current, reference, { type, pack }, names, { keepNames = false } = {}) {
   current ??= {};
   const managed = `Compendium.${pack}.`;
   const result = new Map();
@@ -108,7 +107,7 @@ function relinkList(current, reference, { type, pack }, names) {
       report.removed.push(found.name);
       continue;
     }
-    result.set(found.id, found);
+    result.set(found.id, keepNames && link?.name ? { ...found, name: link.name } : found);
   }
 
   const update = {};
@@ -182,6 +181,56 @@ export async function relinkCareers({ log = () => {} } = {}) {
   for (const career of copies) {
     const reference = byKey.get(career.flags?.starwarsffg?.ffgimportid) ?? byName.get(career.name) ?? null;
     await relink(career, reference);
+  }
+  return summary;
+}
+
+/**
+ * Repair every species in the world (the imported ones, the Items directory's and each actor's):
+ * dead talent links are repointed at the talent of the same name, and modifiers whose effects an
+ * import left empty or missing get them rebuilt. GM only.
+ * @param {object} [options]
+ * @param {function(string): void} [options.log] - receives one line per changed species
+ * @returns {Promise<{checked: number, updated: number, fixed: number, broken: number, effects: number}|null>}
+ */
+export async function relinkSpecies({ log = () => {} } = {}) {
+  if (!game.user.isGM) return null;
+  const summary = { checked: 0, updated: 0, fixed: 0, broken: 0, effects: 0 };
+  const names = await nameIndex(SPECIES_TALENTS);
+
+  const pack = game.packs.get(SPECIES_PACK);
+  const species = pack && !pack.locked ? (await pack.getDocuments()).filter((s) => s.type === "species") : [];
+  species.push(...game.items.filter((i) => i.type === "species"));
+  for (const actor of game.actors) species.push(...actor.items.filter((i) => i.type === "species"));
+
+  for (const item of species) {
+    summary.checked += 1;
+    // A character's copy keeps the names it was given: removing the species deletes the talents it
+    // granted by name, and those copies still carry the old names.
+    const result = relinkList(item.system?.talents, null, SPECIES_TALENTS, names, { keepNames: !!item.parent });
+    summary.fixed += result.fixed.length;
+    summary.broken += result.broken.length;
+    const notes = [];
+    if (result.fixed.length) notes.push(`linked ${result.fixed.join(", ")}`);
+    if (result.broken.length) notes.push(`still broken ${result.broken.join(", ")}`);
+    let changed = false;
+    try {
+      if (Object.keys(result.update).length) {
+        await item.update({ system: { talents: result.update } });
+        changed = true;
+      }
+      const effects = await ModifierHelpers.reconcileAttributeEffects(item);
+      const repaired = effects.created + effects.rebuilt + effects.deleted;
+      if (repaired) {
+        summary.effects += repaired;
+        notes.push(`${repaired} modifier effects repaired`);
+        changed = true;
+      }
+    } catch (err) {
+      CONFIG.logger.error(`Could not relink species ${item.uuid}`, err);
+    }
+    if (changed) summary.updated += 1;
+    if (notes.length) log(`${item.parent ? `${item.parent.name}: ` : ""}${item.name}: ${notes.join("; ")}`);
   }
   return summary;
 }

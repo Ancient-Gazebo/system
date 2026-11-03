@@ -4,6 +4,7 @@ import {ItemFFG} from "../items/item-ffg.js";
 import ModifierHelpers from "../helpers/modifiers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 import { loadImporterLibs } from "../helpers/lazy-libs.js";
+import { markRemovedKeys } from "../helpers/update-operators.js";
 
 export default class ImportHelpers {
   /**
@@ -2421,37 +2422,17 @@ export default class ImportHelpers {
         let updateData = data;
         updateData["_id"] = entry._id;
 
-        if (updateData?.data?.attributes) {
-          // Remove and repopulate all modifiers
-          if (entry.system?.attributes) {
-            for (let k of Object.keys(entry.system.attributes)) {
-              if (!updateData.data.attributes.hasOwnProperty(k)) updateData.data.attributes[`-=${k}`] = null;
-            }
-          }
-        }
-        if (updateData?.data?.specializations) {
-          // Remove and repopulate all specializations
-          if (entry.system?.specializations) {
-            for (let k of Object.keys(entry.system.specializations)) {
-              if (!updateData.data.specializations.hasOwnProperty(k)) updateData.data.specializations[`-=${k}`] = null;
-            }
-          }
-        }
-        if (updateData?.data?.talents) {
-          // Remove and repopulate all talents
-          if (entry.system?.talents) {
-            for (let k of Object.keys(entry.system.talents)) {
-              if (!updateData.data.talents.hasOwnProperty(k)) updateData.data.talents[`-=${k}`] = null;
-            }
-          }
-        }
-        if (updateData?.data?.abilities) {
-          // Remove and repopulate all abilities
-          if (entry.system?.abilities) {
-            for (let k of Object.keys(entry.system.abilities)) {
-              if (!updateData.data.abilities.hasOwnProperty(k)) updateData.data.abilities[`-=${k}`] = null;
-            }
-          }
+        // Replace these maps rather than merging into them. An update merges into what is stored, so
+        // anything the new data lacked survived. Whole entries were removed for four of them, but
+        // never anything inside an entry, signature ability and Force power trees (`upgrades`) not
+        // at all, and specializations - which build their data under `system`, where this never
+        // looked - not at all either: a box kept every connector line the new tree no longer draws,
+        // and a specialization's boxes piled up their modifiers, which get new keys on every import.
+        // A career's signature abilities are left out: that importer writes them separately.
+        const stored = entry._source?.system ?? entry.system ?? {};
+        for (const field of ["attributes", "specializations", "talents", "abilities", "upgrades"]) {
+          const incoming = updateData.system?.[field] ?? updateData.data?.[field];
+          if (incoming && stored[field]) markRemovedKeys(stored[field], incoming);
         }
 
         upd = foundry.utils.duplicate(entry);
@@ -2462,12 +2443,13 @@ export default class ImportHelpers {
             // don't re-import items for existing vehicles, in order to avoid duplicating them
             updateData.items = [];
           }
-          await pack.get(updateData._id).update(updateData);
+          await pack.get(updateData._id).update(updateData, { ffgImport: true });
           // update here does not return the UUID, so retrieve the item from the pack to get it.
           // Return (and cache) the updated record too: the copy taken before the update still had
           // the old name and data, so a career linked a renamed specialization under its old name,
           // and a specialization imported in the same run was built from its talents' old text.
           const updatedItem = await pack.get(updateData._id);
+          if (type === "Item") await ImportHelpers.resyncImportedEffects(updatedItem);
           upd = foundry.utils.duplicate(updatedItem);
           upd.uuid = updatedItem.uuid;
         } catch (e) {
@@ -2481,6 +2463,28 @@ export default class ImportHelpers {
       CONFIG.temporary[pack.collection][data.flags.starwarsffg.ffgimportid] = upd;
       return upd;
     }
+  }
+
+  /**
+   * After an import updated an item in place, rebuild its Active Effects the way creating it does.
+   * Every import gives the item's modifiers new keys, and its effects are named after those keys:
+   * the update emptied the old effects and gave the new keys none, so a compendium talent such as
+   * Grit applied nothing until a copy of it was reconciled on a character, and an old effect that
+   * still held changes doubled the modifier there.
+   * @param {Item} item - the compendium item just updated
+   */
+  static async resyncImportedEffects(item) {
+    const system = item.toObject().system;
+    const keys = new Set(Object.keys(system.attributes ?? {}));
+    if (item.type === "specialization") {
+      for (const box of Object.values(system.talents ?? {})) {
+        for (const key of Object.keys(box?.attributes ?? {})) keys.add(key);
+      }
+    }
+    const stale = item.effects.filter((effect) => effect.name?.startsWith("attr") && !keys.has(effect.name)).map((effect) => effect.id);
+    if (stale.length) await item.deleteEmbeddedDocuments("ActiveEffect", stale, { noHook: true });
+    await ImportHelpers.applyActiveEffectOnUpdate(item, { system });
+    await ImportHelpers.applyTalentActiveEffects(item);
   }
 
   static async getCompendiumPack(type, name) {

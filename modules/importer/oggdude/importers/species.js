@@ -104,7 +104,9 @@ export default class Species {
 
             // populate talents
             if (item?.TalentModifiers?.TalentModifier) {
-              for (const talentData of Object.values(item.TalentModifiers)) {
+              // One talent parses as an object, several as an array; Object.values() of the wrapper
+              // handed the whole array over as one talent, so a species with two or more got none.
+              for (const talentData of [item.TalentModifiers.TalentModifier].flat()) {
                 const talentKey = talentData.Key;
                 let talent = await ImportHelpers.findCompendiumEntityByImportId("Item", talentKey, "world.oggdudetalents", "talent", true);
                 if (!talent) {

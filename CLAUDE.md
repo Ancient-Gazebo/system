@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.20`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.21`, compatibility minimum 13 /
 verified `"14.369"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -196,7 +196,24 @@ npx eslint modules
   character, and a Delete Existing Compendiums import gives every entry a new id.
   `helpers/career-relink.js` repoints them (the importer runs it afterwards;
   `game.ffg.relinkCareers()` by hand). The purchase dialogs match by name, so a
-  list's names have to follow the data set too.
+  list's names have to follow the data set too. Species link their talents the
+  same way (`relinkSpecies`), and a species dropped on a character fetches each
+  talent through its link; a character's copy keeps its names, since removing
+  the species deletes the granted talents by name.
+- **V14 stores an ActiveEffect's changes at `_source.system.changes`**, and puts a
+  non-enumerable getter `_source.changes` on top that returns the same array with
+  no warning. So `_source.changes` reads work on both versions, but
+  `Object.keys(effect._source)` does not list `changes` on V14 - do not take that
+  as "missing". Offline LevelDB scans see only `system.changes`.
+- **An import without Delete Existing updates entries in place, and updates
+  merge.** A key the new data lacks would survive, so `addImportItemToCompendium`
+  marks every such key deleted (`markRemovedKeys`, helpers/update-operators.js)
+  in the maps importers write. A new map field an importer fills belongs in that
+  list, or its stale entries pile up. Modifier keys are new on every import and
+  effects are named after them, so the update then rebuilds the item's effects
+  (`resyncImportedEffects`), passing `ffgImport` so `ItemFFG#_onUpdate` stays out
+  of it. Check a change here by importing in place and then clean, and comparing
+  the two (data, effects) item by item.
 - **Never edit `lib/`.** It's vendored and shipped; fixes belong in `modules/`,
   not in third-party code.
 

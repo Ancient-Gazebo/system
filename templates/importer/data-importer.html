@@ -33,6 +33,12 @@
     </div>
     <div style="display: flex;">
       <div style="white-space: nowrap;">
+        <input type="checkbox" id="relinkCareers" name="relinkCareers" checked />
+        <label for="relinkCareers" title="{{localize "SWFFG.RelinkCareersHint"}}"> {{localize "SWFFG.RelinkCareers"}}</label><br />
+      </div>
+    </div>
+    <div style="display: flex;">
+      <div style="white-space: nowrap;">
         <button type="button" id="importAll" data-action="selectAll" disabled>
           <i class="fa-solid fa-lasso"></i>
           {{ localize "SWFFG.CheckAll" }}

@@ -2,6 +2,7 @@ import ImportHelpers from "./import-helpers.js";
 import OggDude from "./oggdude/oggdude.js";
 import SupersededFilter from "./oggdude/superseded-filter.js";
 import { loadImporterLibs } from "../helpers/lazy-libs.js";
+import { relinkCareers } from "../helpers/career-relink.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api
 
@@ -282,6 +283,19 @@ export default class DataImporter extends HandlebarsApplicationMixin(Application
       this._importLogger(`Done importing phase ${cur_phase}!`);
     }
     this._importLogger("Done with import!");
+
+    // Careers copied onto characters still point at the compendium entries they were copied from,
+    // which Delete Existing Compendiums has just replaced: point them at the new ones.
+    const linkedTypes = ["career", "specialization", "signatureability"];
+    if (scope.querySelector("#relinkCareers")?.checked && linkedTypes.some((type) => this.shouldImport[type])) {
+      this._importLogger("Relinking careers");
+      const summary = await relinkCareers({ log: (line) => this._importLogger(`Relink: ${line}`) });
+      if (summary) {
+        this._importLogger(`Relinked ${summary.updated} of ${summary.checked} careers`);
+        ui.notifications.info(game.i18n.format("SWFFG.Notifications.Import.Relinked", summary));
+        if (summary.broken) ui.notifications.warn(game.i18n.format("SWFFG.Notifications.Import.RelinkBroken", summary));
+      }
+    }
 
     let checked = false;
     checked = Array.from(document.querySelectorAll('.debug input')).some(el => el.checked);

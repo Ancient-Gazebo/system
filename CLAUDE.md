@@ -6,7 +6,7 @@ before editing.
 ## What this is
 
 `starwarsffg` — the **Star Wars FFG** game system for **Foundry VTT**
-(`system.json`: id `starwarsffg`, version `4.0.19`, compatibility minimum 13 /
+(`system.json`: id `starwarsffg`, version `4.0.20`, compatibility minimum 13 /
 verified `"14.369"` — it runs on **both V13 and V14**). Note `verified` is a full
 build string, not a bare generation: Foundry only compares generations when the
 value is an integer, so a build string must be bumped on each core patch release
@@ -191,6 +191,12 @@ npx eslint modules
 - **Only sweep statuses, never `actor.effects`.** XP purchases, species and
   talent modifiers are actor-level Active Effects too. Anything that "clears
   effects" must go through `temporaryStatusEffects()` (helpers/status-effects.js).
+- **Careers link specializations and signature abilities by compendium UUID.**
+  Both lists are `{name, source, id}` maps, copied with the career onto every
+  character, and a Delete Existing Compendiums import gives every entry a new id.
+  `helpers/career-relink.js` repoints them (the importer runs it afterwards;
+  `game.ffg.relinkCareers()` by hand). The purchase dialogs match by name, so a
+  list's names have to follow the data set too.
 - **Never edit `lib/`.** It's vendored and shipped; fixes belong in `modules/`,
   not in third-party code.
 

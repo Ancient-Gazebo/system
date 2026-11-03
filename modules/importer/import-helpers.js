@@ -2463,8 +2463,12 @@ export default class ImportHelpers {
             updateData.items = [];
           }
           await pack.get(updateData._id).update(updateData);
-          // update here does not return the UUID, so retrieve the item from the pack to get it
+          // update here does not return the UUID, so retrieve the item from the pack to get it.
+          // Return (and cache) the updated record too: the copy taken before the update still had
+          // the old name and data, so a career linked a renamed specialization under its old name,
+          // and a specialization imported in the same run was built from its talents' old text.
           const updatedItem = await pack.get(updateData._id);
+          upd = foundry.utils.duplicate(updatedItem);
           upd.uuid = updatedItem.uuid;
         } catch (e) {
           CONFIG.logger.error(`Failed to update ${type} ${dataType} ${data.name} : ${e.toString()}`);

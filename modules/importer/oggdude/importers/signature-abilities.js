@@ -1,4 +1,5 @@
 import ImportHelpers from "../../import-helpers.js";
+import { markDeleted } from "../../../helpers/career-relink.js";
 
 export default class SignatureAbilities {
   static getMetaData() {
@@ -13,17 +14,87 @@ export default class SignatureAbilities {
     };
   }
 
+  /** <Custom> values, ranked by how much of the record the data set's author wrote. */
+  static AUTHORED = { AddedItem: 3, CustomItem: 2, DescOnly: 1 };
+
+  /**
+   * One file per signature ability key. An export can carry two records with the same key (the
+   * stock ability and a reworked copy, or an earlier draft left behind under its old name), and the
+   * compendium keeps one entry per key, so whichever was imported last won: zip order put the stock
+   * "Fated Duel.xml" after "Fated Duel (reSpecialized) 1.0.xml", and the stock version replaced the
+   * rework. Keep the most authored record, then the newest file.
+   */
+  static async pickFiles(zip, files) {
+    const chosen = new Map();
+    for (const file of files) {
+      let key = file.name;
+      let rank = 0;
+      try {
+        const doc = ImportHelpers.stringToXml(await zip.file(file.name).async("text"));
+        key = doc.querySelector("SigAbility > Key")?.textContent?.trim() || file.name;
+        rank = SignatureAbilities.AUTHORED[doc.querySelector("SigAbility > Custom")?.textContent?.trim()] ?? 0;
+      } catch (err) {
+        CONFIG.logger.warn(`Could not read signature ability ${file.name}`, err);
+      }
+      const date = file.date?.getTime?.() ?? 0;
+      const best = chosen.get(key);
+      if (best) {
+        const replace = rank > best.rank || (rank === best.rank && date >= best.date);
+        CONFIG.logger.debug(`Signature abilities ${best.file.name} and ${file.name} share the key ${key}; importing ${replace ? file.name : best.file.name}`);
+        if (!replace) continue;
+      }
+      chosen.set(key, { file, rank, date });
+    }
+    return [...chosen.values()].map((c) => c.file);
+  }
+
+  /**
+   * Give each imported career exactly the signature abilities this data set assigns it. Links used
+   * to be added one ability at a time and never removed, so a career kept an ability the data set
+   * had replaced or moved; and when the careers were updated in place by the same import, the
+   * career came back from the import cache as plain data with no update(), so nothing was linked.
+   * A link to an ability outside the imported compendium (dragged on by hand) is left alone.
+   * @param {object} careerLinks - career key -> {abilityId: {name, source, id}}
+   * @param {CompendiumCollection} sigPack - the imported signature ability compendium
+   */
+  static async linkCareers(careerLinks, sigPack) {
+    const careerPack = game.packs.get("world.oggdudecareers");
+    if (!careerPack || careerPack.locked) return;
+    const managed = `Compendium.${sigPack.collection}.`;
+    for (const career of await careerPack.getDocuments()) {
+      if (career.type !== "career") continue;
+      const wanted = careerLinks[career.flags?.starwarsffg?.ffgimportid] ?? {};
+      const current = career.system.signatureabilities ?? {};
+      const update = {};
+      for (const [id, link] of Object.entries(current)) {
+        if (!wanted[id] && (!link?.source || link.source.startsWith(managed))) markDeleted(update, id);
+      }
+      for (const [id, link] of Object.entries(wanted)) {
+        const old = current[id];
+        if (old?.name !== link.name || old?.source !== link.source || old?.id !== link.id) update[id] = link;
+      }
+      if (!Object.keys(update).length) continue;
+      try {
+        await career.update({ system: { signatureabilities: update } });
+      } catch (err) {
+        CONFIG.logger.error(`Could not link signature abilities to career ${career.name}`, err);
+      }
+    }
+  }
+
   static async Import(xml, zip) {
     const base = JXON.xmlToJs(xml);
     let items = base?.SigAbilityNodes?.SigAbilityNode;
 
     if (items?.length) {
-      const files = Object.values(zip.files).filter((file) => {
+      const files = await SignatureAbilities.pickFiles(zip, Object.values(zip.files).filter((file) => {
         return !file.dir && file.name.split(".").pop() === "xml" && file.name.includes("/SigAbilities/");
-      });
+      }));
 
       let totalCount = files.length;
       let currentCount = 0;
+      // career key -> the abilities this data set gives it, written once every file is in
+      const careerLinks = {};
 
       $(".import-progress.signatureability").toggleClass("import-hidden");
       let pack = await ImportHelpers.getCompendiumPack("Item", `oggdude.SignatureAbilities`);
@@ -38,7 +109,13 @@ export default class SignatureAbilities {
 
           let data = ImportHelpers.prepareBaseObject(item, "signatureability");
 
-          item.Description = ImportHelpers.cleanDescription(item.Description);
+          // The large box at the top of the tree is the base ability, and the item's description is
+          // what it shows. OggDude keeps the base ability's text on the first row's node; the
+          // record's own <Description> is usually the ability's opening story, which the box showed
+          // in place of the rules. Use the record's text only when the node is missing or empty.
+          const baseKey = [[item.AbilityRows?.AbilityRow].flat()[0]?.Abilities?.Key].flat()[0];
+          const baseNode = items.find((a) => a.Key === baseKey);
+          item.Description = ImportHelpers.cleanDescription(baseNode?.Description || item.Description);
 
           data.data = {
             description: item.Description,
@@ -166,28 +243,15 @@ export default class SignatureAbilities {
 
           const sigAbility = await ImportHelpers.addImportItemToCompendium("Item", data, pack);
           currentCount += 1;
-          // process careers
-          if (item?.Careers) {
-            for (const careerKey of Object.values(item.Careers)) {
-              let careerItem = await ImportHelpers.findCompendiumEntityByImportId("Item", careerKey, "world.oggdudecareers", "career");
-              if (!careerItem) {
-                CONFIG.logger.debug(`Could not find career item for signature ability ${sigAbility.name} in career ${careerKey}`);
-                continue;
-              }
-              const updateData = {
-                system: {
-                  signatureabilities: {
-                    [sigAbility._id]: {
-                      name: sigAbility.name,
-                      source: sigAbility.uuid, // not returned
-                      id: sigAbility._id,
-                    },
-                  },
-                },
-              }
-              CONFIG.logger.debug("Updating career item with signature ability", updateData, "(returned item: ", sigAbility, ")");
-              await careerItem.update(updateData);
-            }
+          // `Key` is a string for one career and an array for several; Object.values() of the
+          // latter handed the whole array over as a single career key.
+          for (const careerKey of [item?.Careers?.Key].flat().filter(Boolean)) {
+            careerLinks[careerKey] ??= {};
+            careerLinks[careerKey][sigAbility._id] = {
+              name: data.name,
+              source: sigAbility.uuid ?? pack.getUuid(sigAbility._id),
+              id: sigAbility._id,
+            };
           }
 
           $(".signatureability .import-progress-bar")
@@ -198,6 +262,7 @@ export default class SignatureAbilities {
         }
       });
 
+      await SignatureAbilities.linkCareers(careerLinks, pack);
       CONFIG.logger.debug(`Completed Oggdude Signature Ability (${files.length}) Import`);
     }
   }

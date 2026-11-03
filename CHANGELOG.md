@@ -32,6 +32,15 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.20`
+* Features:
+  * Data Importer: a new Relink Characters' Careers option, ticked by default, runs after importing careers, specializations or signature abilities. Importing with Delete Existing Compendiums ticked rebuilds the compendiums with new ids, so every career already on a character pointed at specializations and signature abilities that no longer existed: the career sheet showed them as broken links, in-career specializations could not be bought, and a signature ability the data set had renamed was no longer offered for purchase. Each career on a character or in the Items directory now gets the lists of the imported career with the same OggDude key: links point at the new entries, names follow the data set, and specializations or signature abilities the data set no longer gives that career are removed. Anything added to a career by hand from outside the imported compendiums is kept. A macro can run the same pass at any time with `game.ffg.relinkCareers()`.
+* Fixes:
+  * Data Importer: a signature ability's base ability box showed the ability's opening story instead of its rules. OggDude keeps the base ability's text on the tree's top node and the story in the record's description, and the importer used the description. It now uses the top node's text, and the description only when the node has none.
+  * Data Importer: when an export held two signature abilities with the same key (a stock ability and a reworked copy of it, or an old draft left behind under another name), whichever came last in the zip was imported, usually the stock one. The most edited record is now imported, and of two equally edited ones, the newer file.
+  * Data Importer: careers now list exactly the signature abilities the data set gives them. Links were only ever added, so a career kept an ability that had been replaced or moved to another career; with Delete Existing Compendiums unticked, signature abilities were not linked to re-imported careers at all; and an ability that belongs to several careers was linked to none of them.
+  * Data Importer: with Delete Existing Compendiums unticked, a record updated in place was handed on with its old name and data, so careers listed a renamed specialization under its old name and specializations were built from their talents' old text.
+
 `4.0.19`
 * Fixes:
   * Relationship Web: re-centring no longer occasionally logs "attribute viewBox: A negative value is not valid" and jolts for a frame. A busy or throttled page can stamp an animation frame with a time from before the move began, which ran the move backwards past its start point; the move now never runs outside its start and end, and the web's frame is never given a negative size.

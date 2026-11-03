@@ -5,7 +5,7 @@ import ModifierHelpers from "../helpers/modifiers.js";
 import { AE_MODES } from "../config/ffg-active-effect-modes.js";
 import { loadImporterLibs } from "../helpers/lazy-libs.js";
 import { markRemovedKeys } from "../helpers/update-operators.js";
-import { careerSkillChanges } from "../helpers/skill-keys.js";
+import { careerSkillChanges, systemSkillKey } from "../helpers/skill-keys.js";
 
 export default class ImportHelpers {
   /**
@@ -2675,7 +2675,7 @@ export default class ImportHelpers {
     } else {
       if (mod.SkillIsCareer) {
         modtype = "Career Skill";
-      } else if (mod.BoostCount || mod.SetbackCount || mod.AddSetbackCount || mod.ForceCount || mod.AdvantageCount || mod.ThreatCount || mod.SuccessCount || mod.FailureCount) {
+      } else if (mod.BoostCount || mod.SetbackCount || mod.AddSetbackCount || mod.ForceCount || mod.AdvantageCount || mod.ThreatCount || mod.SuccessCount || mod.FailureCount || mod.DecreaseDifficultyCount) {
         modtype = "Skill Boost";
 
         if (mod.AddSetbackCount) {
@@ -2709,19 +2709,18 @@ export default class ImportHelpers {
           modtype = "Skill Add Failure";
           value = parseInt(mod.FailureCount, 10);
         }
+        // OggDude's "reduce the difficulty" field; one count per DieModifier entry
+        if (mod.DecreaseDifficultyCount) {
+          modtype = "Skill Decrease Difficulty";
+          value = parseInt(mod.DecreaseDifficultyCount, 10);
+        }
       } else {
         modtype = "Skill Rank";
       }
       if (mod.Key) {
-        let skill = CONFIG.temporary.skills[mod.Key];
-
-        if (skill && skill.includes(":") && !skill.includes(": ")) {
-          skill = skill.replace(":", ": ");
-        }
-
-        if (Object.keys(CONFIG.FFG.skills).includes(skill)) {
-          type = CONFIG.temporary.skills[mod.Key];
-        }
+        // The OggDude name, matched to the skill list's key: compared as-is it dropped every
+        // modifier on a skill whose key is punctuated differently (Ranged-Light, Knowledge-Lore).
+        type = systemSkillKey(CONFIG.temporary.skills[mod.Key]);
       } else if (mod?.Skill) {
         type = mod.Skill;
       }
@@ -2996,27 +2995,16 @@ export default class ImportHelpers {
       }
 
       for (const skill of skills.Key) {
-        let mod = CONFIG.temporary.skills[skill];
+        // The OggDude name, matched to the skill list's key: compared as-is it missed every skill
+        // whose key is punctuated differently (Ranged-Light, Knowledge-Lore, Piloting-Space).
+        const mod = systemSkillKey(CONFIG.temporary.skills[skill]);
         if (mod) {
-          if (mod.includes(":") && !mod.includes(": ")) {
-            mod = mod.replace(":", ": ");
-          }
-
-          if (Object.keys(CONFIG.FFG.skills).includes(mod)) {
-            const key = `attr${new Date().getTime()}`;
-            // ensure further keys have a new entry
-            await new Promise(r => setTimeout(r, 1));
-            if (mod) {
-              const modtype = "Career Skill";
-              attributes[key] = { mod, modtype, value: true };
-
-              if (includeRank) {
-                attributes[key] = { mod, modtype: "Skill Rank", value: 0 };
-              }
-            } else {
-              CONFIG.logger.warn(`Skill ${skill} was not found in the current skills list.`);
-            }
-          }
+          const key = `attr${new Date().getTime()}`;
+          // ensure further keys have a new entry
+          await new Promise(r => setTimeout(r, 1));
+          attributes[key] = includeRank
+            ? { mod, modtype: "Skill Rank", value: 0 }
+            : { mod, modtype: "Career Skill", value: true };
         } else {
           CONFIG.logger.warn(`Skill ${skill} was not found in the current skills list.`);
         }

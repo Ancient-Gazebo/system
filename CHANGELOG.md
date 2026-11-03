@@ -32,6 +32,12 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.23`
+* Fixes:
+  * Data Importer: talent modifiers on skills whose key the world's skill list spells differently are no longer dropped. Dice modifiers (boost, remove setback, Force dice and the rest) and talents that grant career skills compared OggDude's skill name with the list's keys, so under a list keyed Ranged-Light, Piloting-Space or Knowledge-Lore every such modifier was lost: Basic Combat Training, Tactical Combat Training, Vehicle Combat Training, Pilot Training, Well Traveled and Secrets of the Force imported without those career skills. They now use the same name matching as career skills. Gear, armour and attachment dice modifiers go through the same code.
+  * Data Importer: OggDude's talent damage bonus is now imported, as a Skill Damage modifier. Feral Strength's +1 damage per rank to Brawl and Melee was never brought across.
+  * Data Importer: OggDude's "reduce the difficulty" dice modifier (DecreaseDifficultyCount) is now imported, as a Skill Decrease Difficulty modifier.
+
 `4.0.22`
 * Fixes:
   * Data Importer: careers and specializations now import with their career skills. The importer stored each skill's OggDude name, but career skills are stored by the key the world's skill list uses, so with a custom list (such as one keyed Knowledge-Science, Ranged-Light and Piloting-Space) almost every career skill matched no skill. Even plain ones failed, because OggDude names carry a trailing space. The career sheet showed the slots blank, and the career skill effect flagged nothing on the character. Names are now matched to the skill list's keys (and labels) with spacing and punctuation ignored. Skills the list doesn't have, like the data set's "(DO NOT USE)" ones, are left out. A career or specialization with more career skills than it has slots now logs a warning for each skill that doesn't fit, instead of silently losing it.

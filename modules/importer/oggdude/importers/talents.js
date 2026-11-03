@@ -1,4 +1,5 @@
 import ImportHelpers from "../../import-helpers.js";
+import { systemSkillKey } from "../../../helpers/skill-keys.js";
 
 export default class Talents {
   static getMetaData() {
@@ -82,6 +83,16 @@ export default class Talents {
             if (item?.DieModifiers) {
               const dieModifiers = await ImportHelpers.processDieMod(item.DieModifiers);
               data.data.attributes = foundry.utils.mergeObject(data.data.attributes, dieModifiers.attributes);
+            }
+            // OggDude's damage bonus (Feral Strength: +1 damage to Brawl and Melee), which was never read
+            if (item?.Damage?.Skills?.Key) {
+              const bonus = parseInt(item.Damage.Bonus, 10) || 0;
+              for (const skillKey of [item.Damage.Skills.Key].flat()) {
+                const skill = systemSkillKey(CONFIG.temporary.skills[skillKey]);
+                if (skill && bonus) {
+                  data.data.attributes[`attr${foundry.utils.randomID()}`] = { mod: skill, modtype: "Skill Damage", value: bonus };
+                }
+              }
             }
 
             // populate tags

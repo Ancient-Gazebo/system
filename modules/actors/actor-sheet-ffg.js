@@ -8,7 +8,7 @@ import { preparedSystemCopy } from "../datamodels/sheet-data.js";
 import ActorOptions from "./actor-ffg-options.js";
 import ImportHelpers from "../importer/import-helpers.js";
 import ModifierHelpers from "../helpers/modifiers.js";
-import ActorHelpers, {xpLogEarn, xpLogSpend} from "../helpers/actor-helpers.js";
+import ActorHelpers, {purchaseCost, xpLogEarn, xpLogSpend} from "../helpers/actor-helpers.js";
 import TalentTree from "../helpers/talent-tree.js";
 import ItemHelpers from "../helpers/item-helpers.js";
 import StackHelpers from "../helpers/stack-helpers.js";
@@ -3461,9 +3461,11 @@ export class ActorSheetFFG extends FFGActorSheet {
                 // refund is not offset by them.
                 const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
-                if (match) match.refunded = true;
               }
-              if (refundAmount > 0) {
+              // Close the purchase even when it paid nothing: left open, a purchase logged for 0 XP
+              // kept its refund button after the node was unlearned.
+              if (match) {
+                match.refunded = true;
                 // The log records the EFFECTIVE available (what the XP box shows), not the base.
                 log.unshift({
                   action: "refunded",
@@ -3580,9 +3582,10 @@ export class ActorSheetFFG extends FFGActorSheet {
                 // refund is not offset by them.
                 const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
-                if (match) match.refunded = true;
               }
-              if (refundAmount > 0) {
+              // Close the purchase even when it paid nothing (see _refundTreeFromLog).
+              if (match) {
+                match.refunded = true;
                 // The log records the EFFECTIVE available (what the XP box shows), not the base.
                 log.unshift({
                   action: "refunded",
@@ -3689,7 +3692,10 @@ export class ActorSheetFFG extends FFGActorSheet {
               if (refundAmount > 0) {
                 const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
-                if (match) match.refunded = true;
+              }
+              // Close the purchase even when it paid nothing (see _refundTreeFromLog).
+              if (match) {
+                match.refunded = true;
                 log.unshift({
                   action: "refunded",
                   id: undefined,
@@ -3779,7 +3785,10 @@ export class ActorSheetFFG extends FFGActorSheet {
               if (refundAmount > 0) {
                 const newAvailable = ActorHelpers.baseExperience(this.actor).available + refundAmount;
                 await this.actor.update({ system: { experience: { available: newAvailable } } });
-                if (match) match.refunded = true;
+              }
+              // Close the purchase even when it paid nothing (see _refundTreeFromLog).
+              if (match) {
+                match.refunded = true;
                 log.unshift({
                   action: "refunded",
                   id: undefined,
@@ -4566,6 +4575,14 @@ export class ActorSheetFFG extends FFGActorSheet {
               const cost = $("#ffgPurchase option:selected", that).data("cost");
               const selected_id = $("#ffgPurchase option:selected", that).data("id");
               const selected_source = $("#ffgPurchase option:selected", that).data("source");
+              // The placeholder option names nothing to buy (confirming it threw on the missing item).
+              if (!selected_source) return;
+              // An item with no base cost listed as "( XP)" and was bought for nothing, or as NaN,
+              // which the XP field stores as 0.
+              if (purchaseCost(cost) === null) {
+                ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NoCost"));
+                return;
+              }
               if (cost > availableXP) {
                 ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
                 return;

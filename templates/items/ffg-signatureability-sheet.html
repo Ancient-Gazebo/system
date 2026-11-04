@@ -89,7 +89,7 @@
               {{#if upgrade.islearned}}
               <i class="fa-regular fa-circle-down ffg-refund" data-refund-action="signatureability-upgrade" data-base-item-name="{{../item.name}}" data-upgrade-name="{{ upgrade.name }}" data-upgrade-id="{{ key }}" title="{{localize 'SWFFG.Actors.Sheets.Refund.Tooltip'}}"></i>
               {{else}}
-              <i class="fa-regular fa-circle-up ffg-purchase" data-buy-action="signatureability-upgrade" data-cost="{{upgrade.cost}}" data-base-item-name="{{../item.name}}" data-upgrade-name="{{ upgrade.name }}" data-upgrade-id="{{ key }}"></i>
+              <i class="fa-regular fa-circle-up ffg-purchase" data-buy-action="signatureability-upgrade" data-cost="{{calculateSignatureAbilityCost key}}" data-base-item-name="{{../item.name}}" data-upgrade-name="{{ upgrade.name }}" data-upgrade-id="{{ key }}"></i>
               {{/if}}
             {{/if}}
           </a>

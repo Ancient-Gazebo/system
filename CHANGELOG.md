@@ -32,6 +32,13 @@
 * Installing as a separate system id offers a one-time import of a duplicated world's
   flags and settings from the original id (`game.ffg.migrateLegacyScope()`).
 
+`4.0.24`
+* Fixes:
+  * Buying a signature ability upgrade charges its cost again. The cost shown in the box is worked out from the upgrade's row, but the buy button read a stored cost that the importer never writes and only a save from the ability's sheet fills in. So the first upgrade bought on a newly added ability (up arrow or drag and drop) was learned for 0 XP and logged as "for xp". The cost is now derived when the item is prepared, as specialization talent costs already were, and the button uses the same value as the box. Upgrades learned this way can be refunded (for 0 XP, since nothing was paid) and bought again.
+  * Refunding a talent or upgrade from its tree sheet refunds that node's own purchase. The log entry was found by its description, and trees repeat names (35 imported signature abilities and 147 specializations do, such as two Add Boosts or Reflect in two rows), so one node's refund could be paid out of another's purchase: 5 XP back for a 10 XP talent, or 15 back for a 5. Entries record the node they bought, and the refund now matches on that, as the XP log's own refund button already did.
+  * A refund that returns 0 XP now closes its purchase in the XP log, adding a "refunded ... for 0 xp" line. Before, the purchase kept its refund button after the talent, upgrade or item was gone. This covers all five refund paths.
+  * A purchase with no usable cost is refused with a warning instead of charged. A blank cost (a hand-built Force power upgrade left empty, say) was bought for nothing. A cost that came out as NaN on the purchase dialog was worse: the XP field stores a non-number as 0, so it would have wiped the character's available XP. Confirming the purchase dialog with nothing picked no longer throws.
+
 `4.0.23`
 * Fixes:
   * Data Importer: talent modifiers on skills whose key the world's skill list spells differently are no longer dropped. Dice modifiers (boost, remove setback, Force dice and the rest) and talents that grant career skills compared OggDude's skill name with the list's keys, so under a list keyed Ranged-Light, Piloting-Space or Knowledge-Lore every such modifier was lost: Basic Combat Training, Tactical Combat Training, Vehicle Combat Training, Pilot Training, Well Traveled and Secrets of the Force imported without those career skills. They now use the same name matching as career skills. Gear, armour and attachment dice modifiers go through the same code.

@@ -400,6 +400,23 @@ export default class ActorHelpers {
 }
 
 /**
+ * The XP cost a purchase should charge, or null when it has none.
+ *
+ * Purchase costs come off data attributes, so a missing one arrives as "" or undefined. Charged
+ * anyway, "" subtracts as 0 and the purchase was free; a NaN was worse, since the XP fields are
+ * SafeNumberFields, which store a non-number as 0 and so wiped the character's available XP.
+ *
+ * @param {*} value  the cost as read
+ * @returns {number|null}  a finite cost of 0 or more, or null
+ */
+export function purchaseCost(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const cost = Number(value);
+  return Number.isFinite(cost) && cost >= 0 ? cost : null;
+}
+
+/**
  * Adds a SPEND log entry to the actor's XP log (accessed via the notebook under specializations)
  * @param actor - ffgActor object
  * @param action - action taken (e.g. "skill rank Astrogation 1 --> 2")

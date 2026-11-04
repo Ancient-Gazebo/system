@@ -747,6 +747,12 @@ export class ItemFFG extends ItemBaseFFG {
         if (itemType === "talent") {
           const id = parseInt(upgrade.replace("talent", ""), 10);
           talents[upgrade].cost = (Math.trunc(id / 4) + 1) * 5;
+        } else if (this.type === "signatureability") {
+          // Fixed by the row too (the sheet shows calculateSignatureAbilityCost). The importer stores
+          // no upgrade costs, so until the ability had been saved from its sheet every upgrade read as
+          // blank and was bought for nothing.
+          const id = parseInt(upgrade.replace("upgrade", ""), 10);
+          talents[upgrade].cost = (Math.trunc(id / 4) + 2) * 5;
         }
 
         if (typeof talents[upgrade].visible === "undefined") {

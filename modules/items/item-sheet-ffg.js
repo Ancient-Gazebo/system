@@ -8,7 +8,7 @@ import ImportHelpers from "../importer/import-helpers.js";
 import DiceHelpers from "../helpers/dice-helpers.js";
 import item from "../helpers/embeddeditem-helpers.js";
 import EmbeddedItemHelpers from "../helpers/embeddeditem-helpers.js";
-import ActorHelpers, {xpLogSpend} from "../helpers/actor-helpers.js";
+import ActorHelpers, {purchaseCost, xpLogSpend} from "../helpers/actor-helpers.js";
 import ItemOptions from "./item-ffg-options.js";
 import {forcePowerEditor, itemEditor, talentEditor} from "./item-editor.js";
 import TalentTree from "../helpers/talent-tree.js";
@@ -1516,6 +1516,11 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     }
     const availableXPToLog = foundry.utils.deepClone(owner.system.experience.available);
     const totalXP = owner.system.experience.total;
+    // A node with no cost set (a hand-built Force power left blank, say) used to be learned for 0 XP.
+    if (purchaseCost(cost) === null) {
+      ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NoCost"));
+      throw new Error("No XP cost set");
+    }
     if (cost > availableXPToLog) {
       ui.notifications.warn(game.i18n.localize("SWFFG.Actors.Sheets.Purchase.NotEnoughXP"));
       throw new Error("Not enough XP");
@@ -1579,10 +1584,23 @@ export class ItemSheetFFG extends FFGDocumentSheet {
    * Locate the most recent un-refunded XP-log entry that paid for this node, so we can refund the
    * exact amount that was spent (handling mentor discounts, and refunding 0 for talents that were
    * granted or auto-purchased for free across trees). Returns the matched entry or null.
+   *
+   * Trees repeat names (Toughened in two rows of one specialization, two Add Boosts on a signature
+   * ability), so matching on the description alone paid one node's refund out of another's purchase:
+   * 15 XP back for a 5 XP talent. Entries record the node they bought and match on it; only an entry
+   * logged before they did falls back to the description.
+   *
+   * @param {Actor} owner
+   * @param {string} description  what the buy path logged
+   * @param {string} nodeId       the talent / upgrade key
+   * @param {object[]} [log]      the log to search, so a caller can mark the entry it gets back
    */
-  _findPurchaseLogEntry(owner, description) {
-    const log = owner.getFlag("starwarsffg", "xpLog") || [];
-    return log.find((entry) => entry.action === "purchased" && !entry.refunded && entry.description === description) || null;
+  _findPurchaseLogEntry(owner, description, nodeId, log = owner.getFlag("starwarsffg", "xpLog") || []) {
+    const open = log.filter((entry) => entry.action === "purchased" && !entry.refunded);
+    return open.find((entry) => entry.refund?.kind === "tree" && entry.refund.itemId === this.object.id
+        && String(entry.refund.nodeId) === String(nodeId))
+      ?? open.find((entry) => !entry.refund && entry.description === description)
+      ?? null;
   }
 
   /**
@@ -1632,7 +1650,7 @@ export class ItemSheetFFG extends FFGDocumentSheet {
     } else {
       logDescription = `force power ${baseName} upgrade ${nodeName}`;
     }
-    const logEntry = this._findPurchaseLogEntry(owner, logDescription);
+    const logEntry = this._findPurchaseLogEntry(owner, logDescription, nodeId);
     const refundAmount = logEntry ? parseInt(logEntry.xp.cost, 10) || 0 : 0;
 
     const dialog = DialogV2.wait({
@@ -1651,17 +1669,19 @@ export class ItemSheetFFG extends FFGDocumentSheet {
               // Unlearn the node (direct update persists it and re-renders the sheet).
               await this.object.update({ system: { [collection]: { [nodeId]: { islearned: false } } } });
 
-              // Refund the XP that was actually spent (if any) and record it in the log.
+              // Refund the XP that was actually spent (if any).
               if (refundAmount > 0) {
                 // Add to the stored BASE available (before the purchase effects).
                 const newAvailable = ActorHelpers.baseExperience(owner).available + refundAmount;
                 await owner.update({ system: { experience: { available: newAvailable } } });
+              }
+              // Record it against the purchase, even one that paid nothing: left open, a purchase
+              // logged for 0 XP kept its refund button after the node was unlearned.
+              if (logEntry) {
                 const log = owner.getFlag("starwarsffg", "xpLog") || [];
-                if (logEntry) {
-                  // Mark the original purchase as refunded so it can't be refunded twice.
-                  const match = log.find((e) => e.action === "purchased" && !e.refunded && e.description === logDescription);
-                  if (match) match.refunded = true;
-                }
+                // Mark the original purchase as refunded so it can't be refunded twice.
+                const match = this._findPurchaseLogEntry(owner, logDescription, nodeId, log);
+                if (match) match.refunded = true;
                 // Effective (sheet-visible) XP. The stored available is the BASE value,
                 // before the purchase effects, so it does not match the XP box. Every log entry
                 // records the effective available after its own operation, so the
